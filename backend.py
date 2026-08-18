@@ -152,6 +152,31 @@ def send_mail(to_email, subject, body):
 # =====================================================================
 
 
+@app.route('/student_dashboard.html')
+def student_dashboard():
+    return render_template('student_dashboard.html')
+
+@app.route('/admin_dashboard.html')
+def admin_dashboard():
+    return render_template('admin_dashboard.html')
+
+@app.route('/driver_dashboard.html')
+def driver_dashboard():
+    return render_template('driver_dashboard.html')
+
+@app.route('/principal_dashboard.html')
+def principal_dashboard():
+    return render_template('principal_dashboard.html')
+
+@app.route('/moderator_dashboard.html')
+def moderator_dashboard():
+    return render_template('moderator_dashboard.html')
+
+@app.route('/general_dashboard.html')
+def general_dashboard():
+    return render_template('general_dashboard.html')
+
+
 @app.route('/login')
 @app.route('/login.html')
 def login_page():
