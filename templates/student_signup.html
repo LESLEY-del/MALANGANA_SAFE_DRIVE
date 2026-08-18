@@ -1,0 +1,279 @@
+<!DOCTYPE html> 
+<html lang="en"> 
+<head> 
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Safe Drive - Student Signup</title> 
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <style> 
+        :root {
+            --bg: #0f172a;
+            --card: #1e293b;
+            --input: #334155;
+            --accent: #38bdf8;
+            --error: #fb7185;
+            --success: #34d399;
+            --warning: #facc15;
+            --text-main: #f8fafc;
+            --text-dim: #94a3b8;
+        }
+
+        body { 
+            background: var(--bg); 
+            font-family: sans-serif; 
+            display: flex; 
+            justify-content: center; 
+            align-items: center; 
+            min-height: 100vh; 
+            margin: 0; 
+            padding: 20px; 
+            box-sizing: border-box; 
+            color: var(--text-main);
+        } 
+        
+        .card { 
+            background: var(--card); 
+            padding: 35px 30px; 
+            border-radius: 30px; 
+            width: 100%; 
+            max-width: 380px; 
+            text-align: center; 
+            box-shadow: 0 10px 25px rgba(0,0,0,0.4); 
+            box-sizing: border-box; 
+            position: relative; 
+        } 
+        
+        .back-link {
+            position: absolute;
+            top: 25px;
+            left: 25px;
+            color: var(--text-dim);
+            text-decoration: none;
+            font-size: 13px;
+            font-weight: bold;
+            transition: color 0.3s;
+        }
+        .back-link:hover { color: var(--accent); }
+
+        .input-box { width:100%; background: var(--input); border:1px solid #475569; padding:14px; margin:8px 0; border-radius:15px; outline:none; transition: 0.2s; color:white; box-sizing: border-box; } 
+        .input-box::placeholder { color: var(--text-dim); }
+        .input-box:focus { border-color: var(--accent); }
+        
+        .btn { background: var(--accent); color: #020218; width:100%; padding:15px; border-radius:20px; border:none; cursor:pointer; font-weight:bold; margin-top:15px; transition: 0.3s; text-transform: uppercase; } 
+        .btn:disabled { background: #475569; cursor: not-allowed; color: var(--text-dim); } 
+        
+        .btn-secondary { background: transparent; border: 2px solid var(--text-dim); color: var(--text-main); }
+        .btn-secondary:hover { border-color: var(--error); color: var(--error); }
+
+        .error-text { color: var(--error); font-size: 11px; font-weight: 800; display: none; margin-bottom: 5px; text-transform: uppercase; text-align: left; padding-left: 5px; } 
+
+        .modal-overlay {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.85); display: none; justify-content: center; align-items: center; z-index: 1000; backdrop-filter: blur(5px);
+        }
+        .modal {
+            background: var(--card); padding: 35px; border-radius: 25px; text-align: center; width: 90%; max-width: 380px; box-shadow: 0 10px 40px rgba(0,0,0,0.8);
+        }
+        .code-input {
+            font-size: 24px; letter-spacing: 8px; text-align: center; font-weight: bold; color: white;
+        }
+    </style> 
+</head> 
+<body> 
+    <div class="card"> 
+        <a href="choice.html" class="back-link">&#8592; Back</a>
+
+        <h2 style="color: var(--text-main); margin-top: 10px;">STUDENT SIGNUP</h2> 
+        <p style="font-size: 12px; color: var(--text-dim); margin-bottom: 20px;">Create your secure transit profile</p> 
+
+        <input type="text" id="name" placeholder="Full Name" class="input-box"> 
+         
+        <input type="text" id="username" placeholder="Create Username" class="input-box"> 
+        <div id="uError" class="error-text">THIS USERNAME IS ALREADY TAKEN</div> 
+         
+        <input type="email" id="email" placeholder="Your Email Address" class="input-box"> 
+        <input type="email" id="parent_email" placeholder="Parent's Email Address" class="input-box"> 
+        <input type="tel" id="parent_phone" placeholder="Parent's Phone (for SMS updates)" class="input-box"> 
+        
+        <input type="text" id="grade" placeholder="Student Grade (e.g. 10A)" class="input-box"> 
+
+        <input type="text" id="school_code" placeholder="School Access Code" class="input-box"> 
+        <input type="password" id="password" placeholder="Password" class="input-box"> 
+         
+        <button class="btn" id="signupBtn">CREATE ACCOUNT</button> 
+    </div> 
+
+    <div class="modal-overlay" id="verifyModal" style="z-index: 1000;">
+        <div class="modal">
+            <h3 style="color: white; margin-top: 0;">Verify Your Email</h3>
+            <p style="color: var(--text-dim); font-size: 13px;">Enter the 4-digit verification code sent to your email to activate your student account.</p>
+            <input type="text" id="vCodeInput" class="input-box code-input" placeholder="0000" maxlength="4" autocomplete="off">
+            <button class="btn" id="verifyBtn">CONFIRM CODE</button>
+            <button class="btn btn-secondary" id="cancelVerifyBtn" style="margin-top: 10px; padding: 10px;">Cancel</button>
+        </div>
+    </div>
+
+    <div class="modal-overlay" id="customAlertModal" style="z-index: 9999;">
+        <div class="modal" style="padding: 30px 25px;">
+            <h3 id="alertTitle" style="color: white; margin-top: 0; text-transform: uppercase; letter-spacing: 1px;">Notice</h3>
+            <p id="alertMessage" style="color: var(--text-main); font-size: 14px; line-height: 1.5; margin: 15px 0 25px;"></p>
+            <button class="btn" id="alertOkBtn" style="padding: 12px;">ACKNOWLEDGE</button>
+        </div>
+    </div>
+
+    <script> 
+        const supabaseUrl = 'https://mlzpmiccmggfwenfzvsy.supabase.co';
+        const supabaseKey = 'sb_publishable_ehnY1o3Vm1YCHVhaL5NL-Q_UZN-xRIp';
+        const _supabase = supabase.createClient(supabaseUrl, supabaseKey);
+
+        const btn = document.getElementById('signupBtn'); 
+        const uError = document.getElementById('uError'); 
+        const uInput = document.getElementById('username'); 
+        const verifyModal = document.getElementById('verifyModal');
+
+        const alertModal = document.getElementById('customAlertModal');
+        const alertTitle = document.getElementById('alertTitle');
+        const alertMessage = document.getElementById('alertMessage');
+        const alertOkBtn = document.getElementById('alertOkBtn');
+        let alertCallback = null;
+
+        function showSystemAlert(title, message, isError = true, callback = null) {
+            alertTitle.innerText = title;
+            alertTitle.style.color = isError ? "var(--error)" : "var(--success)";
+            alertMessage.innerText = message;
+            alertModal.style.display = 'flex';
+            alertCallback = callback;
+        }
+
+        alertOkBtn.addEventListener('click', () => {
+            alertModal.style.display = 'none';
+            if (alertCallback) {
+                alertCallback();
+                alertCallback = null;
+            }
+        });
+
+        uInput.addEventListener('input', async () => {
+            const u = uInput.value.trim().toLowerCase();
+            if (u.length < 1) {
+                uError.style.display = 'none';
+                uInput.style.border = "1px solid #475569";
+                btn.disabled = false;
+                return;
+            }
+
+            try {
+                const { data } = await _supabase.from('users').select('username').eq('username', u).maybeSingle();
+                if (data) { 
+                    uError.style.display = 'block'; 
+                    uInput.style.border = "2px solid var(--error)"; 
+                    btn.disabled = true; 
+                } else { 
+                    uError.style.display = 'none'; 
+                    uInput.style.border = "1px solid #475569";
+                    btn.disabled = false;
+                } 
+            } catch (err) {
+                console.error("Cloud security check failed.");
+            }
+        });
+
+        btn.addEventListener('click', async () => { 
+            const u = uInput.value.trim().toLowerCase(); 
+            const sc = document.getElementById('school_code').value.trim().toUpperCase(); 
+            const name = document.getElementById('name').value.trim();
+            const email = document.getElementById('email').value.trim();
+            const pEmail = document.getElementById('parent_email').value.trim();
+            const pPhone = document.getElementById('parent_phone').value.trim();
+            const grade = document.getElementById('grade').value.trim();
+            const pass = document.getElementById('password').value.trim();
+
+            if(!u || !sc || !name || !pass || !grade || !email || !pEmail || !pPhone) {
+                return showSystemAlert("Missing Details", "Please fill in all required fields to continue.", true);
+            }
+
+            btn.innerText = "SENDING VERIFICATION..."; 
+            btn.disabled = true; 
+
+            try { 
+                const payload = { 
+                    name, 
+                    username: u, 
+                    email, 
+                    parent_email: pEmail, 
+                    parent_phone: pPhone, 
+                    school_code: sc, 
+                    grade: grade, 
+                    password: pass, 
+                    role: 'student' 
+                }; 
+                 
+                const res = await fetch('/api/student/signup', {  
+                    method: 'POST',  
+                    headers: {'Content-Type': 'application/json'},  
+                    body: JSON.stringify(payload)  
+                }); 
+                 
+                const data = await res.json(); 
+                 
+                if (data.status === 'pending') { 
+                    verifyModal.style.display = 'flex';
+                    document.getElementById('vCodeInput').focus();
+                } else {  
+                    showSystemAlert("Registration Failed", data.message || "An error occurred on the server.", true);
+                    btn.innerText = "CREATE ACCOUNT";  
+                    btn.disabled = false; 
+                } 
+            } catch (err) { 
+                console.error(err);
+                showSystemAlert("Connection Error", "Network failed. Ensure cloud and local services are running.", true);
+                btn.innerText = "CREATE ACCOUNT"; 
+                btn.disabled = false; 
+            } 
+        }); 
+
+        document.getElementById('verifyBtn').addEventListener('click', async () => {
+            const code = document.getElementById('vCodeInput').value.trim();
+            const u = uInput.value.trim().toLowerCase(); 
+
+            if(code.length !== 4) {
+                return showSystemAlert("Invalid Code Format", "Security code must be exactly 4 digits.", true);
+            }
+
+            const vBtn = document.getElementById('verifyBtn');
+            vBtn.innerText = "VERIFYING...";
+            vBtn.disabled = true;
+
+            try {
+                const vRes = await fetch('/api/verify-and-save', {  
+                    method: 'POST',  
+                    headers: {'Content-Type': 'application/json'},  
+                    body: JSON.stringify({ username: u, code: code })  
+                }); 
+                 
+                const final = await vRes.json(); 
+                 
+                if (final.status === 'success') {  
+                    showSystemAlert("Verification Complete!", "Your student account is activated. You can now log in.", false, () => {
+                        window.location.href='login.html';  
+                    });
+                } else {  
+                    showSystemAlert("Verification Failed", "Invalid code. Please try again.", true);
+                    vBtn.innerText = "CONFIRM CODE";  
+                    vBtn.disabled = false; 
+                } 
+            } catch (err) {
+                showSystemAlert("Server Error", "Verification Server Error. Please check your connection.", true);
+                vBtn.innerText = "CONFIRM CODE";
+                vBtn.disabled = false;
+            }
+        });
+
+        document.getElementById('cancelVerifyBtn').addEventListener('click', () => {
+            verifyModal.style.display = 'none';
+            btn.innerText = "CREATE ACCOUNT"; 
+            btn.disabled = false; 
+        });
+    </script> 
+</body> 
+</html>

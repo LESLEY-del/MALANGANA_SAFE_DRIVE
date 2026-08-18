@@ -1,0 +1,991 @@
+<!DOCTYPE html> 
+<html lang="en"> 
+<head> 
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Student Portal | Safe Drive Logistics</title> 
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700;800&display=swap" rel="stylesheet"> 
+    
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.23/jspdf.plugin.autotable.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
+    <style> 
+        :root {  
+            --primary: #020218; --accent: #27ae60; --warning: #f39c12; --danger: #e11d48;  
+            --bg: #0f172a; --card-bg: #1e293b; --text-main: #f1f5f9; --text-muted: #94a3b8; --border: #334155; --nav-bg: #020218; 
+        } 
+        
+        body { 
+            background: linear-gradient(135deg, #0f172a 0%, #020218 100%);
+            background-attachment: fixed;
+            font-family: 'Inter', sans-serif; 
+            margin: 0; 
+            color: var(--text-main); 
+        } 
+        
+        .header { background: var(--nav-bg); color: white; padding: 1.2rem 5%; display: flex; justify-content: space-between; align-items: center; position: sticky; top: 0; z-index: 1000; box-shadow: 0 4px 20px rgba(0,0,0,0.6); border-bottom: 1px solid rgba(255,255,255,0.05); } 
+        .header h1 { margin: 0; font-size: 1.2rem; letter-spacing: -1px; font-weight: 800;} 
+        .header h1 span { color: var(--accent); } 
+        
+        .container { 
+            width: 80%; 
+            max-width: 1000px; 
+            margin: 50px auto; 
+            display: flex; 
+            flex-direction: column; 
+            gap: 40px; 
+        } 
+        
+        .card { background: linear-gradient(145deg, var(--card-bg) 0%, #151e2b 100%); border-radius: 20px; box-shadow: 0 15px 35px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.05); border: 1px solid var(--border); overflow: hidden; transition: 0.3s; width: 100%; } 
+        .card-header { padding: 20px 25px; border-bottom: 1px solid rgba(0,0,0,0.3); display: flex; justify-content: space-between; align-items: center; background: rgba(0,0,0,0.2); } 
+        .card-header h3 { margin: 0; font-size: 0.9rem; text-transform: uppercase; letter-spacing: 1px; color: var(--text-muted); font-weight: 800; } 
+        .body-content { padding: 25px; }
+
+        .search-container { display: flex; gap: 10px; align-items: center; }
+        .search-box { background: rgba(0,0,0,0.2); border: 1px solid var(--border); color: white; padding: 12px 18px; border-radius: 10px; font-size: 12px; outline: none; width: 220px; transition: 0.3s; }
+        .search-box:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(39,174,96,0.1); background: rgba(0,0,0,0.4); width: 260px;}
+
+        .driver-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 20px; padding: 25px; } 
+        .driver-card { background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.05); padding: 25px 20px; border-radius: 18px; text-align: center; transition: 0.3s ease; position: relative; box-shadow: 0 10px 20px rgba(0,0,0,0.2);} 
+        .driver-card:hover { border-color: var(--accent); background: rgba(255,255,255,0.06); transform: translateY(-5px); }
+        
+        img.initials-avatar { width: 65px; height: 65px; border-radius: 50%; background: var(--accent); object-fit: cover; margin: 0 auto 15px; border: 2px solid white; box-shadow: 0 5px 15px rgba(0,0,0,0.3); display: block; cursor: pointer; transition: 0.2s; }
+        img.initials-avatar:hover { transform: scale(1.1); }
+
+        .service-badge { font-size: 9px; font-weight: 900; background: rgba(0,0,0,0.3); color: var(--text-muted); padding: 6px 10px; border-radius: 6px; display: inline-block; margin-bottom: 15px; text-transform: uppercase; letter-spacing: 0.5px; border: 1px solid var(--border); }
+
+        .btn { padding: 12px 20px; border-radius: 12px; border: none; font-weight: 800; cursor: pointer; font-size: 11px; transition: 0.2s; text-transform: uppercase; letter-spacing: 0.5px; box-shadow: 0 4px 10px rgba(0,0,0,0.2);} 
+        .btn:active { transform: scale(0.95); }
+        .btn-primary { background: var(--accent); color: white; width: 100%; } 
+        .btn-secondary { background: #3498db; color: white; width: 100%; } 
+        .btn-chat { background: #3b4b61; color: white; } 
+        .btn-cancel { background: var(--danger); color: white; }
+        .btn-pdf { background: #3498db; color: white; }
+        .btn-hide { background: transparent; border: 1px solid var(--border); color: var(--text-muted); font-size: 9px; padding: 8px 15px; box-shadow: none; }
+        .btn:disabled { opacity: 0.5; cursor: not-allowed; filter: grayscale(1); transform: none; box-shadow: none;}
+
+        .trip-row { padding: 20px 25px; border-bottom: 1px solid rgba(255,255,255,0.03); display: flex; justify-content: space-between; align-items: center; transition: 0.2s; flex-wrap: wrap; gap: 15px;}
+        .trip-row:hover { background: rgba(255,255,255,0.02); }
+        .driver-min-avatar { width: 50px; height: 50px; border-radius: 12px; object-fit: cover; border: 1px solid var(--border); background: var(--primary); cursor: pointer; transition: 0.2s; }
+        .driver-min-avatar:hover { transform: scale(1.05); }
+        .status-tag { font-size: 10px; font-weight: 900; padding: 6px 12px; border-radius: 8px; background: rgba(255,255,255,0.05); color: var(--text-main); margin-top: 6px; border: 1px solid var(--border); width: fit-content; letter-spacing: 1px; }
+
+        #chatOverlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: #1e293b; border-radius: 0; z-index: 10000; flex-direction: column; border: none; box-shadow: none; overflow: hidden;} 
+        #chatMessages { flex: 1; padding: 20px; overflow-y: auto; background: #0f172a; display: flex; flex-direction: column; gap: 12px; scroll-behavior: smooth; } 
+        .msg { padding: 12px 16px; border-radius: 15px; font-size: 13px; max-width: 80%; line-height: 1.4; box-shadow: 0 4px 10px rgba(0,0,0,0.2); } 
+        .msg.me { background: var(--accent); color: white; align-self: flex-end; border-bottom-right-radius: 4px; } 
+        .msg.driver { background: rgba(51, 65, 85, 0.95); border: 1px solid rgba(255,255,255,0.1); color: white; align-self: flex-start; border-bottom-left-radius: 4px; backdrop-filter: blur(10px); } 
+
+        .app-alert-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.85); display: flex; justify-content: center; align-items: center; z-index: 9999; opacity: 0; pointer-events: none; backdrop-filter: blur(8px); transition: opacity 0.3s ease; }
+        .app-alert-overlay.show { opacity: 1; pointer-events: auto; }
+        .app-alert-box { background: var(--card-bg); border: 1px solid var(--border); border-radius: 24px; padding: 35px 30px; width: 85%; max-width: 400px; text-align: center; box-shadow: 0 25px 50px rgba(0, 0, 0, 0.6); transform: scale(0.9); transition: transform 0.3s ease; }
+        .app-alert-overlay.show .app-alert-box { transform: scale(1); }
+        .app-alert-message { color: var(--text-main); font-size: 14px; line-height: 1.6; margin-bottom: 25px; margin-top: 0; }
+        .app-alert-btn { background: var(--accent); color: white; border: none; padding: 14px 0; border-radius: 12px; font-weight: 800; font-size: 13px; width: 100%; cursor: pointer; text-transform: uppercase; letter-spacing: 0.5px; }
+
+        .history-item { background: rgba(255,255,255,0.02); padding: 18px 20px; border-radius: 14px; border: 1px solid rgba(255,255,255,0.05); margin-bottom: 12px; display: flex; justify-content: space-between; align-items: center; transition: 0.2s; }
+        .history-item:hover { background: rgba(255,255,255,0.04); }
+
+        #requestInput { background: rgba(0,0,0,0.3); border: 1px solid var(--border); color: white; padding: 16px; border-radius: 12px; width: 100%; box-sizing: border-box; margin-bottom: 20px; font-family: inherit; font-size: 14px; outline: none; transition: 0.3s;}
+        #requestInput:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(39,174,96,0.1); }
+
+        @keyframes pulseGreenAlert { 0% { opacity: 1; transform: scale(1); } 50% { opacity: 0.6; transform: scale(1.1); } 100% { opacity: 1; transform: scale(1); } }
+        .chat-badge { background: #27ae60; color: white; padding: 3px 7px; border-radius: 10px; font-weight: 900; font-size: 10px; margin-left: 6px; animation: pulseGreenAlert 1s infinite; display: inline-block; box-shadow: 0 0 8px rgba(39, 174, 96, 0.6); }
+        .req-badge { background: #27ae60; color: white; font-size: 10px; font-weight: 900; padding: 4px 9px; border-radius: 20px; min-width: 18px; text-align: center; display: none; margin-left: 10px; }
+        @media (max-width: 600px) {
+            .container { width: 95%; }
+            .btn-group { justify-content: flex-start; }
+        }
+    </style> 
+</head> 
+<body> 
+
+    <div class="header"> 
+        <h1>SAFE<span>DRIVE</span></h1> 
+        <div style="display:flex; align-items:center; gap:15px;"> 
+            <div style="text-align: right;"> 
+                <div id="sName" style="font-weight: 800; font-size: 13px; letter-spacing: 0.5px;">Loading...</div> 
+                <div id="sGrade" style="font-size: 10px; color: var(--warning); font-weight: 700; margin-top:2px;">Grade: --</div>
+                <div id="liveClock" style="font-size: 11px; opacity: 0.7; font-family: monospace; margin-top:3px;">00:00:00</div> 
+            </div> 
+            <img id="navAvatarContainer" onclick="openProfileMenu()" style="width:45px;height:45px;border-radius:50%;border:2px solid var(--accent); object-fit: cover; box-shadow: 0 0 10px rgba(39, 174, 96, 0.4); cursor: pointer; transition: 0.2s;" title="Manage Profile">
+            <button onclick="logout()" class="btn" style="background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.2); color:#fff; padding:8px 15px;">EXIT</button> 
+        </div> 
+    </div> 
+
+    <div id="profileMenuOverlay" class="app-alert-overlay">
+        <div class="app-alert-box">
+            <h3 style="margin-top: 0; color: var(--text-main); font-size: 16px; margin-bottom: 20px; font-weight: 800;">Profile Options</h3>
+            <input type="text" id="gradeInput" class="search-box" style="width:100%; background: rgba(0,0,0,0.3); margin-bottom:12px; font-size:13px;" placeholder="Enter Grade (e.g. 10A)">
+            <button onclick="updateGrade()" class="btn btn-warning" style="width:100%; margin-bottom:12px; padding: 15px; border-radius: 12px; font-weight: 800;">UPDATE GRADE</button>
+            <button onclick="viewFullProfile()" class="btn btn-secondary" style="margin-bottom:12px; padding: 15px;">VIEW FULL PICTURE</button>
+            <button onclick="document.getElementById('profileUpload').click()" class="btn btn-primary" style="margin-bottom:12px; padding: 15px;">UPLOAD / CHANGE PHOTO</button>
+            <button onclick="deleteProfilePic()" class="btn btn-cancel" style="margin-bottom:12px; padding: 15px;">DELETE PICTURE</button>
+            <button onclick="closeProfileMenu()" class="btn btn-hide" style="width:100%; font-size: 11px; padding: 12px; border-radius: 12px;">CANCEL</button>
+            <input type="file" id="profileUpload" accept="image/*" style="display:none;" onchange="handleProfileUpload(event)">
+        </div>
+    </div>
+
+    <div id="fullViewOverlay" class="app-alert-overlay" style="background: rgba(0,0,0,0.95);">
+        <div style="position:relative; width: 100%; height: 100%; display:flex; justify-content:center; align-items:center; flex-direction: column;">
+            <button onclick="closeFullView()" style="position:absolute; top:30px; left:30px; background:rgba(255,255,255,0.1); border:1px solid rgba(255,255,255,0.2); color:white; font-size:24px; width:50px; height:50px; border-radius:50%; cursor:pointer; transition: 0.2s;">&times;</button>
+            <img id="fullViewImg" src="" style="max-width: 90%; max-height: 80%; border-radius: 20px; box-shadow: 0 20px 60px rgba(0,0,0,0.8); object-fit: contain;">
+        </div>
+    </div>
+
+    <div id="requestModalOverlay" class="app-alert-overlay">
+        <div class="app-alert-box" style="max-width: 450px;">
+            <h3 style="margin-top: 0; color: var(--accent); font-size: 18px; margin-bottom: 10px; font-weight: 900; text-transform: uppercase;">Request Transport</h3>
+            <p id="requestModalDriverName" style="color: var(--text-muted); font-size: 13px; margin-bottom: 25px;"></p>
+            
+            <input type="text" id="requestInput" placeholder="Please type pick-up details to send request...">
+            
+            <div style="display: flex; gap: 15px;">
+                <button onclick="closeRequestModal()" class="btn btn-hide" style="flex: 1; padding: 14px; border-radius: 12px; font-size: 12px;">CANCEL</button>
+                <button onclick="submitRideRequest()" class="btn btn-primary" style="flex: 2; padding: 14px;">SEND REQUEST</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="appAlertOverlay" class="app-alert-overlay">
+        <div class="app-alert-box">
+            <h3 style="margin-top: 0; color: var(--accent); font-size: 18px; margin-bottom: 15px; font-weight: 900; text-transform: uppercase;" id="appAlertTitle">Notice</h3>
+            <p id="appAlertMessage" class="app-alert-message"></p>
+            <div id="alertActionGroupContainer" style="display: flex; gap: 10px; width: 100%;">
+                <button id="alertDefaultCloseBtn" onclick="closeAppAlert()" class="app-alert-btn">ACKNOWLEDGE</button>
+            </div>
+        </div>
+    </div>
+    <div id="chatOverlay"> 
+        <div style="background:#020218; color:white; padding:15px 25px; display:flex; justify-content:space-between; align-items:center; border-bottom: 1px solid rgba(255,255,255,0.05);"> 
+            <div style="display: flex; align-items: center; gap: 15px;">
+                <img id="chatTargetImg" src="" style="width: 45px; height: 45px; border-radius: 50%; border: 2px solid var(--accent); object-fit: cover; box-shadow: 0 0 10px rgba(39,174,96,0.3);" onclick="viewFullProfile(this.src)" title="View Full Profile">
+                <span id="chatTarget" style="font-weight:800; font-size: 15px; text-transform: uppercase; letter-spacing: 0.5px;">Chat</span> 
+            </div>
+            <button onclick="closeChat()" style="background:none; border:none; color:white; font-size:32px; cursor:pointer; transition:0.2s;" onmouseover="this.style.transform='scale(1.2)'" onmouseout="this.style.transform='scale(1)'">&times;</button> 
+        </div> 
+        <div id="chatMessages"></div> 
+        <div style="padding:20px; background:#1e293b; display:flex; gap:10px; border-top: 1px solid rgba(255,255,255,0.05);"> 
+            <input type="text" id="chatInput" placeholder="Secure message..." style="flex:1; background:rgba(0,0,0,0.3); border:1px solid #334155; color:white; padding:15px; border-radius:12px; outline:none; font-size:14px; margin-bottom:0;"> 
+            <button class="btn btn-primary" style="width:auto; padding:0 25px; border-radius:12px; font-size:13px;" onclick="sendChatMessage()">SEND</button> 
+        </div> 
+    </div> 
+
+    <div class="container"> 
+        
+        <div id="pendingCard" class="card" style="display:none;"> 
+            <div class="card-header">
+                <h3>Pending Approvals</h3>
+                <span id="badgePending" class="req-badge"></span>
+            </div> 
+            <div id="pendingList" style="padding: 10px 0;"></div>
+        </div> 
+
+        <div id="acceptedCard" class="card" style="display:none; border-left: 6px solid var(--accent);"> 
+            <div class="card-header" style="background: rgba(39, 174, 96, 0.1);">
+                <h3 style="color: var(--accent);">✓ Active Trips</h3>
+                <span id="badgeActive" class="req-badge"></span>
+            </div> 
+            <div id="activeList" style="padding: 10px 0;"></div>
+        </div>
+
+        <div class="card" id="schoolTransportCard"> 
+            <div class="card-header"> 
+                <h3>School Transport (Code: <span id="displayCode" style="color:var(--accent)"></span>)</h3> 
+                <button class="btn btn-hide" onclick="toggleCard('driverList', this)">HIDE</button> 
+            </div> 
+            <div id="driverList" class="driver-grid" style="display:grid;"></div> 
+        </div> 
+
+        <div class="card" id="globalTransportCard"> 
+            <div class="card-header" style="flex-wrap: wrap; gap: 15px;"> 
+                <h3>Global Private & Event Hire</h3> 
+                <div class="search-container" style="flex-wrap: wrap; gap: 10px;">
+                    <input type="text" id="driverSearch" class="search-box" placeholder="Search name or plate..." oninput="filterDrivers()">
+                    <input type="text" id="locationSearch" class="search-box" placeholder="Search town or area..." oninput="filterDrivers()">
+                    <button class="btn btn-hide" onclick="toggleCard('privateDriverList', this)">HIDE</button>
+                </div>
+            </div> 
+            <div id="privateDriverList" class="driver-grid" style="display:grid;"></div> 
+        </div>
+
+        <div class="card">
+            <div class="card-header">
+                <h3>Travel Transcript (History)</h3>
+                <div style="display:flex; gap:10px;">
+                    <button class="btn btn-pdf" onclick="downloadHistoryPDF()">PRINT PDF</button>
+                    <button class="btn btn-hide" onclick="toggleCard('historyBody', this)">VIEW</button>
+                </div>
+            </div>
+            <div id="historyBody" style="display:none; padding:25px;">
+                <input type="text" id="historySearch" placeholder="Search driver name..." style="background: rgba(0,0,0,0.2); border: 1px solid var(--border); color: white; padding: 14px; border-radius: 10px; outline: none; width: 100%; box-sizing: border-box; margin-bottom: 20px;" oninput="renderHistory()">
+                <div id="historyList"></div>
+            </div>
+        </div>
+
+        <button class="btn btn-cancel" style="display:block; margin: 0 auto; width: 280px; padding: 18px; font-size: 12px; border: 2px solid rgba(255,255,255,0.1); border-radius: 15px; background: #450a0a;" onclick="delAcc()">DELETE ACCOUNT PERMANENTLY</button> 
+
+    </div> 
+
+    <script> 
+        function showAppAlert(message, title="Notice", callback=null, customButtonsHtml=null) {
+            document.getElementById("appAlertTitle").innerText = title;
+            document.getElementById("appAlertMessage").innerText = message;
+
+            const groupContainer = document.getElementById("alertActionGroupContainer");
+            if (customButtonsHtml) {
+                groupContainer.innerHTML = customButtonsHtml;
+            } else {
+                groupContainer.innerHTML = `<button id="alertDefaultCloseBtn" class="app-alert-btn">ACKNOWLEDGE</button>`;
+                document.getElementById("alertDefaultCloseBtn").onclick = function() {
+                    closeAppAlert();
+                    if(callback) callback();
+                };
+            }
+            document.getElementById("appAlertOverlay").classList.add("show");
+        }
+        function closeAppAlert() { document.getElementById("appAlertOverlay").classList.remove("show"); }
+
+        // --- SUPABASE CONFIG & INSTANT CACHE LOADING ---
+        const supabaseUrl = 'https://mlzpmiccmggfwenfzvsy.supabase.co';
+        const supabaseKey = 'sb_publishable_ehnY1o3Vm1YCHVhaL5NL-Q_UZN-xRIp';
+        const _supabase = supabase.createClient(supabaseUrl, supabaseKey);
+
+        async function authFetch(url, options = {}) {
+    const token = sessionStorage.getItem('authToken');
+    const headers = new Headers(options.headers || {});
+    if (token) {
+        headers.set('Authorization', 'Bearer ' + token);
+    }
+    return fetch(url, { ...options, headers });
+}
+
+        const myU = sessionStorage.getItem('username');
+        const myN = sessionStorage.getItem('userName') || "Student"; 
+        const myRole = sessionStorage.getItem('userRole'); 
+        const cachedPhoto = sessionStorage.getItem('userPhoto');
+
+        if(!myU || myRole !== 'student') { 
+            sessionStorage.clear(); 
+            window.location.replace("login.html"); 
+        }
+
+        const scCode = (sessionStorage.getItem('school_code') || "N/A").trim().toUpperCase(); 
+        function escapeHtml(str) {
+            if (str === null || str === undefined) return '';
+            return String(str)
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#039;');
+        }
+        let allDrivers = []; 
+        let rawBookings = []; 
+        let bookingStateCache = JSON.parse(sessionStorage.getItem('student_booking_states') || "{}"); 
+        let chatLengthsCache = JSON.parse(sessionStorage.getItem('chatLengthsCache') || "{}");
+        
+        let activeChatBid = null; 
+        let targetDriverUser = null;
+        let targetDriverName = null;
+        let targetTripType = null;
+
+        // 🔥 FIX: Restore profile photo after logout/login from Supabase if sessionStorage is empty
+(async function restoreProfilePhoto() {
+    try {
+        if (!cachedPhoto && myU) {
+            const profRes = await authFetch('/api/profile/get_self', { method: 'POST' });
+            const profJson = await profRes.json();
+            const data = profJson.status === 'success' ? profJson.profile : null;
+            const error = profJson.status !== 'success';
+
+
+            if (!error && data && data.photo) {
+                sessionStorage.setItem('userPhoto', data.photo);
+
+                if (avatarEl) {
+                    avatarEl.src = data.photo;
+                }
+            }
+        }
+    } catch (err) {
+        console.log("Photo restore failed:", err);
+    }
+})();
+
+        // ⚡ INSTANT UI UPDATE ⚡
+        document.getElementById('sName').innerText = myN.toUpperCase(); 
+        document.getElementById('displayCode').innerText = scCode;
+        const avatarEl = document.getElementById('navAvatarContainer');
+        if (cachedPhoto && cachedPhoto !== "null" && cachedPhoto !== "") {
+            avatarEl.src = cachedPhoto;
+        } else {
+            avatarEl.src = `https://ui-avatars.com/api/?name=${myN}&background=27ae60&color=fff&size=256`;
+        }
+        
+        setInterval(() => { 
+            const now = new Date();
+            const dateStr = now.toLocaleDateString(undefined, { weekday: 'short', year: 'numeric', month: 'short', day: 'numeric' });
+            const timeStr = now.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+            document.getElementById('liveClock').innerText = `${dateStr} | ${timeStr}`; 
+        }, 1000);
+
+        function updateBadge(id, count) {
+    const el = document.getElementById(id);
+    if (!el) return;
+    if (count > 0) { el.innerText = count; el.style.display = 'inline-block'; }
+    else { el.style.display = 'none'; }
+}
+
+        function toggleCard(id, btn) {
+            const el = document.getElementById(id);
+            const isHidden = el.style.display === 'none' || el.style.display === '';
+            el.style.display = isHidden ? (id.includes('List') ? 'grid' : 'block') : 'none';
+            btn.innerText = isHidden ? 'HIDE' : 'VIEW';
+        }
+
+        async function initDashboard() {
+            try {
+                // Background sync for Grade
+                const profRes2 = await authFetch('/api/profile/get_self', { method: 'POST' });
+                const profJson2 = await profRes2.json();
+                const data = profJson2.status === 'success' ? profJson2.profile : null;
+                if(data && data.grade) {
+                    document.getElementById('sGrade').innerText = "Grade: " + data.grade;
+                    document.getElementById('gradeInput').value = data.grade;
+                }
+            } catch(e) {}
+            loadAllDrivers();
+            loadBookings(); 
+        }
+
+        function openProfileMenu() { document.getElementById('profileMenuOverlay').classList.add('show'); }
+        function closeProfileMenu() { document.getElementById('profileMenuOverlay').classList.remove('show'); }
+        
+        function viewFullProfile(imgSrc) {
+            closeProfileMenu();
+            let src = imgSrc || sessionStorage.getItem('userPhoto');
+            if(!src || src === "null" || src === "") src = `https://ui-avatars.com/api/?name=${myN}&background=27ae60&color=fff&size=512`;
+            document.getElementById('fullViewImg').src = src;
+            document.getElementById('fullViewOverlay').classList.add('show');
+        }
+        function closeFullView() { document.getElementById('fullViewOverlay').classList.remove('show'); }
+
+                async function handleProfileUpload(e) {
+            const file = e.target.files[0];
+            if(!file) return;
+
+            closeProfileMenu();
+            showAppAlert("AI Engine is scanning and uploading the image to secure storage... Please wait.", "SYSTEM VERIFICATION");
+
+            try {
+                const formData = new FormData();
+                formData.append('photo', file);
+
+                const res = await authFetch('/api/profile/upload_photo', {
+                    method: 'POST',
+                    body: formData
+                });
+                const data = await res.json();
+
+                if (data.status === 'success') {
+                    sessionStorage.setItem('userPhoto', data.photo_url);
+                    if(avatarEl) avatarEl.src = data.photo_url;
+                    const warningBanner = document.getElementById('profileWarningBanner');
+                    if(warningBanner) warningBanner.style.display = 'none';
+                    showAppAlert("AI check passed. Profile picture securely updated.", "SUCCESS");
+                } else {
+                    showAppAlert("Could not sync photo link to database.");
+                }
+            } catch (err) {
+                console.error(err);
+                showAppAlert("Storage upload failed. Please verify your connection or bucket permissions.");
+            }
+        }
+
+        async function deleteProfilePic() {
+            closeProfileMenu();
+            try {
+                const res = await authFetch('/api/profile/delete_photo', { method: 'POST' });
+                const data = await res.json();
+
+                if (data.status === 'success') {
+                    sessionStorage.removeItem('userPhoto');
+                    if(avatarEl) avatarEl.src = `https://ui-avatars.com/api/?name=${myN}&background=27ae60&color=fff&size=256`;
+                    showAppAlert("Profile picture successfully completely deleted from storage and database.");
+                } else {
+                    showAppAlert("Error deleting profile picture.");
+                }
+            } catch(err) {
+                console.error(err);
+                showAppAlert("Error deleting profile picture.");
+            }
+        }
+
+        async function updateGrade() {
+            const grade = document.getElementById('gradeInput').value.trim();
+            if(!grade) return showAppAlert("Please enter a valid grade.");
+            try {
+                await authFetch('/api/profile/update_self', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ grade: grade }) });
+                document.getElementById('sGrade').innerText = "Grade: " + grade;
+                showAppAlert("Grade updated successfully! It is now saved in the system.", "SUCCESS");
+                closeProfileMenu();
+            } catch(e) { showAppAlert("Failed to update grade."); }
+        }
+
+        async function loadAllDrivers() {
+            try {
+                const driverRes = await authFetch('/api/users/lookup', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ role: 'driver' }) });
+                const driverJson = await driverRes.json();
+                if (driverJson.users) { 
+                    allDrivers = driverJson.users; 
+                    renderDrivers(); 
+                }
+
+            } catch (err) {}
+        }
+
+        function getFullTimestamp() {
+            const now = new Date();
+            const dateOpts = { weekday: 'short', year: 'numeric', month: 'short', day: 'numeric' };
+            const timeOpts = { hour: '2-digit', minute: '2-digit', second: '2-digit' };
+            return now.toLocaleDateString(undefined, dateOpts) + ' | ' + now.toLocaleTimeString(undefined, timeOpts);
+        }
+
+        function appendLocalLog(driverName, driverUsername, action) {
+            let logs = JSON.parse(sessionStorage.getItem('student_local_logs') || "[]");
+            logs.push({ dName: driverName, dUser: driverUsername, action: action.toUpperCase(), time: getFullTimestamp() });
+            sessionStorage.setItem('student_local_logs', JSON.stringify(logs));
+            renderHistory();
+        }
+
+        function trackBookingStates(bookings) {
+            let stateChanged = false;
+            bookings.forEach(b => {
+                const currentState = b.tracking_status || b.status;
+                const prevState = bookingStateCache[b.booking_id];
+                
+                if(prevState && prevState !== currentState) {
+                    appendLocalLog(b.driver_name, b.driver_username, currentState);
+                    stateChanged = true;
+                } else if (!prevState && (b.status === 'Accepted' || b.status === 'Finished')) {
+                    appendLocalLog(b.driver_name, b.driver_username, currentState);
+                    stateChanged = true;
+                }
+                bookingStateCache[b.booking_id] = currentState;
+            });
+            if(stateChanged) sessionStorage.setItem('student_booking_states', JSON.stringify(bookingStateCache));
+        }
+
+       async function loadBookings() { 
+            try { 
+                const bRes = await authFetch('/api/get_my_bookings', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({username: myU, role:'student'}) }); 
+                const bData = await bRes.json(); 
+                rawBookings = bData.bookings || [];
+
+                trackBookingStates(rawBookings);
+                
+                let pending = rawBookings.filter(b => b.status === 'Pending');
+                const accepted = rawBookings.filter(b => b.status === 'Accepted');
+
+                const activeSchoolTrip = accepted.find(b => b.initial_msg && b.initial_msg.includes('[SCHOOL]'));
+                const pendingSchoolTrips = pending.filter(b => b.initial_msg && b.initial_msg.includes('[SCHOOL]'));
+
+                if (activeSchoolTrip && pendingSchoolTrips.length > 0) {
+                    pendingSchoolTrips.forEach(pb => {
+                        authFetch('/api/delete_account', { 
+                            method: 'POST', 
+                            headers: {'Content-Type': 'application/json'}, 
+                            body: JSON.stringify({ booking_id: pb.booking_id, type: 'booking' }) 
+                        });
+                    });
+                    pending = pending.filter(b => !b.initial_msg.includes('[SCHOOL]'));
+                }
+
+                window.hasActiveSchoolTransport = !!activeSchoolTrip;
+
+                if(pending.length > 0) {
+                    document.getElementById('pendingCard').style.display = 'block';
+                    updateBadge('badgePending', pending.length);
+                    document.getElementById('pendingList').innerHTML = pending.map(b => {
+                        const dObj = allDrivers.find(d => d.username === b.driver_username);
+                        const dPhoto = (dObj && dObj.photo) ? dObj.photo : `https://ui-avatars.com/api/?name=${b.driver_name || 'D'}&background=3498db&color=fff`;
+                        
+                        const chatArr = b.chat || [];
+                        const currentLen = chatArr.length;
+                        const storedLen = chatLengthsCache[b.booking_id] || 0;
+                        let unreadCount = 0;
+                        if (currentLen > storedLen) {
+                            for(let i = storedLen; i < currentLen; i++) {
+                                if(chatArr[i].sender !== myU) unreadCount++;
+                            }
+                        }
+                        const badgeHtml = unreadCount > 0 ? `<span class="chat-badge">+${unreadCount}</span>` : '';
+
+                        return `
+                        <div class="trip-row" id="row-${b.booking_id}">
+                            <div style="display:flex; align-items:center; gap:15px;">
+                                <img src="${dPhoto}" class="driver-min-avatar" onclick="viewFullProfile('${dPhoto}')" title="View Driver">
+                                <div style="display:flex; flex-direction:column; gap:3px;">
+                                    <b style="font-size:14px; letter-spacing: 0.5px;">${b.driver_name}</b>
+                                    <span style="font-size:11px; color:var(--warning); font-weight: 800;">AWAITING APPROVAL</span>
+                                </div>
+                            </div>
+                            <div class="btn-group">
+                                <button class="btn btn-chat" onclick="openChat('${b.booking_id}', '${b.driver_name}', '${dPhoto}', ${currentLen})">CHAT ${badgeHtml}</button>
+                                <button class="btn btn-cancel" onclick="cancelRide('${b.booking_id}')">CANCEL</button>
+                            </div>
+                        </div>`;
+                    }).join('');
+                } else {
+                    document.getElementById('pendingCard').style.display = 'none';
+                    updateBadge('badgePending', 0);
+                }
+
+                if(accepted.length > 0) {
+                    document.getElementById('acceptedCard').style.display = 'block';
+                    let activeUnreadTotal = 0;
+
+                    document.getElementById('activeList').innerHTML = accepted.map(b => {
+                        const dObj = allDrivers.find(d => d.username === b.driver_username);
+                        const dPhoto = (dObj && dObj.photo) ? dObj.photo : `https://ui-avatars.com/api/?name=${b.driver_name || 'D'}&background=3498db&color=fff`;
+                        
+                        let statusText = (b.tracking_status || "Accepted").toUpperCase();
+                        if(statusText === "DROPPED OFF") {
+                            let lastUpd = new Date(b.last_updated);
+                            if(Math.floor((new Date() - lastUpd)/60000) >= 10) statusText = "ACCEPTED";
+                        }
+
+                        const chatArr = b.chat || [];
+                        const currentLen = chatArr.length;
+                        const storedLen = chatLengthsCache[b.booking_id] || 0;
+                        let unreadCount = 0;
+                        if (currentLen > storedLen) {
+                            for(let i = storedLen; i < currentLen; i++) {
+                                if(chatArr[i].sender !== myU) unreadCount++;
+                            }
+                        }
+                        activeUnreadTotal += unreadCount;
+                        const badgeHtml = unreadCount > 0 ? `<span class="chat-badge">+${unreadCount}</span>` : '';
+
+                        return `
+                        <div class="trip-row">
+                            <div style="display:flex; align-items:center; gap:15px;">
+                                <img src="${dPhoto}" class="driver-min-avatar" onclick="viewFullProfile('${dPhoto}')" title="View Driver">
+                                <div style="display:flex; flex-direction:column; gap:5px;">
+                                    <b style="font-size:15px; letter-spacing: 0.5px;">${b.driver_name}</b>
+                                    <span class="status-tag" style="background: rgba(39, 174, 96, 0.1); border-color: var(--accent); color: white;">${statusText}</span>
+                                </div>
+                            </div>
+                            <div class="btn-group">
+                                <button class="btn btn-chat" onclick="openChat('${b.booking_id}', '${b.driver_name}', '${dPhoto}', ${currentLen})" style="background:var(--accent); width:150px;">MESSAGE DRIVER ${badgeHtml}</button>
+                            </div>
+                        </div>`;
+                    }).join('');
+
+                    updateBadge('badgeActive', activeUnreadTotal);
+                } else {
+                    document.getElementById('acceptedCard').style.display = 'none';
+                    updateBadge('badgeActive', 0);
+                }
+
+                renderHistory();
+                renderDrivers();
+
+                if(activeChatBid) syncChatMessages();
+
+            } catch(e) { console.log("Booking refresh error", e); } 
+        }
+
+        function renderDrivers() {
+            const pending = rawBookings.filter(b => b.status === 'Pending');
+            const accepted = rawBookings.filter(b => b.status === 'Accepted');
+            
+            const hasActiveRide = accepted.length > 0;
+
+            const schoolDrivers = allDrivers.filter(d => {
+                if (d.school_code && d.school_code.toUpperCase() === scCode) return true;
+                let codes = d.school_codes;
+                if (typeof codes === 'string') { try { codes = JSON.parse(codes); } catch(e) { codes = []; } }
+                if (Array.isArray(codes)) { return codes.map(c => c.toUpperCase()).includes(scCode); }
+                return false;
+            });
+
+            if(hasActiveRide) {
+                document.getElementById('schoolTransportCard').style.opacity = '1';
+                document.getElementById('driverList').innerHTML = schoolDrivers.map(d => {
+                    const driverPhoto = d.photo ? d.photo : `https://ui-avatars.com/api/?name=${d.name || 'D'}&background=27ae60&color=fff&size=256`;
+                    return `
+                    <div class="driver-card">
+                        <span class="service-badge">INSTITUTIONAL</span>
+                        <img class="initials-avatar" src="${driverPhoto}" onclick="viewFullProfile('${driverPhoto}')" title="View Full Profile">
+                        <div style="font-size:12px; font-weight:800; margin-bottom:15px;">${d.name || 'Unknown Driver'}</div>
+                        <button class="btn" style="background:var(--border); color:var(--text-main); width:100%; cursor:not-allowed;" disabled>TRANSPORT SECURED 🔒</button>
+                    </div>`;
+                }).join('');
+            } else {
+                document.getElementById('schoolTransportCard').style.opacity = '1';
+                document.getElementById('driverList').innerHTML = schoolDrivers.map(d => {
+                    const driverPhoto = d.photo ? d.photo : `https://ui-avatars.com/api/?name=${d.name || 'D'}&background=27ae60&color=fff&size=256`;
+                    const isPendingWithDriver = pending.some(b => b.driver_username === d.username && b.message && b.message.includes('[SCHOOL]'));
+                    
+                    let btnHtml = isPendingWithDriver
+                        ? `<button class="btn" style="background:var(--warning); color:#020218; width:100%;" disabled>PENDING</button>`
+                        : `<button id="req-btn-${d.username}" class="btn btn-primary" onclick="openRequestModal('${d.username}', '${d.name}', 'School')">REQUEST</button>`;
+
+                    return `
+                    <div class="driver-card">
+                        <span class="service-badge">INSTITUTIONAL</span>
+                        <img class="initials-avatar" src="${driverPhoto}" onclick="viewFullProfile('${driverPhoto}')" title="View Full Profile">
+                        <div style="font-size:12px; font-weight:800; margin-bottom:15px;">${d.name || 'Unknown Driver'}</div>
+                        ${btnHtml}
+                    </div>`;
+                }).join('') || '<p style="color:gray; font-size:12px; padding:20px; grid-column: 1 / -1;">No transport drivers assigned to your school code.</p>';
+            }
+
+            filterDrivers();
+        }
+
+        function filterDrivers() {
+            const pending = rawBookings.filter(b => b.status === 'Pending');
+            const accepted = rawBookings.filter(b => b.status === 'Accepted');
+            
+            const hasActiveRide = accepted.length > 0;
+
+            // Extract terms from both inputs safely
+            const textTerm = document.getElementById('driverSearch').value.toLowerCase().trim();
+            const locationTerm = document.getElementById('locationSearch').value.toLowerCase().trim();
+            
+            const globalDrivers = allDrivers.filter(d => {
+                const tType = (d.transport_type || "").toLowerCase();
+                const dMode = (d.driver_mode || "").toLowerCase();
+                
+                // Allow explicit event choices and exclude normal daily route profiles
+                if (tType === 'door_to_door' || dMode === 'door to door') return false; 
+                
+                // Base metadata string conversions
+                const nameMatch = d.name ? d.name.toLowerCase().includes(textTerm) : false;
+                const plateMatch = d.vehicle_plate ? d.vehicle_plate.toLowerCase().includes(textTerm) : false;
+                
+                // Location Matching logic: Reads columns like 'town', 'location', or 'current_town'
+                const driverTown = (d.town || d.location || d.current_town || "").toLowerCase();
+                const locationMatch = locationTerm === "" ? true : driverTown.includes(locationTerm);
+                
+                // Both filters must clear true for the card element row component grid entry to display
+                return (nameMatch || plateMatch) && locationMatch;
+            });
+
+            document.getElementById('privateDriverList').innerHTML = globalDrivers.map(d => {
+                const driverPhoto = d.photo ? d.photo : `https://ui-avatars.com/api/?name=${d.name || 'D'}&background=3498db&color=fff&size=256`;
+                const isPendingWithDriver = pending.some(b => b.driver_username === d.username && b.message && b.message.includes('[PRIVATE]'));
+                
+                let btnHtml = "";
+               // ✅ THE FIX: Allow booking other drivers for events independently!
+if (isPendingWithDriver) {
+    btnHtml = `<button class="btn" style="background:var(--warning); color:#020218; width:100%;" disabled>PENDING</button>`;
+} else {
+    // Keep it unlocked so it passes through openRequestModal, which correctly catches cross-enrollments!
+    btnHtml = `<button id="req-btn-${d.username}" class="btn btn-secondary" onclick="openRequestModal('${d.username}', '${d.name}', 'Private')">HIRE NOW</button>`;
+}
+
+                return `
+                <div class="driver-card">
+                    <span class="service-badge" style="background:rgba(52, 152, 219, 0.2); border-color:#3498db; color:white;">${(d.transport_type || d.driver_mode || 'PRIVATE').toUpperCase().replace(/_/g, ' ')}</span>
+                    <img class="initials-avatar" style="border-color:#3498db;" src="${driverPhoto}" onclick="viewFullProfile('${driverPhoto}')" title="View Full Profile">
+                    <div style="font-size:12px; font-weight:800; margin-bottom:5px;">${d.name || 'Unknown Driver'}</div>
+                    ${d.vehicle_plate ? `<div style="font-size:9px; color:var(--text-muted); font-family:monospace; margin-bottom:15px; background: rgba(0,0,0,0.3); padding:4px; border-radius:4px;">PLATE: ${d.vehicle_plate.toUpperCase()}</div>` : '<div style="margin-bottom:15px;"></div>'}
+                    ${btnHtml}
+                </div>`;
+            }).join('') || '<p style="color:gray; font-size:12px; padding:20px; grid-column: 1 / -1;">No event drivers found.</p>';
+        }
+
+        function openRequestModal(du, dn, type) {
+            // Rule 1: Lock Dashboard 1 if a school transport allocation is already running active
+            if (type === 'School' && window.hasActiveSchoolTransport) {
+                return showAppAlert("Request Denied: You already have a confirmed School Transport allocation active. You cannot request another until your current transport is removed.", "SYSTEM LOCKED");
+            }
+
+            // Rule 2: Dashboard 2 Cross-check configuration rules
+            if (type === 'Private') {
+                // Find if this specific driver is currently your active school transport provider
+                const activeSchoolTrip = rawBookings.find(b => 
+                    b.status === 'Accepted' && 
+                    b.driver_username === du && 
+                    b.initial_msg && b.initial_msg.includes('[SCHOOL]')
+                );
+
+                if (activeSchoolTrip) {
+                    return showAppAlert(`Since you are already enrolled with driver ${dn} for your standard School Transport routing lines, please chat with the driver on your active chats above to coordinate your event scheduling details.`, "ENROLLMENT NOTICE");
+                }
+            }
+
+            // Fall-through validation mapping if context limits are completely cleared
+            targetDriverUser = du;
+            targetDriverName = dn;
+            targetTripType = type;
+            
+            document.getElementById('requestModalDriverName').innerText = `Sending to: ${dn} (${type})`;
+            document.getElementById('requestInput').value = '';
+            document.getElementById('requestModalOverlay').classList.add('show');
+        }
+
+        function closeRequestModal() {
+            document.getElementById('requestModalOverlay').classList.remove('show');
+            targetDriverUser = null; targetDriverName = null; targetTripType = null;
+        }
+
+        async function submitRideRequest() {
+            const msg = document.getElementById('requestInput').value.trim();
+            if(!msg) return showAppAlert("Please type your pickup instructions before sending.");
+
+            const fullMessage = `[${targetTripType.toUpperCase()}] ${msg}`;
+            document.getElementById('requestModalOverlay').classList.remove('show');
+            
+            const btn = document.getElementById(`req-btn-${targetDriverUser}`);
+            if(btn) { btn.innerText = "PENDING"; btn.disabled = true; btn.style.background = "var(--warning)"; btn.style.color = "#020218"; }
+
+            authFetch('/api/student/book', { 
+                method: 'POST', headers: {'Content-Type': 'application/json'}, 
+                body: JSON.stringify({ 
+                    student_username: myU, 
+                    student_name: myN, 
+                    driver_username: targetDriverUser, 
+                    driver_name: targetDriverName, 
+                    message: fullMessage, // Keeps communication array matrix tracking clean
+                    initial_msg: fullMessage, // Used natively by your filtering loops to determine [SCHOOL] vs [PRIVATE]
+                    school_code: scCode 
+                }) 
+            }).then(() => loadBookings());
+        }
+
+        function cancelRide(bid) {
+            const btnHtml = `
+                <button id="confirmCancelRideBtn" class="btn btn-cancel" style="flex:1; margin-bottom:0;">CONFIRM CANCEL</button>
+                <button id="cancelCancelRideBtn" class="btn btn-hide" style="flex:1; margin-bottom:0; color:white; border-color:#334155;">BACK</button>
+            `;
+            showAppAlert("Cancel this ride request?", "CONFIRM CANCELLATION", null, btnHtml);
+
+            document.getElementById("cancelCancelRideBtn").onclick = function() { closeAppAlert(); };
+            document.getElementById("confirmCancelRideBtn").onclick = function() {
+                closeAppAlert();
+                const row = document.getElementById(`row-${bid}`);
+                if(row) row.style.display = 'none'; 
+                authFetch('/api/delete_account', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ booking_id: bid, type: 'booking' }) })
+                    .then(() => loadBookings());
+            };
+        }
+        function renderHistory() {
+            const term = document.getElementById('historySearch').value.toLowerCase();
+            const backendFinished = rawBookings.filter(b => b.status === 'Finished');
+            let combinedHtml = "";
+
+            backendFinished.forEach(h => {
+                if(h.driver_name.toLowerCase().includes(term)) {
+                    const dObj = allDrivers.find(d => d.username === h.driver_username);
+                    const dPhoto = (dObj && dObj.photo) ? dObj.photo : `https://ui-avatars.com/api/?name=${h.driver_name || 'D'}&background=3498db&color=fff`;
+
+                    combinedHtml += `
+                    <div class="history-item">
+                        <div style="display:flex; align-items:center; gap:15px;">
+                            <img src="${dPhoto}" class="driver-min-avatar" style="width:40px; height:40px;">
+                            <div>
+                                <b style="font-size: 13px; letter-spacing: 0.5px;">Driver: ${h.driver_name}</b>
+                                <div style="font-size: 10px; color: var(--text-muted); margin-top:4px; font-family: monospace;">ID: ${h.booking_id} | END OF TRIP</div>
+                            </div>
+                        </div>
+                        <span style="color:var(--accent); font-weight:900; font-size:10px; letter-spacing: 1px;">SUCCESS</span>
+                    </div>`;
+                }
+            });
+
+            let logs = JSON.parse(sessionStorage.getItem('student_local_logs') || "[]");
+            logs.slice().reverse().forEach(l => {
+                if(l.dName.toLowerCase().includes(term)) {
+                    const dObj = allDrivers.find(d => d.username === l.dUser);
+                    const dPhoto = (dObj && dObj.photo) ? dObj.photo : `https://ui-avatars.com/api/?name=${l.dName || 'D'}&background=3498db&color=fff`;
+                    let color = l.action === 'PICKUP' ? '#3498db' : (l.action === 'DROPOFF' ? '#f39c12' : '#27ae60');
+                    
+                    combinedHtml += `
+                    <div class="history-item">
+                        <div style="display:flex; align-items:center; gap:15px;">
+                            <img src="${dPhoto}" class="driver-min-avatar" style="width:40px; height:40px;">
+                            <div>
+                                <b style="font-size: 13px; letter-spacing: 0.5px;">Driver: ${l.dName}</b>
+                                <div style="font-size: 10px; color: var(--text-muted); margin-top:4px; font-family: monospace;">TIME: ${l.time}</div>
+                            </div>
+                        </div>
+                        <span style="color:${color}; font-weight:900; font-size:10px; letter-spacing: 1px;">${l.action}</span>
+                    </div>`;
+                }
+            });
+
+            document.getElementById('historyList').innerHTML = combinedHtml || '<p style="color:gray; font-size:12px; text-align:center;">No records found.</p>';
+        }
+
+        function downloadHistoryPDF() {
+            const { jsPDF } = window.jspdf;
+            const doc = new jsPDF();
+            doc.setFillColor(2, 2, 24); doc.rect(0, 0, 210, 40, 'F');
+            doc.setTextColor(255, 255, 255); doc.setFontSize(22); doc.text("SAFE DRIVE LOGISTICS", 15, 25);
+            doc.setTextColor(100, 100, 100); doc.setFontSize(10); doc.text("STUDENT TRAVEL TRANSCRIPT", 15, 35);
+            
+            const rows = Array.from(document.querySelectorAll('#historyList .history-item')).map(el => { return [el.innerText.replace(/\n/g, ' | ')]; });
+            if(rows.length === 0) return showAppAlert("No history to export. Try searching for a specific driver.");
+            
+            doc.autoTable({ head: [['TRIP DETAILS & HANDLER']], body: rows, startY: 50, styles: { fontSize: 9, cellPadding: 5 }, headStyles: { fillColor: [39, 174, 96] }});
+            doc.save(`SafeDrive_Transcript_${myU}.pdf`);
+        }
+
+        function setChatBackground() {
+            const myPic = sessionStorage.getItem('userPhoto');
+            let bgUrl = (myPic && myPic !== "null" && myPic !== "") ? myPic : `https://ui-avatars.com/api/?name=${myN}&background=27ae60&color=fff`;
+            const chatDiv = document.getElementById('chatMessages');
+            chatDiv.style.backgroundImage = `linear-gradient(rgba(15, 23, 42, 0.90), rgba(2, 2, 24, 0.98)), url('${bgUrl}')`;
+            chatDiv.style.backgroundSize = "cover";
+            chatDiv.style.backgroundPosition = "center";
+            chatDiv.style.backgroundRepeat = "no-repeat";
+        }
+
+        function openChat(bid, dName, photoUrl, currentLen = null) { 
+            activeChatBid = bid;
+            document.getElementById('chatTarget').innerText = "Driver: " + dName;
+            document.getElementById('chatTargetImg').src = photoUrl;
+            
+            setChatBackground();
+            document.getElementById('chatOverlay').style.display = 'flex'; 
+
+            if (currentLen !== null) {
+                chatLengthsCache[bid] = currentLen;
+                sessionStorage.setItem('chatLengthsCache', JSON.stringify(chatLengthsCache));
+                loadBookings();
+            }
+            syncChatMessages();
+        }
+        function formatTime(timestamp) {
+    if (!timestamp) return "";
+
+    const d = new Date(timestamp);
+    const now = new Date();
+
+    const sameDay =
+        d.getDate() === now.getDate() &&
+        d.getMonth() === now.getMonth() &&
+        d.getFullYear() === now.getFullYear();
+
+    if (sameDay) {
+        return d.toLocaleTimeString([], {
+            hour: "2-digit",
+            minute: "2-digit"
+        });
+    }
+
+    return d.toLocaleDateString([], {
+        day: "2-digit",
+        month: "short"
+    }) + " " +
+    d.toLocaleTimeString([], {
+        hour: "2-digit",
+        minute: "2-digit"
+    });
+}
+
+        function closeChat() { 
+            activeChatBid = null; 
+            document.getElementById('chatOverlay').style.display = 'none'; 
+        }
+        
+        async function syncChatMessages() {
+            if(!activeChatBid) return;
+            try {
+                const res = await authFetch('/api/get_my_bookings', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({username: myU, role:'student'}) }); 
+                const data = await res.json();
+                const b = (data.bookings || []).find(x => x.booking_id === activeChatBid);
+                if(b) {
+                    renderMessages(b.chat);
+                    chatLengthsCache[activeChatBid] = (b.chat || []).length;
+                    sessionStorage.setItem('chatLengthsCache', JSON.stringify(chatLengthsCache));
+                }
+            } catch(e) {}
+        }
+
+        function sendChatMessage() {
+            const i = document.getElementById('chatInput');
+            const msgText = i.value.trim();
+            if(!msgText || !activeChatBid) return;
+            
+            const area = document.getElementById('chatMessages');
+            area.innerHTML += `<div class="msg me">${escapeHtml(msgText)}</div>`;
+            area.scrollTop = area.scrollHeight;
+            i.value = ""; 
+            
+            const tempMsg = { sender: myU, text: msgText, time: new Date().toISOString() };
+            authFetch('/api/booking/chat', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ booking_id: activeChatBid, message_obj: tempMsg }) })
+                .then(() => syncChatMessages());
+        }
+
+        function renderMessages(chat) {
+            const area = document.getElementById('chatMessages');
+            const newHtml = (chat || []).map(m => `
+<div class="msg ${m.sender === myU ? 'me' : 'them'}">
+
+    <div>${escapeHtml(m.text || m.message)}</div>
+
+    <div class="msg-footer">
+        <span>${formatTime(m.time || m.timestamp)}</span>
+    </div>
+
+</div>
+`).join('');
+            if (area.childElementCount !== (chat || []).length) {
+                area.innerHTML = newHtml;
+                area.scrollTop = area.scrollHeight;
+            }
+        }
+
+        function delAcc() { 
+            const btnHtml = `
+                <button id="confirmDelAccBtn" class="btn btn-cancel" style="flex:1; margin-bottom:0;">DELETE PERMANENTLY</button>
+                <button id="cancelDelAccBtn" class="btn btn-hide" style="flex:1; margin-bottom:0; color:white; border-color:#334155;">CANCEL</button>
+            `;
+            showAppAlert("PERMANENTLY DELETE ACCOUNT? This will remove your booking data records and completely wipe your identity from our systems. This action cannot be undone.", "CONFIRM ACCOUNT DELETION", null, btnHtml);
+
+            document.getElementById("cancelDelAccBtn").onclick = function() { closeAppAlert(); };
+            document.getElementById("confirmDelAccBtn").onclick = async function() {
+                const confirmBtn = document.getElementById("confirmDelAccBtn");
+                confirmBtn.disabled = true;
+                confirmBtn.innerText = "WIPING PROFILE...";
+
+                try {
+                    const res = await authFetch('/api/delete_account', { 
+                        method: 'POST', 
+                        headers: { 'Content-Type': 'application/json' }, 
+                        body: JSON.stringify({ username: myU }) 
+                    });
+                    
+                    const data = await res.json();
+
+                    if (res.ok && data.status === 'success') {
+                        closeAppAlert();
+                        logout(); 
+                    } else {
+                        throw new Error(data.message || "Database side error.");
+                    }
+                } catch(err) {
+                    console.error("Account purge network sequence exception:", err);
+                    confirmBtn.disabled = false;
+                    confirmBtn.innerText = "DELETE PERMANENTLY";
+                    showAppAlert("Security Network Error: Could not synchronize your profile termination with the core backend server clusters. Please retry.");
+                }
+            };
+        }
+        function logout() { sessionStorage.clear(); window.location.replace("login.html"); } 
+        
+        window.onload = () => { 
+            initDashboard();
+            setInterval(loadBookings, 5000); 
+            setInterval(syncChatMessages, 2000);
+        }; 
+    </script> 
+</body> 
+</html>

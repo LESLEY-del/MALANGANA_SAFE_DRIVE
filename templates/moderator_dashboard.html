@@ -1,0 +1,590 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Moderator Control | Safe Drive Network</title>
+    
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.23/jspdf.plugin.autotable.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <style>
+        :root { 
+            --primary: #020218; 
+            --accent: #0eb8a6; 
+            --bg: #0f172a; 
+            --card: #1e293b; 
+            --border: #334155; 
+            --warning: #f59e0b;
+            --danger: #ef4444;
+            --text-main: #f1f5f9;
+            --text-muted: #94a3b8;
+        }
+        body { background: var(--bg); font-family: 'Inter', sans-serif; color: white; margin: 0; }
+        .nav { background: var(--primary); padding: 15px 5%; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border); position: sticky; top: 0; z-index: 1000; }
+        .profile-area { display: flex; align-items: center; gap: 15px; cursor: pointer; transition: 0.2s; }
+        .profile-area:hover { transform: scale(1.03); }
+        .user-avatar { width: 45px; height: 45px; border-radius: 50%; border: 2px solid var(--accent); object-fit: cover; box-shadow: 0 0 10px rgba(14, 184, 166, 0.3); }
+        .container { max-width: 1000px; margin: 40px auto; padding: 0 20px; }
+        
+        .dashboard-header-block { display: flex; justify-content: space-between; align-items: center; margin-bottom: 25px; flex-wrap: wrap; gap: 15px; background: rgba(255,255,255,0.02); padding: 20px; border-radius: 15px; border: 1px solid var(--border); }
+        .date-display-node { font-size: 14px; font-weight: 600; color: var(--accent); background: rgba(14, 184, 166, 0.1); padding: 8px 16px; border-radius: 8px; letter-spacing: 0.5px; text-transform: uppercase; }
+        .btn-print-register { background: #3b82f6; color: white; border: none; padding: 10px 20px; border-radius: 10px; font-weight: 800; font-size: 11px; cursor: pointer; text-transform: uppercase; box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3); transition: 0.2s; }
+        .btn-new-session { background: #8e44ad; color: white; border: none; padding: 10px 20px; border-radius: 10px; font-weight: 800; font-size: 11px; cursor: pointer; text-transform: uppercase; box-shadow: 0 4px 12px rgba(142, 68, 173, 0.3); transition: 0.2s; margin-left: 10px; }
+        .btn-print-register:active, .btn-new-session:active { transform: scale(0.95); }
+
+        .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 20px; }
+        .student-card { background: var(--card); border: 1px solid var(--border); border-radius: 20px; padding: 25px; text-align: center; position: relative; transition: 0.3s ease; }
+        .student-card.card-locked { border-color: var(--warning); background: rgba(30, 41, 59, 0.5); filter: opacity(0.8); }
+        .avatar { width: 70px; height: 70px; border-radius: 50%; border: 2px solid var(--accent); object-fit: cover; margin-bottom: 10px; }
+        .btn-attendance { padding: 12px 20px; border: none; border-radius: 10px; font-weight: 800; cursor: pointer; font-size: 11px; text-transform: uppercase; width: 46%; margin: 5px 2%; transition: 0.2s; }
+        .btn-present { background: #10b981; color: white; }
+        .btn-absent { background: #ef4444; color: white; }
+        .btn-attendance:disabled { opacity: 0.2 !important; cursor: not-allowed !important; transform: none !important; }
+        .lock-indicator { font-size: 10px; color: var(--warning); font-weight: bold; margin-top: 8px; display: none; text-transform: uppercase; letter-spacing: 0.5px; }
+        
+        .app-alert-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.85); display: none; justify-content: center; align-items: center; z-index: 9999; backdrop-filter: blur(5px); opacity: 0; transition: opacity 0.2s ease; }
+        .app-alert-overlay.show { display: flex !important; opacity: 1; }
+        .app-alert-box { background: var(--card); border: 1px solid var(--border); border-radius: 24px; padding: 35px 30px; width: 85%; max-width: 400px; text-align: center; box-shadow: 0 25px 50px rgba(0, 0, 0, 0.6); transform: scale(0.9); transition: transform 0.3s ease; }
+        .app-alert-overlay.show .app-alert-box { transform: scale(1); }
+        .btn-action { padding: 12px 20px; border-radius: 12px; border: none; cursor: pointer; font-weight: 800; font-size: 11px; transition: 0.2s; text-transform: uppercase; margin-bottom: 10px; width: 100%; box-sizing: border-box; }
+        .btn-submit { background: var(--accent); color: white; }
+        .btn-cancel { background: transparent; border: 1px solid var(--border); color: var(--text-muted); }
+        .search-box { background: rgba(0,0,0,0.2); border: 1px solid var(--border); color: white; padding: 14px; border-radius: 10px; outline: none; width: 100%; box-sizing: border-box; margin-bottom: 15px; font-family: inherit; font-size: 14px; text-align: center; }
+
+        @keyframes ocrSpin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        .ocr-spinner { margin: 20px auto; width: 45px; height: 45px; border: 4px solid #334155; border-top: 4px solid var(--accent); border-radius: 50%; animation: ocrSpin 0.8s linear infinite; }
+        
+        .query-comms-hub { border: 1px dashed var(--border); padding: 15px; border-radius: 14px; margin-bottom: 20px; background: rgba(0,0,0,0.1); text-align: left; }
+        .query-hub-title { font-size: 11px; font-weight: 800; color: var(--accent); text-transform: uppercase; margin-top: 0; margin-bottom: 10px; letter-spacing: 0.5px; }
+        .comms-link-btn { display: flex; align-items: center; justify-content: center; gap: 8px; background: #24292f; color: white; text-decoration: none; padding: 10px; border-radius: 8px; font-size: 12px; font-weight: 700; margin-bottom: 8px; border: 1px solid var(--border); transition: 0.2s; }
+        .comms-link-btn:hover { background: #30363d; border-color: var(--accent); }
+    </style>
+</head>
+<body>
+    <div class="nav">
+        <h2>OVERWATCH<span>MODERATOR</span></h2>
+        <div style="display:flex; align-items:center; gap:20px;">
+            <div class="profile-area" onclick="openProfileMenu()" title="Manage Profile Options">
+                <div style="text-align: right;">
+                    <div style="font-weight: 800; font-size: 13px; letter-spacing: 0.5px;" id="modNameDisp">---</div>
+                    <div style="font-size: 10px; color: var(--warning); font-weight: 700; margin-top:2px;">Grade: <span id="gradeDisp">--</span></div>
+                    <div id="liveClock" style="font-size: 11px; opacity: 0.7; font-family: monospace; margin-top:3px;">00:00:00</div>
+                </div>
+                <img id="navAvatarContainer" class="user-avatar" src="">
+            </div>
+            <button onclick="logout()" style="background:rgba(255,255,255,0.05); color:white; border:1px solid var(--border); padding:8px 15px; border-radius:8px; cursor:pointer; font-weight:600; font-size:12px;">EXIT</button>
+        </div>
+    </div>
+
+    <div id="profileMenuOverlay" class="app-alert-overlay">
+        <div class="app-alert-box">
+            <h3 style="margin-top: 0; color: var(--text-main); font-size: 16px; margin-bottom: 15px; font-weight: 800;">Moderator Configuration Options</h3>
+            
+            <div class="query-comms-hub">
+                <div class="query-hub-title">Safe Drive Network Queries Support</div>
+                <a href="mailto:safedrive@gmail.com" class="comms-link-btn" target="_blank">📧 Email Support Desk</a>
+                <a href="https://wa.me/27631636039" class="comms-link-btn" target="_blank">💬 WhatsApp Business Account</a>
+            </div>
+
+            <input type="text" id="gradeInput" class="search-box" placeholder="Upgrade Grade (e.g. 11B)">
+            <button onclick="updateGrade()" class="btn-action btn-submit">UPGRADE GRADE LEVEL</button>
+            <button onclick="viewFullProfile()" class="btn-action" style="background:#3498db; color:white;">VIEW FULL PICTURE</button>
+            <button onclick="document.getElementById('profileUpload').click()" class="btn-action" style="background:var(--accent); color:white;">UPLOAD / CHANGE PHOTO</button>
+            <button onclick="deleteProfilePic()" class="btn-action" style="background:var(--danger); color:white;">DELETE PICTURE</button>
+            <button onclick="closeProfileMenu()" class="btn-action btn-cancel">CANCEL</button>
+            <input type="file" id="profileUpload" accept="image/*" style="display:none;" onchange="handleProfileUpload(event)">
+        </div>
+    </div>
+
+    <div id="fullViewOverlay" class="app-alert-overlay" style="background: rgba(0,0,0,0.95);">
+        <div style="position:relative; width: 100%; height: 100%; display:flex; justify-content:center; align-items:center; flex-direction: column;">
+            <button onclick="closeFullView()" style="position:absolute; top:30px; left:30px; background:rgba(255,255,255,0.1); border:1px solid rgba(255,255,255,0.2); color:white; font-size:24px; width:50px; height:50px; border-radius:50%; cursor:pointer;">&times;</button>
+            <img id="fullViewImg" src="" style="max-width: 90%; max-height: 80%; border-radius: 20px; box-shadow: 0 20px 60px rgba(0,0,0,0.8); object-fit: contain;">
+        </div>
+    </div>
+
+    <div id="processingModalOverlay" class="app-alert-overlay">
+        <div class="app-alert-box" style="border: 2px solid var(--accent);">
+            <h2 style="color: var(--accent); margin-top:0; font-size: 18px; text-transform: uppercase; letter-spacing: 0.5px;">Compiling Live Metrics</h2>
+            <div class="ocr-spinner"></div>
+            <p id="processingStatusText" style="font-weight: 600; font-size: 13px;">Assembling official attendance matrices and printing document ledger...</p>
+        </div>
+    </div>
+
+    <div id="appAlertOverlay" class="app-alert-overlay">
+        <div class="app-alert-box">
+            <h3 style="margin-top: 0; color: var(--accent); font-size: 16px; margin-bottom: 12px; font-weight: 900; text-transform: uppercase; letter-spacing: 0.5px;" id="appAlertTitle">Notice</h3>
+            <p id="appAlertMessage" class="app-alert-message" style="white-space: pre-line; color: var(--text-main); font-size: 14px; margin-bottom: 25px; line-height: 1.5; text-align: center;"></p>
+            <div id="alertActionGroupContainer" style="display: flex; gap: 10px; width: 100%;">
+                <button id="alertDefaultCloseBtn" onclick="closeAppAlert()" class="btn-action btn-submit" style="margin-bottom:0; width: 100%;">ACKNOWLEDGE</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="container">
+        <div class="dashboard-header-block">
+            <div id="liveDate" class="date-display-node">Loading Date...</div>
+            <div>
+                <button class="btn-print-register" onclick="printRegisterPDF()">Print Current Register</button>
+                <button class="btn-new-session" onclick="triggerResetNewSession()">Start New Register Session</button>
+            </div>
+        </div>
+        <div id="studentGrid" class="grid"></div>
+        <button class="btn-action" style="display:block; margin: 40px auto 0; width: 280px; padding: 18px; font-size: 12px; border: 2px solid rgba(255,255,255,0.1); border-radius: 15px; background: #450a0a; color: #fecaca; font-weight: 800; cursor: pointer; transition: 0.2s;" onclick="deleteModeratorAccount()">DELETE MODERATOR ACCOUNT</button>
+    </div>
+
+    <script>
+        
+        const myU = sessionStorage.getItem('username');
+        const myN = sessionStorage.getItem('userName');
+        const scCode = sessionStorage.getItem('school_code');
+        let myGrade = sessionStorage.getItem('moderated_grade');
+
+        const supabaseUrl = 'https://mlzpmiccmggfwenfzvsy.supabase.co';
+        const supabaseKey = 'sb_publishable_ehnY1o3Vm1YCHVhaL5NL-Q_UZN-xRIp';
+        const _supabase = supabase.createClient(supabaseUrl, supabaseKey);
+        async function authFetch(url, options = {}) {
+    const token = sessionStorage.getItem('authToken');
+    const headers = new Headers(options.headers || {});
+    if (token) {
+        headers.set('Authorization', 'Bearer ' + token);
+    }
+    return fetch(url, { ...options, headers });
+}
+
+        let visibleStudentUsernames = [];
+        let studentsDataCache = [];
+        let executionBlockPollState = false;
+
+        document.getElementById('modNameDisp').innerText = (myN || "Moderator").toUpperCase();
+        document.getElementById('gradeDisp').innerText = myGrade || "--";
+        if(myGrade) document.getElementById('gradeInput').value = myGrade;
+
+        const avatarEl = document.getElementById('navAvatarContainer');
+        const cachedPhoto = sessionStorage.getItem('userPhoto');
+        if (cachedPhoto && cachedPhoto !== "null" && cachedPhoto !== "") {
+            avatarEl.src = cachedPhoto;
+        } else {
+            avatarEl.src = `https://ui-avatars.com/api/?name=${myN || 'M'}&background=0eb8a6&color=fff&size=256`;
+        }
+
+        if(!myU || sessionStorage.getItem('userRole') !== 'moderator') { logout(); }
+
+        function updateLiveClockAndDate() {
+            const now = new Date();
+            document.getElementById('liveClock').innerText = now.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false });
+            document.getElementById('liveDate').innerText = now.toLocaleDateString(undefined, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+        }
+        setInterval(updateLiveClockAndDate, 1000);
+        updateLiveClockAndDate();
+
+        function openProfileMenu() { document.getElementById('profileMenuOverlay').classList.add('show'); }
+        function closeProfileMenu() { document.getElementById('profileMenuOverlay').classList.remove('show'); }
+        
+        function viewFullProfile() {
+            closeProfileMenu();
+            let src = sessionStorage.getItem('userPhoto');
+            if(!src || src === "null" || src === "") src = `https://ui-avatars.com/api/?name=${myN || 'M'}&background=0eb8a6&color=fff&size=512`;
+            document.getElementById('fullViewImg').src = src;
+            document.getElementById('fullViewOverlay').classList.add('show');
+        }
+        function closeFullView() { document.getElementById('fullViewOverlay').classList.remove('show'); }
+
+        function showAppAlert(message, title="Notice", callback=null, customButtonsHtml=null) {
+            document.getElementById("appAlertTitle").innerText = title;
+            document.getElementById("appAlertMessage").innerText = message;
+            
+            const groupContainer = document.getElementById("alertActionGroupContainer");
+            if (customButtonsHtml) {
+                groupContainer.innerHTML = customButtonsHtml;
+            } else {
+                groupContainer.innerHTML = `<button id="alertDefaultCloseBtn" class="btn-action btn-submit" style="margin-bottom:0; width:100%;">ACKNOWLEDGE</button>`;
+                document.getElementById("alertDefaultCloseBtn").onclick = function() {
+                    closeAppAlert();
+                    if(callback) callback();
+                };
+            }
+            document.getElementById("appAlertOverlay").classList.add("show");
+        }
+        function closeAppAlert() { document.getElementById("appAlertOverlay").classList.remove("show"); }
+
+// 🔥 FIX: Restore profile photo after logout/login from Supabase if sessionStorage is empty
+(async function restoreProfilePhoto() {
+    try {
+        if (!cachedPhoto && myU) {
+            const profRes = await authFetch('/api/profile/get_self', { method: 'POST' });
+            const profJson = await profRes.json();
+            const data = profJson.status === 'success' ? profJson.profile : null;
+            const error = profJson.status !== 'success';
+
+            if (!error && data && data.photo) {
+                sessionStorage.setItem('userPhoto', data.photo);
+
+                if (avatarEl) {
+                    avatarEl.src = data.photo;
+                }
+            }
+        }
+    } catch (err) {
+        console.log("Photo restore failed:", err);
+    }
+})();
+
+                async function handleProfileUpload(e) {
+            const file = e.target.files[0];
+            if(!file) return;
+
+            closeProfileMenu();
+            showAppAlert("AI Engine is scanning and uploading the image to secure storage... Please wait.", "SYSTEM VERIFICATION");
+
+            try {
+                const formData = new FormData();
+                formData.append('photo', file);
+
+                const res = await authFetch('/api/profile/upload_photo', {
+                    method: 'POST',
+                    body: formData
+                });
+                const data = await res.json();
+
+                if (data.status === 'success') {
+                    sessionStorage.setItem('userPhoto', data.photo_url);
+                    if(avatarEl) avatarEl.src = data.photo_url;
+                    const warningBanner = document.getElementById('profileWarningBanner');
+                    if(warningBanner) warningBanner.style.display = 'none';
+                    showAppAlert("AI check passed. Profile picture securely updated.", "SUCCESS");
+                } else {
+                    showAppAlert("Could not sync photo link to database.");
+                }
+            } catch (err) {
+                console.error(err);
+                showAppAlert("Storage upload failed. Please verify your connection or bucket permissions.");
+            }
+        }
+
+        async function deleteProfilePic() {
+            closeProfileMenu();
+            try {
+                const res = await authFetch('/api/profile/delete_photo', { method: 'POST' });
+                const data = await res.json();
+
+                if (data.status === 'success') {
+                    sessionStorage.removeItem('userPhoto');
+                    if(avatarEl) avatarEl.src = `https://ui-avatars.com/api/?name=${myN}&background=27ae60&color=fff&size=256`;
+                    showAppAlert("Profile picture successfully completely deleted from storage and database.");
+                } else {
+                    showAppAlert("Error deleting profile picture.");
+                }
+            } catch(err) {
+                console.error(err);
+                showAppAlert("Error deleting profile picture.");
+            }
+        }
+
+        // ⚡ RIGID QUOTA PARAMETER PROTECTION: LOCK RE-ASSIGNMENT IF TARGET GRADE PARAMETER IS OCCUPIED ⚡
+        async function updateGrade() {
+            const grade = document.getElementById('gradeInput').value.trim().toUpperCase();
+            if(!grade) return showAppAlert("Please input a valid institutional grade tracker flag.");
+            
+            try {
+                // Read cloud infrastructure tables directly to ensure role boundaries are clean
+                const recordsRes = await authFetch('/api/users/lookup', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ role: 'moderator', school_code: scCode, moderated_grade: grade }) });
+                const recordsJson = await recordsRes.json();
+                const records = recordsJson.users;
+
+                if (records && records.length >= 1) {
+                    return showAppAlert(`CRITICAL SLOTS OCCUPIED: Grade ${grade} has already been claimed by another educator supervisor module at this campus block.`, "GRADE LOCKED");
+                }
+
+                await authFetch('/api/profile/update_self', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ moderated_grade: grade }) });
+                sessionStorage.setItem('moderated_grade', grade);
+                myGrade = grade;
+                document.getElementById('gradeDisp').innerText = grade;
+                closeProfileMenu();
+                showAppAlert(`Grade parameters successfully upgraded to Grade: ${grade}`, "SUCCESS");
+                loadClassRegistry();
+            } catch(e) { showAppAlert("Failed to update index boundaries."); }
+        }
+
+        function checkCardLockState(uid) {
+            return localStorage.getItem(`lock_attendance_${myU}_${uid}`) === 'true' ? { locked: true } : { locked: false };
+        }
+
+        function enforceSingleCardLockUI(uid, status) {
+            localStorage.setItem(`lock_attendance_${myU}_${uid}`, 'true');
+            localStorage.setItem(`status_attendance_${myU}_${uid}`, status.toUpperCase());
+            localStorage.setItem(`timestamp_attendance_${myU}_${uid}`, new Date().toISOString());
+
+            const card = document.getElementById(`card-${uid}`);
+            if(card) {
+                card.classList.add('card-locked');
+                card.querySelectorAll('.btn-attendance').forEach(b => b.disabled = true);
+                const indicator = card.querySelector('.lock-indicator');
+                indicator.innerText = `⏳ MARKED: ${status.toUpperCase()} (LOCKED)`;
+                indicator.style.display = 'block';
+            }
+        }
+
+        function verifyAndProcessGlobalClassUnlock() {
+            const allLocked = visibleStudentUsernames.every(uid => localStorage.getItem(`lock_attendance_${myU}_${uid}`) === 'true');
+            if (allLocked && visibleStudentUsernames.length > 0) {
+                executionBlockPollState = true; 
+                showAppAlert("Roster marking finalized! This completed sheet remains saved and available to download below. Click 'Start New Register Session' when you are ready to replace it.", "REGISTER SECURED");
+            }
+        }
+
+        function triggerResetNewSession() {
+            const btnHtml = `
+                <button id="confirmResetBtn" class="btn-action" style="background:var(--danger); color:white; flex:1; margin-bottom:0;">CONFIRM RESET</button>
+                <button id="cancelResetBtn" class="btn-action btn-cancel" style="flex:1; margin-bottom:0;">CANCEL</button>
+            `;
+            showAppAlert("Are you sure you want to initialize a new attendance sheet? This action replaces the current active sheet selection placeholder.", "CONFIRM SESSION RESET", null, btnHtml);
+            
+            document.getElementById("cancelResetBtn").onclick = function() { closeAppAlert(); };
+            document.getElementById("confirmResetBtn").onclick = function() {
+                closeAppAlert();
+                visibleStudentUsernames.forEach(uid => {
+                    localStorage.removeItem(`lock_attendance_${myU}_${uid}`);
+                    localStorage.removeItem(`status_attendance_${myU}_${uid}`);
+                    localStorage.removeItem(`timestamp_attendance_${myU}_${uid}`);
+                });
+                executionBlockPollState = false;
+                loadClassRegistry();
+                showAppAlert("Roster metrics cleared. New register tracking panel initialized.", "ROSTER RESET");
+            };
+        }
+
+        async function submitAttendance(uid, name, status) {
+            const btnHtml = `
+                <button id="confirmMarkBtn" class="btn-action btn-submit" style="flex:1; margin-bottom:0;">CONFIRM MARK</button>
+                <button id="cancelMarkBtn" class="btn-action btn-cancel" style="flex:1; margin-bottom:0;">CANCEL</button>
+            `;
+            showAppAlert(`Mark ${name} as ${status.toUpperCase()}? This updates parent ledgers instantly.`, "CONFIRM ATTENDANCE MARK", null, btnHtml);
+            
+            document.getElementById("cancelMarkBtn").onclick = function() { closeAppAlert(); };
+            document.getElementById("confirmMarkBtn").onclick = async function() {
+                closeAppAlert();
+                enforceSingleCardLockUI(uid, status);
+                try {
+                    await authFetch('/api/moderator/log_attendance', {
+                        method: 'POST', headers: {'Content-Type': 'application/json'},
+                        body: JSON.stringify({ student_username: uid, student_name: name, moderator_username: myU, grade: myGrade, status: status.toUpperCase(), school_code: scCode })
+                    });
+                    verifyAndProcessGlobalClassUnlock();
+                } catch(e) { console.error("Sync drop trace."); }
+            };
+        }
+
+        async function loadClassRegistry() {
+            if (!scCode || !myGrade || executionBlockPollState) return;
+            try {
+                const classRes = await authFetch('/api/users/lookup', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ role: 'student', school_code: scCode, grade: myGrade.trim() }) });
+                const classJson = await classRes.json();
+                studentsDataCache = classJson.users || [];
+                visibleStudentUsernames = studentsDataCache.map(s => s.username);
+                
+                const grid = document.getElementById('studentGrid');
+                if(studentsDataCache.length === 0) {
+                    grid.innerHTML = `<p style="grid-column:1/-1; text-align:center; color:gray;">No students registered under Grade ${myGrade} at your school node.</p>`;
+                    return;
+                }
+
+                let cardsHtml = studentsDataCache.map(s => {
+                    const lockStatus = checkCardLockState(s.username);
+                    const isLockedAttr = lockStatus.locked ? 'disabled' : '';
+                    const displayLockStyle = lockStatus.locked ? 'block' : 'none';
+                    const lockedCardClass = lockStatus.locked ? 'card-locked' : '';
+                    const photo = s.photo ? s.photo : `https://ui-avatars.com/api/?name=${s.name}&background=3498db&color=fff`;
+                    
+                    const cachedStatus = localStorage.getItem(`status_attendance_${myU}_${s.username}`) || "PENDING";
+
+                    return `
+                    <div class="student-card ${lockedCardClass}" id="card-${s.username}">
+                        <img src="${photo}" class="avatar">
+                        <h4 style="margin:5px 0;">${s.name}</h4>
+                        <small style="color:var(--accent); font-family:monospace; display:block; margin-bottom:15px;">UID: ${s.username}</small>
+                        <div style="display:flex; justify-content:center;">
+                            <button class="btn-attendance btn-present" ${isLockedAttr} onclick="submitAttendance('${s.username}', '${s.name}', 'present')">PRESENT</button>
+                            <button class="btn-attendance btn-absent" ${isLockedAttr} onclick="submitAttendance('${s.username}', '${s.name}', 'absent')">ABSENT</button>
+                        </div>
+                        <div class="lock-indicator" style="display:${displayLockStyle}">⏳ MARKED: ${cachedStatus.toUpperCase()} (LOCKED)</div>
+                    </div>`;
+                }).join('');
+
+                grid.innerHTML = cardsHtml;
+                
+                const allLocked = visibleStudentUsernames.every(uid => localStorage.getItem(`lock_attendance_${myU}_${uid}`) === 'true');
+                if(allLocked && visibleStudentUsernames.length > 0) executionBlockPollState = true;
+            } catch(e) { console.error(e); }
+        }
+
+        function getBase64ImageFromUrl(url) {
+            return new Promise((resolve) => {
+                const img = new Image();
+                img.setAttribute('crossOrigin', 'anonymous');
+                img.onload = () => {
+                    const canvas = document.createElement('canvas');
+                    canvas.width = img.width; canvas.height = img.height;
+                    const ctx = canvas.getContext('2d');
+                    ctx.drawImage(img, 0, 0);
+                    resolve(canvas.toDataURL('image/jpeg'));
+                };
+                img.onerror = () => resolve(null);
+                img.src = url;
+            });
+        }
+
+        async function printRegisterPDF() {
+            if(studentsDataCache.length === 0) return alert("No active class roster loaded.");
+            
+            document.getElementById('processingModalOverlay').classList.add('show');
+
+            const { jsPDF } = window.jspdf;
+            const doc = new jsPDF();
+            const dateStr = new Date().toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' });
+
+            doc.setFillColor(248, 250, 252); doc.rect(0, 0, 210, 297, 'F');
+            doc.setFillColor(2, 2, 24); doc.rect(0, 0, 210, 45, 'F');
+            doc.setFillColor(14, 184, 166); doc.rect(0, 45, 210, 3, 'F');
+
+            doc.setTextColor(255, 255, 255);
+            doc.setFontSize(20); doc.setFont(undefined, 'bold'); doc.text("OFFICIAL ATTENDANCE ROSTER", 15, 20);
+            doc.setFontSize(9); doc.setFont(undefined, 'normal'); doc.setTextColor(14, 184, 166);
+            doc.text("SAFE DRIVE TRANSIT LOGISTICS & INSTITUTIONAL SECURITY NETWORK", 15, 28);
+            doc.text(`DATE GENERATED: ${dateStr.toUpperCase()}`, 15, 36);
+
+            let modPicUrl = sessionStorage.getItem('userPhoto') || `https://ui-avatars.com/api/?name=${myN || 'M'}&background=0eb8a6&color=fff`;
+            let modBase64 = await getBase64ImageFromUrl(modPicUrl);
+            if(modBase64) {
+                doc.addImage(modBase64, 'JPEG', 170, 8, 26, 26);
+                doc.setDrawColor(14, 184, 166); doc.setLineWidth(1);
+                doc.rect(170, 8, 26, 26);
+            }
+
+            doc.setTextColor(30, 41, 59); doc.setFontSize(11); doc.setFont(undefined, 'bold');
+            doc.text("CLASSROOM METADATA INDEX:", 15, 60);
+            doc.setFont(undefined, 'normal'); doc.setFontSize(10);
+            doc.text(`Institution Node: ${scCode}`, 15, 68);
+            doc.text(`Grade Overwatch Segment: Class ${myGrade}`, 15, 75);
+            doc.text(`Assigned Moderator / Educator: ${myN || 'N/A'}`, 15, 82);
+
+            let totalStudents = studentsDataCache.length;
+            let presentCount = 0; let absentCount = 0;
+            
+            const tableRows = [];
+            for (let i = 0; i < studentsDataCache.length; i++) {
+                const s = studentsDataCache[i];
+                
+                let actualLiveStatus = "PENDING";
+                const cardEl = document.getElementById(`card-${s.username}`);
+                if (cardEl) {
+                    const indicatorText = cardEl.querySelector('.lock-indicator').innerText;
+                    if (indicatorText.includes("PRESENT")) actualLiveStatus = "PRESENT";
+                    else if (indicatorText.includes("ABSENT")) actualLiveStatus = "ABSENT";
+                } else {
+                    actualLiveStatus = localStorage.getItem(`status_attendance_${myU}_${s.username}`) || "PENDING";
+                }
+
+                if (actualLiveStatus === "PRESENT") presentCount++;
+                if (actualLiveStatus === "ABSENT") absentCount++;
+
+                tableRows.push([
+                    String(i + 1),
+                    s.username,
+                    s.name.toUpperCase(),
+                    s.email || "N/A",
+                    actualLiveStatus
+                ]);
+            }
+
+            doc.setFont(undefined, 'bold'); doc.setFontSize(11); doc.text("ATTENDANCE SUMMATION METRICS:", 120, 60);
+            doc.setFont(undefined, 'normal'); doc.setFontSize(10);
+            doc.text(`Total Enrolled Class Count: ${totalStudents}`, 120, 68);
+            doc.setTextColor(16, 185, 129); doc.text(`Total Marked Present: ${presentCount}`, 120, 75);
+            doc.setTextColor(239, 68, 68); doc.text(`Total Marked Absent: ${absentCount}`, 120, 82);
+
+            doc.autoTable({
+                head: [['INDEX', 'STUDENT UID', 'FULL NAME (SURNAME FIRST)', 'COMMUNICATION E-MAIL', 'OVERWATCH STATE']],
+                body: tableRows,
+                startY: 92,
+                theme: 'grid',
+                styles: { fontSize: 9, cellPadding: 6, font: 'Helvetica', textColor: [51, 65, 85], valign: 'middle' },
+                headStyles: { fillColor: [2, 2, 24], textColor: [255, 255, 255], fontStyle: 'bold', halign: 'center' },
+                columnStyles: {
+                    0: { width: 15, halign: 'center' },
+                    1: { width: 35, halign: 'center' },
+                    2: { width: 65 },
+                    3: { width: 55 },
+                    4: { width: 26, fontStyle: 'bold', halign: 'center' }
+                },
+                didParseCell: function(data) {
+                    if (data.section === 'body' && data.column.index === 4) {
+                        if (data.cell.raw === "PRESENT") data.cell.styles.textColor = [16, 185, 129];
+                        else if (data.cell.raw === "ABSENT") data.cell.styles.textColor = [239, 68, 68];
+                        else data.cell.styles.textColor = [243, 156, 18];
+                    }
+                }
+            });
+
+            let finalY = doc.autoTable.previous.finalY + 25; if(finalY > 240) { doc.addPage(); finalY = 40; }
+            doc.setLineWidth(0.5); doc.setDrawColor(203, 213, 225); doc.line(15, finalY, 85, finalY); doc.line(125, finalY, 195, finalY);
+            doc.setTextColor(100, 116, 139); doc.setFontSize(9); doc.text("Educator / Lead Teacher Signature", 15, finalY + 6); doc.text("Date Signed Verification Line", 125, finalY + 6);
+
+            doc.save(`Official_Roster_Grade_${myGrade || 'Class'}_${dateStr.replace(/ /g, '_')}.pdf`);
+            
+            document.getElementById('processingModalOverlay').classList.remove('show');
+        }
+
+        async function deleteModeratorAccount() {
+            const reason = prompt("REASON FOR DELETING MODERATOR ACCOUNT:");
+            if (reason === null) return; 
+            if (!reason.trim()) { 
+                showAppAlert("Operation Aborted: You must provide an official justification text reason to drop credentials.", "ERROR"); 
+                return; 
+            }
+            
+            const btnHtml = `
+                <button id="confirmPurgeBtn" class="btn-action" style="background:var(--danger); color:white; flex:1; margin-bottom:0;">PURGE ACCOUNT</button>
+                <button id="cancelPurgeBtn" class="btn-action btn-cancel" style="flex:1; margin-bottom:0;">CANCEL</button>
+            `;
+            showAppAlert("WARNING: This permanently purges your identity mapping node from cloud indexes. Proceed?", "CONFIRM ACCOUNT PURGE", null, btnHtml);
+            
+            document.getElementById("cancelPurgeBtn").onclick = function() { closeAppAlert(); };
+            document.getElementById("confirmPurgeBtn").onclick = function() {
+                closeAppAlert();
+                executeAccountPurgePipeline(reason);
+            };
+        }
+
+        async function executeAccountPurgePipeline(reasonText) {
+            try {
+                const response = await authFetch('/api/delete_account', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ username: myU, reason: reasonText })
+                });
+                
+                const result = await response.json();
+                if (result.status === 'success') {
+                    visibleStudentUsernames.forEach(uid => {
+                        localStorage.removeItem(`lock_attendance_${myU}_${uid}`);
+                        localStorage.removeItem(`status_attendance_${myU}_${uid}`);
+                        localStorage.removeItem(`timestamp_attendance_${myU}_${uid}`);
+                    });
+                    sessionStorage.clear();
+                    window.location.replace("login.html");
+                } else {
+                    showAppAlert("Account deletion pipeline rejected by backend server.", "CRITICAL ERROR");
+                }
+            } catch(e) {
+                showAppAlert("Network Error: Could not connect to authentication services.", "CONNECTION ERROR");
+            }
+        }
+
+        function logout() { sessionStorage.clear(); window.location.replace("login.html"); }
+        window.onload = () => { loadClassRegistry(); setInterval(loadClassRegistry, 30000); };
+    </script>
+</body>
+</html>
