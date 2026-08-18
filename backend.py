@@ -19,6 +19,7 @@ from zoneinfo import ZoneInfo
 from datetime import datetime
 from flask import render_template
 from auth import issue_token, require_auth, require_role  # NEW: JWT auth module
+import resend
 
 print("BACKEND STARTED")
 load_dotenv()
@@ -96,7 +97,7 @@ def check_face_proximity(image_path):
 
 SENDER_EMAIL = os.getenv("SENDER_EMAIL")
 SENDER_PASSWORD = os.getenv("SENDER_PASSWORD")
-
+resend.api_key = os.environ.get("RESEND_API_KEY")
 pending_users = {}
 pending_parent_links = {}
 password_reset_codes = {}
@@ -127,24 +128,23 @@ def generate_email_wrapper(content, subtitle="Security Notification"):
     </div>
     """
 
-def send_mail(to_email, subject, body):
-    SENDER_EMAIL = os.getenv("SENDER_EMAIL")
-    APP_PASSWORD = os.getenv("SENDER_PASSWORD")
-
-    msg = EmailMessage()
-    msg["Subject"] = subject
-    msg["From"] = SENDER_EMAIL
-    msg["To"] = to_email
-    msg.set_content(body, subtype="html")
+def send_mail(to_email, subject, body_content, subtitle="Security Notification"):
+    # Wrap your custom body content inside your HTML template
+    full_html_body = generate_email_wrapper(body_content, subtitle=subtitle)
 
     try:
-        with smtplib.SMTP("smtp.gmail.com", 587) as server:
-            server.starttls()
-            server.login(SENDER_EMAIL, APP_PASSWORD)
-            server.send_message(msg)
-            print(f"✅ Email successfully sent to {to_email}")
+        params = {
+            "from": "Safe Drive <onboarding@resend.dev>",  # Uses Resend's default test sender (works instantly)
+            "to": [to_email],
+            "subject": subject,
+            "html": full_html_body,
+        }
+        response = resend.Emails.send(params)
+        print(f"✅ Email successfully sent to {to_email}")
+        return True
     except Exception as e:
-        print(f"❌ [CRITICAL SMTP FAILURE] Error: {e}")
+        print(f"❌ [RESEND API FAILURE] Error: {e}")
+        return False
 
 # =====================================================================
 # OPEN ROUTES — no identity exists yet, so these stay unauthenticated.
