@@ -152,20 +152,30 @@ def send_mail(to_email, subject, body):
 # =====================================================================
 
 
-@app.route('/driver_signup')
-@app.route('/driver_signup.html')
-def driver_signup_page():
-    return render_template('driver_signup.html')
+@app.route('/signup')
+@app.route('/signup.html')
+def signup_page():
+    return render_template('signup.html')
 
 @app.route('/student_signup')
 @app.route('/student_signup.html')
 def student_signup_page():
     return render_template('student_signup.html')
 
-@app.route('/signup')
-@app.route('/signup.html')
-def signup_page():
-    return render_template('signup.html')
+@app.route('/driver_signup')
+@app.route('/driver_signup.html')
+def driver_signup_page():
+    return render_template('driver_signup.html')
+
+@app.route('/moderator_signup')
+@app.route('/moderator_signup.html')
+def moderator_signup_page():
+    return render_template('moderator_signup.html')
+
+@app.route('/principal_signup')
+@app.route('/principal_signup.html')
+def principal_signup_page():
+    return render_template('principal_signup.html')
 
 
 
