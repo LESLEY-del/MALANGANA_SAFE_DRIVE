@@ -17,7 +17,7 @@ from dotenv import load_dotenv
 from email.message import EmailMessage
 from zoneinfo import ZoneInfo
 from datetime import datetime
-
+from flask import render_template
 from auth import issue_token, require_auth, require_role  # NEW: JWT auth module
 
 print("BACKEND STARTED")
@@ -38,6 +38,11 @@ def current_sa_time():
         .replace(microsecond=0)
         .isoformat(timespec="seconds")
     )
+
+
+@app.route('/')
+def home():
+    return render_template('index.html')
 
 @app.before_request
 def log_requests():
