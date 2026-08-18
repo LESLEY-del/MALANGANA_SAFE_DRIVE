@@ -151,7 +151,9 @@ def send_mail(to_email, subject, body):
 # (login, signup, otp verification, password reset)
 # =====================================================================
 
-@app.route('/moderatore_signup')
+
+
+@app.route('/moderator_signup')
 @app.route('/moderatore_signup.html')
 def moderator_signup_page():
     return render_template('moderatore_signup.html')
