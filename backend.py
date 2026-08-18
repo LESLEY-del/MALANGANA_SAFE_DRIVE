@@ -189,17 +189,7 @@ def login_page():
 def choice_page():
     return render_template('choice.html')
 
-@app.route('/student_dashboard')
-def student_dashboard():
-    return render_template('student_dashboard.html')
 
-@app.route('/admin_dashboard')
-def admin_dashboard():
-    return render_template('admin_dashboard.html')
-
-@app.route('/driver_dashboard')
-def driver_dashboard():
-    return render_template('driver_dashboard.html')
 
 @app.route('/api/admin/users', methods=['GET', 'OPTIONS'])
 @require_auth
