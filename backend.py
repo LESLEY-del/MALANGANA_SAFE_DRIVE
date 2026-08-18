@@ -177,10 +177,7 @@ def student_signup_page():
 def driver_signup_page():
     return render_template('driver_signup.html')
 
-@app.route('/moderator_signup')
-@app.route('/moderator_signup.html')
-def moderator_signup_page():
-    return render_template('moderator_signup.html')
+
 
 @app.route('/principal_signup')
 @app.route('/principal_signup.html')
