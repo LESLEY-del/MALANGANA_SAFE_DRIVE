@@ -2,4 +2,4 @@ Flask
 supabase
 python-dotenv
 gunicorn
-opencv-python
+opencv-python-headless
