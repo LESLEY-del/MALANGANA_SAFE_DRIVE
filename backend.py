@@ -151,15 +151,7 @@ def send_mail(to_email, subject, body):
 # (login, signup, otp verification, password reset)
 # =====================================================================
 
-@app.route('/')
-@app.route('/index.html')
-def home_page():
-    return render_template('index.html')
 
-@app.route('/choice')
-@app.route('/choice.html')
-def choice_page():
-    return render_template('choice.html')
 
 
 @app.route('/student_dashboard.html')
