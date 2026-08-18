@@ -1,5 +1,10 @@
 Flask
-supabase
-python-dotenv
-gunicorn
+flask-cors
+numpy
 opencv-python-headless
+bcrypt
+PyJWT
+supabase
+httpx
+python-dotenv
+waitress
