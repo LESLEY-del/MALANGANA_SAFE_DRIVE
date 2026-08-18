@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Safe Drive - Public Dashboard</title>
+    <style>
+        body { font-family: 'Segoe UI', sans-serif; background-color: #bbb6b6; margin: 0; }
+        #header { width: 100%; height: 12vh; background-color: #020218; display: flex; align-items: center; justify-content: space-between; padding: 0 5%; box-sizing: border-box; }
+        #title { color: white; font-size: 24px; }
+        .container { padding: 20px; display: flex; flex-direction: column; align-items: center; gap: 20px; }
+        .profile-card, .driver-card { background: white; padding: 30px; border-radius: 30px; width: 450px; text-align: center; box-shadow: 0 10px 30px rgba(0,0,0,0.1); }
+        .driver-list { margin-top: 20px; text-align: left; }
+        .driver-item { border-bottom: 1px solid #eee; padding: 15px 0; display: flex; justify-content: space-between; align-items: center; }
+        .contact-btn { background: #27ae60; color: white; border: none; padding: 8px 15px; border-radius: 10px; cursor: pointer; font-weight: bold; }
+    </style>
+</head>
+<body>
+    <div id="header">
+        <h1 id="title">SAFE DRIVE - DOOR TO DOOR</h1>
+        <button onclick="localStorage.clear(); window.location.href='login.html';" style="color:white; background:none; border:1px solid white; padding:5px 15px; cursor:pointer; border-radius: 5px;">Logout</button>
+    </div>
+
+    <div class="container">
+        <div class="profile-card">
+            <h2 id="userName">Welcome</h2>
+            <hr>
+            <p style="color: #666; font-size: 14px;">Browse available door-to-door and private event drivers below.</p>
+        </div>
+
+        <div class="driver-card">
+            <h3 style="margin-top: 0;">AVAILABLE PRIVATE TRANSPORTS</h3>
+            <div id="driverList" class="driver-list">Searching for drivers...</div>
+        </div>
+    </div>
+
+    <script>
+        // Set user name from local storage
+        document.getElementById('userName').innerText = localStorage.getItem('userName') || "Welcome";
+
+        async function fetchGeneralDrivers() {
+            try {
+                // This endpoint ONLY fetches drivers with service_type == 'door_to_door'
+                const res = await fetch('http://127.0.0.1:5000/api/general/drivers');
+                const data = await res.json();
+                const listContainer = document.getElementById('driverList');
+                listContainer.innerHTML = "";
+
+                if (data.drivers.length === 0) {
+                    listContainer.innerHTML = "<p style='color:red;'>No door-to-door drivers available at the moment.</p>";
+                } else {
+                    data.drivers.forEach(d => {
+                        listContainer.innerHTML += `
+                            <div class="driver-item">
+                                <div>
+                                    <b>${d.name}</b> (${d.vehicle_type ? d.vehicle_type.toUpperCase() : 'CAR'})<br>
+                                    <small style="color: #666;">Contact: ${d.email}</small>
+                                </div>
+                                <a href="mailto:${d.email}?subject=Safe Drive: Booking Request" style="text-decoration: none;">
+                                    <button class="contact-btn">BOOK NOW</button>
+                                </a>
+                            </div>`;
+                    });
+                }
+            } catch (error) {
+                console.error("Dashboard error:", error);
+                document.getElementById('driverList').innerHTML = "<p style='color:red;'>Failed to load drivers.</p>";
+            }
+        }
+
+        fetchGeneralDrivers();
+    </script>
+</body>
+</html>
