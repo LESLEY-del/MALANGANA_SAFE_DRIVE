@@ -1565,5 +1565,6 @@ def users_lookup():
 
 
 if __name__ == '__main__':
-    print("🚀 Starting High-Performance Resilient Waitress Server on port 5000...")
-    serve(app, host='0.0.0.0', port=5000, threads=8)
+    port = int(os.environ.get("PORT", 5000))
+    print(f"🚀 Starting Safe Drive backend on port {port}...")
+    serve(app, host='0.0.0.0', port=port, threads=8)
