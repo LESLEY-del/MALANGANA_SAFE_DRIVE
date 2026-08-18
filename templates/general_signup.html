@@ -1,0 +1,430 @@
+<!DOCTYPE html> 
+<html lang="en"> 
+<head> 
+    <meta charset="UTF-8"> 
+    <meta name="viewport" content="width=device-width, initial-scale=1.0"> 
+    <title>Public Signup | Safe Drive</title> 
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <style> 
+        :root {
+            --bg: #0f172a;
+            --card: #1e293b;
+            --input: #334155;
+            --accent: #38bdf8;
+            --error: #fb7185;
+            --success: #34d399;
+            --text-main: #f8fafc;
+            --text-dim: #94a3b8;
+        }
+
+        body {
+            background: var(--bg);
+            font-family: sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            margin: 0;
+            color: var(--text-main);
+            padding: 20px;
+            box-sizing: border-box;
+        }  
+
+        .card {
+            background: var(--card);
+            padding: 35px 30px;
+            border-radius: 40px;
+            width: 100%;
+            max-width: 380px;
+            text-align: center;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.4);
+            box-sizing: border-box;
+            position: relative;
+        }  
+
+        .back-link {
+            position: absolute;
+            top: 25px;
+            left: 25px;
+            color: var(--text-dim);
+            text-decoration: none;
+            font-size: 13px;
+            font-weight: bold;
+            transition: color 0.3s;
+        }
+        .back-link:hover { color: var(--accent); }
+
+        .input-box {
+            width: 100%;
+            background: var(--input);
+            border: 1px solid #475569;
+            padding: 14px;
+            margin: 8px 0;
+            border-radius: 20px;
+            outline: none;
+            color: white;
+            box-sizing: border-box;
+            transition: 0.2s;
+        }  
+
+        .input-box::placeholder { color: var(--text-dim); }
+        .input-box:focus { border-color: var(--accent); }
+
+        .btn {
+            background: var(--accent);
+            color: #020218;
+            width: 100%;
+            padding: 15px;
+            border-radius: 25px;
+            border: none;
+            cursor: pointer;
+            font-weight: bold;
+            margin-top: 15px;
+            transition: 0.3s;
+            text-transform: uppercase;
+        } 
+        .btn:disabled { background: #475569; cursor: not-allowed; color: #94a3b8; } 
+
+        .btn-secondary { background: transparent; border: 2px solid var(--text-dim); color: var(--text-main); }
+        .btn-secondary:hover { border-color: var(--error); color: var(--error); }
+
+        .error-text {
+            color: var(--error); 
+            font-size: 11px; 
+            font-weight: 800; 
+            display: none; 
+            margin: -4px 0 10px 0; 
+            text-transform: uppercase;
+            text-align: left;
+            padding-left: 10px;
+        } 
+
+        .modal-overlay {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.85); display: none; justify-content: center; align-items: center; z-index: 1000; backdrop-filter: blur(5px);
+        }
+        .modal {
+            background: var(--card); padding: 35px; border-radius: 25px; text-align: center; width: 90%; max-width: 380px; box-shadow: 0 10px 40px rgba(0,0,0,0.8);
+        }
+        .code-input {
+            font-size: 24px; letter-spacing: 8px; text-align: center; font-weight: bold; color: white;
+        }
+
+        .camera-container {
+            width: 100%; height: 240px; background: #000; border-radius: 20px;
+            margin: 15px 0; overflow: hidden; position: relative;
+            border: 3px solid var(--input); transition: border-color 0.3s;
+        }
+        #video { width: 100%; height: 100%; object-fit: cover; transform: scaleX(-1); }
+        #canvas { display: none; }
+        .camera-overlay {
+            position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+            width: 140px; height: 180px; border: 3px dashed var(--accent);
+            border-radius: 50%; pointer-events: none; transition: all 0.3s ease;
+        }
+
+        .app-alert-overlay {
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0, 0, 0, 0.7);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 9999;
+            opacity: 0;
+            pointer-events: none;
+            backdrop-filter: blur(4px);
+            transition: opacity 0.3s ease;
+        }
+        .app-alert-overlay.show { opacity: 1; pointer-events: auto; }
+        .app-alert-box {
+            background: var(--card);
+            border: 1px solid #475569;
+            border-radius: 20px;
+            padding: 30px 25px;
+            width: 85%;
+            max-width: 320px;
+            text-align: center;
+            box-shadow: 0 25px 50px rgba(0, 0, 0, 0.5);
+            transform: scale(0.9);
+            transition: transform 0.3s ease;
+        }
+        .app-alert-overlay.show .app-alert-box { transform: scale(1); }
+        .app-alert-message { color: var(--text-main); font-size: 14px; line-height: 1.5; margin-bottom: 25px; margin-top: 0; }
+        .app-alert-btn {
+            background: var(--accent);
+            color: #020218;
+            border: none;
+            padding: 12px 0;
+            border-radius: 12px;
+            font-weight: bold;
+            font-size: 14px;
+            width: 100%;
+            cursor: pointer;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+    </style> 
+</head> 
+<body> 
+    <div class="card"> 
+        <a href="choice.html" class="back-link">&#8592; Back</a>
+        
+        <h2 style="letter-spacing: -1px; margin-top: 10px;">PUBLIC SIGNUP</h2> 
+        <p style="font-size: 12px; color: var(--text-dim); margin-bottom: 20px;">Identity Verification Required</p> 
+         
+        <input type="text" id="name" placeholder="Full Name" class="input-box"> 
+         
+        <input type="text" id="username" placeholder="Create Username" class="input-box"> 
+        <div id="uError" class="error-text">THIS USERNAME IS ALREADY TAKEN</div> 
+         
+        <input type="email" id="email" placeholder="Email Address" class="input-box"> 
+        <input type="password" id="password" placeholder="Password" class="input-box"> 
+         
+        <button class="btn" id="startScanBtn">SCAN FACE TO CONTINUE</button> 
+    </div> 
+
+    <div class="modal-overlay" id="cameraModal">
+        <div class="modal" style="padding: 25px;">
+            <h3 style="color: white; margin-top: 0;">Identity Security Check</h3>
+            
+            <div class="camera-container" id="camContainer">
+                <video id="video" autoplay muted playsinline></video>
+                <div class="camera-overlay" id="camOverlay"></div>
+                <canvas id="canvas"></canvas>
+            </div>
+            
+            <p id="camStatus" style="font-size: 14px; color: var(--text-dim); font-weight: bold; min-height: 20px;">Initializing camera...</p>
+        </div>
+    </div>
+
+    <div class="modal-overlay" id="verifyModal">
+        <div class="modal">
+            <h3 style="color: white; margin-top: 0;">Verify Email</h3>
+            <p style="color: var(--text-dim); font-size: 13px;">Face scanned successfully. Enter the 4-digit code sent to your email to activate your account.</p>
+            <input type="text" id="vCodeInput" class="input-box code-input" placeholder="0000" maxlength="4" autocomplete="off">
+            <button class="btn" id="verifyBtn">CONFIRM CODE</button>
+            <button class="btn btn-secondary" id="cancelVerifyBtn" style="margin-top: 10px; padding: 10px;">Cancel</button>
+        </div>
+    </div>
+
+    <div id="appAlertOverlay" class="app-alert-overlay">
+        <div class="app-alert-box">
+            <h3 style="margin-top: 0; color: var(--accent); font-size: 18px; margin-bottom: 10px;">Notice</h3>
+            <p id="appAlertMessage" class="app-alert-message"></p>
+            <button onclick="closeAppAlert()" class="app-alert-btn">OK</button>
+        </div>
+    </div>
+ 
+    <script> 
+        let alertRedirectUrl = null;
+
+        function showAppAlert(message, redirectUrl = null) {
+            document.getElementById("appAlertMessage").innerText = message;
+            document.getElementById("appAlertOverlay").classList.add("show");
+            alertRedirectUrl = redirectUrl; 
+        }
+
+        function closeAppAlert() {
+            document.getElementById("appAlertOverlay").classList.remove("show");
+            if (alertRedirectUrl) {
+                window.location.href = alertRedirectUrl;
+            }
+        }
+
+        const supabaseUrl = 'https://mlzpmiccmggfwenfzvsy.supabase.co';
+        const supabaseKey = 'sb_publishable_ehnY1o3Vm1YCHVhaL5NL-Q_UZN-xRIp';
+        const _supabase = supabase.createClient(supabaseUrl, supabaseKey);
+
+        const startScanBtn = document.getElementById('startScanBtn'); 
+        const uError = document.getElementById('uError'); 
+        const uInput = document.getElementById('username'); 
+        
+        const cameraModal = document.getElementById('cameraModal');
+        const video = document.getElementById('video');
+        const canvas = document.getElementById('canvas');
+        const camStatus = document.getElementById('camStatus');
+        const camContainer = document.getElementById('camContainer');
+        const camOverlay = document.getElementById('camOverlay');
+        const verifyModal = document.getElementById('verifyModal');
+
+        let cameraStream = null;
+        let faceImageData = null;
+
+        uInput.addEventListener('input', async () => {
+            const u = uInput.value.trim().toLowerCase();
+            if (u.length < 1) {
+                uError.style.display = 'none';
+                uInput.style.border = "1px solid #475569";
+                startScanBtn.disabled = false;
+                return;
+            }
+
+            try {
+                const { data } = await _supabase.from('users').select('username').eq('username', u).maybeSingle();
+                if (data) { 
+                    uError.style.display = 'block'; 
+                    uInput.style.border = "2px solid var(--error)"; 
+                    startScanBtn.disabled = true; 
+                } else { 
+                    uError.style.display = 'none'; 
+                    uInput.style.border = "1px solid #475569";
+                    startScanBtn.disabled = false;
+                } 
+            } catch (err) {
+                console.error("Cloud security check failed.");
+            }
+        });
+ 
+        startScanBtn.addEventListener('click', async () => { 
+            const u = uInput.value.trim().toLowerCase(); 
+            const n = document.getElementById('name').value.trim();
+            const e = document.getElementById('email').value.trim();
+            const p = document.getElementById('password').value.trim();
+
+            if(!u || !n || !e || !p) return showAppAlert("Please complete all registration fields first."); 
+ 
+            cameraModal.style.display = 'flex';
+            await startCamera();
+            runFaceAutoScan(n, u, e, p);
+        }); 
+
+        async function startCamera() {
+            try {
+                cameraStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "user" } });
+                video.srcObject = cameraStream;
+            } catch (err) {
+                camStatus.innerText = "Camera Access Denied!";
+                camStatus.style.color = "var(--error)";
+            }
+        }
+
+        function stopCamera() {
+            if(cameraStream) {
+                cameraStream.getTracks().forEach(track => track.stop());
+            }
+        }
+
+        function runFaceAutoScan(name, username, email, password) {
+            camContainer.style.borderColor = "var(--input)";
+            camOverlay.style.backgroundColor = "transparent";
+
+            setTimeout(() => { camStatus.innerText = "Positioning face..."; }, 500);
+            setTimeout(() => { camStatus.innerText = "Please look directly at the camera..."; }, 2500);
+            setTimeout(() => { 
+                camStatus.innerText = "Perfect! Hold still..."; 
+                camStatus.style.color = "var(--success)";
+                camContainer.style.borderColor = "var(--success)";
+            }, 4500);
+            setTimeout(() => {
+                camStatus.innerText = "CAPTURING...";
+                captureFrame();
+                
+                camOverlay.style.backgroundColor = "rgba(255,255,255,0.6)";
+                
+                setTimeout(() => { 
+                    submitToBackend(name, username, email, password);
+                }, 300);
+            }, 6000);
+        }
+
+        function captureFrame() {
+            const context = canvas.getContext('2d');
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+            context.drawImage(video, 0, 0, canvas.width, canvas.height);
+            faceImageData = canvas.toDataURL('image/jpeg');
+        }
+
+      async function submitToBackend(n, u, e, p) {
+    camStatus.innerText = "Verifying security data...";
+    camStatus.style.color = "var(--accent)";
+    camOverlay.style.backgroundColor = "transparent";
+
+    const payload = {  
+        name: n,  
+        username: u,  
+        email: e,  
+        password: p,
+        role: 'general'
+    }; 
+
+    // FIX ONLY: prevent undefined crash
+    if (typeof faceImageData !== "undefined" && faceImageData) {
+        payload.face_image = faceImageData;
+    }
+     
+    try { 
+        const res = await fetch('http://127.0.0.1:5000/api/general/signup', {  
+            method: 'POST',  
+            headers: {'Content-Type': 'application/json'},  
+            body: JSON.stringify(payload)  
+        }); 
+         
+        const data = await res.json(); 
+        cameraModal.style.display = 'none';
+        stopCamera();
+         
+        if (data.status === 'pending') { 
+            verifyModal.style.display = 'flex';
+            document.getElementById('vCodeInput').focus();
+        } else {  
+            showAppAlert(data.message || "Face Detection Failed. Please try again.");  
+        } 
+    } catch (err) { 
+        showAppAlert("Connection error. Is the AI server running?"); 
+        cameraModal.style.display = 'none';
+        stopCamera();
+    } 
+}
+
+document.getElementById('verifyBtn').addEventListener('click', async () => {
+    const code = document.getElementById('vCodeInput').value.trim();
+    const u = uInput.value.trim().toLowerCase(); 
+
+    if(code.length !== 4) return showAppAlert("Code must be exactly 4 digits.");
+
+    const vBtn = document.getElementById('verifyBtn');
+    vBtn.innerText = "CHECKING...";
+    vBtn.disabled = true;
+
+    // FIX ONLY: safe payload build
+    const payload = {
+        username: u,
+        code: code
+    };
+
+    if (typeof photoData !== "undefined" && photoData) {
+        payload.verification_image = photoData;
+    }
+
+    try {
+        const vRes = await fetch('http://127.0.0.1:5000/api/verify-and-save', {  
+            method: 'POST',  
+            headers: {'Content-Type': 'application/json'},  
+            body: JSON.stringify(payload)  
+        }); 
+         
+        const final = await vRes.json(); 
+         
+        if (final.status === 'success') {  
+            showAppAlert("Face Data Secured & Account Activated!", 'login.html');  
+        } else {  
+            showAppAlert(final.message || "Invalid Verification Code.");  
+            vBtn.innerText = "CONFIRM CODE";  
+            vBtn.disabled = false; 
+        } 
+    } catch (err) {
+        showAppAlert("Verification Server Error.");
+        vBtn.innerText = "CONFIRM CODE";
+        vBtn.disabled = false;
+    }
+});
+
+document.getElementById('cancelVerifyBtn').addEventListener('click', () => {
+    verifyModal.style.display = 'none';
+    showAppAlert("Verification cancelled. Your account is not activated.");
+});
+    </script> 
+</body> 
+</html>
