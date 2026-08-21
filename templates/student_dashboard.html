@@ -126,6 +126,12 @@
         .view-section.active { display: flex; }
         @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
 
+        /* Full Screen Home Image */
+        .home-image-container { position: relative; width: 100%; height: 55vh; }
+        .home-image-container img { width: 100%; height: 100%; object-fit: cover; display: block; }
+        .home-image-overlay { position: absolute; bottom: 0; left: 0; width: 100%; background: linear-gradient(to top, var(--bg-grad-1) 0%, transparent 100%); padding: 40px 20px 20px; }
+        .home-controls { padding: 15px 20px; display: flex; flex-direction: column; gap: 15px; background: var(--bg-grad-1); flex: 1; }
+
         .card { background: var(--card-bg); width: 100%; border-bottom: 8px solid var(--bg-grad-1); } 
         .card-header { padding: 15px 20px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; background: var(--card-bg-alt); flex-wrap: wrap; gap: 10px;} 
         .card-header h3 { margin: 0; font-size: 0.95rem; letter-spacing: 0.5px; color: var(--text-muted); font-weight: 700; text-transform: uppercase; display: flex; align-items: center;} 
@@ -175,9 +181,6 @@
         .app-alert-overlay.show .app-alert-box { transform: scale(1); }
         .app-alert-message { color: var(--text-muted); font-size: 14px; line-height: 1.5; margin-bottom: 25px; margin-top: 5px; white-space: pre-line; }
 
-        .alarm-box { border: 3px solid var(--danger); box-shadow: 0 0 50px rgba(255, 0, 0, 0.5); animation: pulseRed 1s infinite; }
-        @keyframes pulseRed { 0% { box-shadow: 0 0 20px rgba(255,0,0,0.5); } 50% { box-shadow: 0 0 60px rgba(255,0,0,0.8); } 100% { box-shadow: 0 0 20px rgba(255,0,0,0.5); } }
-
         .history-item { background: transparent; padding: 15px 20px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; }
     </style> 
 </head> 
@@ -188,7 +191,7 @@
             <span></span><span></span><span></span>
         </button>
         <div class="header-titles">
-            <h1>SAFE<span>DRIVE</span></h1>
+            <h1>STUDENT COMMAND</h1>
             <span class="header-overwatch" id="liveClock">00:00:00</span>
         </div>
         <div class="header-right">
@@ -208,15 +211,24 @@
         </div>
         <div class="drawer-nav">
             <button class="drawer-item active" data-view="view-home" onclick="switchView('view-home', this)">
-                <span class="ico">🔍</span> Find Rides
+                <span class="ico">🏠</span> Home Dashboard
             </button>
-            <button class="drawer-item" data-view="view-rides" onclick="switchView('view-rides', this)">
-                <span class="ico">🚐</span> My Bookings
-                <span class="count-pill" id="drawer_badgePending" style="display:none; background: var(--warning); color: #020218;">0</span>
-                <span class="count-pill" id="drawer_badgeActive" style="display:none; margin-left: 5px;">0</span>
+            <button class="drawer-item" data-view="view-school-request" onclick="switchView('view-school-request', this)">
+                <span class="ico">🏫</span> School Transport Request
+            </button>
+            <button class="drawer-item" data-view="view-event-request" onclick="switchView('view-event-request', this)">
+                <span class="ico">🎉</span> Event Request
+            </button>
+            <button class="drawer-item" data-view="view-school-active" onclick="switchView('view-school-active', this)">
+                <span class="ico">🚐</span> Active School
+                <span class="count-pill" id="drawer_badgeSchoolActive" style="display:none;">0</span>
+            </button>
+            <button class="drawer-item" data-view="view-event-active" onclick="switchView('view-event-active', this)">
+                <span class="ico">⭐</span> Active Event
+                <span class="count-pill" id="drawer_badgeEventActive" style="display:none;">0</span>
             </button>
             <button class="drawer-item" data-view="view-history" onclick="switchView('view-history', this)">
-                <span class="ico">🧾</span> Transcript
+                <span class="ico">🧾</span> Travel Transcript
             </button>
             
             <div style="height: 1px; background: var(--border); margin: 10px 20px;"></div>
@@ -312,18 +324,42 @@
     <!-- ===== MAIN EDGE-TO-EDGE CONTAINER ===== -->
     <div class="container"> 
         
-        <!-- ===== VIEW: HOME (FIND RIDES) ===== -->
+        <!-- ===== VIEW: HOME (Welcome screen) ===== -->
         <div id="view-home" class="view-section active">
-            
-            <!-- School Transport Card -->
+            <div class="home-image-container">
+                <img id="studentHomeImg" src="https://images.unsplash.com/photo-1523050854058-8df90110c9f1?auto=format&fit=crop&w=800&q=80" alt="Home Base">
+                <div class="home-image-overlay">
+                    <h2 style="margin: 0; color: white; font-size: 1.8rem; font-weight: 800;">Welcome,</h2>
+                    <p id="homeGreetingName" style="margin: 0; color: rgba(255,255,255,0.8); font-size: 1.1rem;"></p>
+                </div>
+            </div>
+            <div class="home-controls">
+                <div style="display: flex; gap: 10px;">
+                    <button class="btn btn-chat" onclick="document.getElementById('studentImgUpload').click()" style="flex: 1;">CHANGE WALLPAPER</button>
+                    <button class="btn btn-remove" onclick="removeStudentPicture()" style="flex: 1;">RESET</button>
+                    <input type="file" id="studentImgUpload" style="display:none;" onchange="handleStudentImgUpload(event)" accept="image/*">
+                </div>
+                
+                <div style="display: flex; flex-direction: column; gap: 10px; margin-top: 15px;">
+                    <button class="btn btn-primary" style="height: 50px;" onclick="switchView('view-school-request', document.querySelector('[data-view=view-school-request]'))">FIND SCHOOL TRANSPORT</button>
+                    <button class="btn btn-secondary" style="height: 50px;" onclick="switchView('view-event-request', document.querySelector('[data-view=view-event-request]'))">FIND EVENT HIRE</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- ===== VIEW: SCHOOL TRANSPORT REQUEST ===== -->
+        <div id="view-school-request" class="view-section">
             <div class="card" id="schoolTransportCard"> 
-                <div class="card-header"> 
-                    <h3>School Transport <span id="displayCode" style="color:var(--accent); text-transform: none; font-size: 12px; margin-left: 5px;"></span></h3> 
+                <div class="card-header" style="flex-direction: column; align-items: flex-start;"> 
+                    <h3 style="margin-bottom: 5px;">School Transport <span id="displayCode" style="color:var(--accent); text-transform: none; font-size: 12px; margin-left: 5px;"></span></h3> 
+                    <span style="font-size: 12px; color: var(--text-muted);">Drivers assigned to your institution</span>
                 </div> 
                 <div id="driverList" style="display:block;"></div> 
-            </div> 
+            </div>
+        </div>
 
-            <!-- Global Transport Card -->
+        <!-- ===== VIEW: EVENT REQUEST ===== -->
+        <div id="view-event-request" class="view-section">
             <div class="card" id="globalTransportCard"> 
                 <div class="card-header" style="flex-direction: column; align-items: flex-start;"> 
                     <h3 style="margin-bottom: 10px;">Global Private & Event Hire</h3> 
@@ -334,26 +370,56 @@
                 </div> 
                 <div id="privateDriverList" style="display:block;"></div> 
             </div>
-
         </div>
 
-        <!-- ===== VIEW: MY BOOKINGS ===== -->
-        <div id="view-rides" class="view-section">
+        <!-- ===== VIEW: ACTIVE SCHOOL ===== -->
+        <div id="view-school-active" class="view-section">
+            <div class="card-header" style="border:none; padding-bottom: 5px;">
+                <h3 style="font-size: 14px; color: var(--text-main);">My School Bookings</h3>
+            </div>
             
-            <div id="pendingCard" class="card" style="display:none;"> 
-                <div class="card-header">
-                    <h3>Pending Approvals <span id="badgePending" class="req-badge" style="background: var(--warning); color: #020218;"></span></h3>
+            <div id="schoolPendingCard" class="card" style="display:none; border-left: 4px solid var(--warning); margin-bottom: 20px;"> 
+                <div class="card-header" style="background: rgba(243, 156, 18, 0.05);">
+                    <h3 style="color: var(--warning);">Pending Approvals</h3>
                 </div> 
-                <div id="pendingList" style="display:block;"></div>
+                <div id="schoolPendingList" style="display:block;"></div>
             </div> 
 
-            <div id="acceptedCard" class="card" style="display:none; border-top: 4px solid var(--accent);"> 
+            <div id="schoolAcceptedCard" class="card" style="display:none; border-left: 4px solid var(--accent);"> 
                 <div class="card-header" style="background: rgba(37, 211, 102, 0.05);">
-                    <h3 style="color: var(--accent);">Active Trips <span id="badgeActive" class="req-badge"></span></h3>
+                    <h3 style="color: var(--accent);">Active Transport</h3>
                 </div> 
-                <div id="activeList" style="display:block;"></div>
+                <div id="schoolActiveList" style="display:block;"></div>
+            </div>
+            
+            <div id="schoolEmptyState" style="padding:30px 20px; color:var(--text-muted); text-align:center; font-size:14px; display:block;">
+                No active school transport bookings.
+            </div>
+        </div>
+
+        <!-- ===== VIEW: ACTIVE EVENT ===== -->
+        <div id="view-event-active" class="view-section">
+            <div class="card-header" style="border:none; padding-bottom: 5px; background: transparent;">
+                <h3 style="font-size: 14px; color: #3498db;">My Event Bookings</h3>
+            </div>
+            
+            <div id="eventPendingCard" class="card" style="display:none; border-left: 4px solid var(--warning); margin-bottom: 20px;"> 
+                <div class="card-header" style="background: rgba(243, 156, 18, 0.05);">
+                    <h3 style="color: var(--warning);">Pending Approvals</h3>
+                </div> 
+                <div id="eventPendingList" style="display:block;"></div>
+            </div> 
+
+            <div id="eventAcceptedCard" class="card" style="display:none; border-left: 4px solid #3498db;"> 
+                <div class="card-header" style="background: rgba(52, 152, 219, 0.05);">
+                    <h3 style="color: #3498db;">Active Transport</h3>
+                </div> 
+                <div id="eventActiveList" style="display:block;"></div>
             </div>
 
+            <div id="eventEmptyState" style="padding:30px 20px; color:var(--text-muted); text-align:center; font-size:14px; display:block;">
+                No active event bookings.
+            </div>
         </div>
 
         <!-- ===== VIEW: HISTORY ===== -->
@@ -435,38 +501,6 @@
         }
         function closeAppAlert() { document.getElementById("appAlertOverlay").classList.remove("show"); }
 
-        // --- Mock Fetch for Sandbox (Allows UI to work without real backend) ---
-        const originalFetch = window.fetch;
-        window.fetch = async function(url, options) {
-            if(url.includes('/api/users/lookup')) {
-                // Return some mock drivers
-                return new Response(JSON.stringify({users:[
-                    {username: 'd1', name: 'John Transport', role: 'driver', school_codes: ['SCH01']},
-                    {username: 'd2', name: 'Sarah Shuttle', role: 'driver', school_codes: ['SCH01']},
-                    {username: 'd3', name: 'Mike Private', role: 'driver', transport_type: 'school_events', town: 'Polokwane'}
-                ]}), {status: 200});
-            }
-            if(url.includes('/api/profile/get_self')) return new Response(JSON.stringify({status:'success', profile:{ grade: '10A', photo: 'https://ui-avatars.com/api/?name=Student' }}), {status: 200});
-            if(url.includes('/api/get_my_bookings')) {
-                return new Response(JSON.stringify({
-                    bookings: [
-                        { booking_id: '1', driver_name: 'John Transport', driver_username: 'd1', status: 'Pending', school_code: 'SCH01', student_username: myU, initial_msg: '[SCHOOL]' },
-                        { booking_id: '2', driver_name: 'Mike Private', driver_username: 'd3', status: 'Accepted', tracking_status: 'PICKED UP', school_code: 'D2D_GLOBAL', student_username: myU, initial_msg: '[PRIVATE]' }
-                    ]
-                }), {status: 200});
-            }
-            return new Response(JSON.stringify({status: 'success'}), {status: 200});
-        };
-        // ----------------------------------------------------------------------
-
-        // Mock Login logic for sandbox
-        if (!sessionStorage.getItem('username')) {
-            sessionStorage.setItem('username', 'student1');
-            sessionStorage.setItem('userName', 'Jane Doe');
-            sessionStorage.setItem('userRole', 'student');
-            sessionStorage.setItem('school_code', 'SCH01');
-        }
-
         const myU = sessionStorage.getItem('username');
         const myN = sessionStorage.getItem('userName') || "Student"; 
         const myRole = sessionStorage.getItem('userRole'); 
@@ -511,6 +545,7 @@
 
         // ⚡ INSTANT UI UPDATE ⚡
         document.getElementById('sName').innerText = myN.toUpperCase(); 
+        document.getElementById('homeGreetingName').innerText = myN;
         document.getElementById('displayCode').innerText = scCode;
         const avatarEl = document.getElementById('navAvatarContainer');
         if (cachedPhoto && cachedPhoto !== "null" && cachedPhoto !== "") {
@@ -523,7 +558,7 @@
             const now = new Date();
             const dateStr = now.toLocaleDateString(undefined, { weekday: 'short', year: 'numeric', month: 'short', day: 'numeric' });
             const timeStr = now.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-            document.getElementById('liveClock').innerText = `${dateStr} | ${timeStr}`; 
+            document.getElementById('liveClock').innerText = `${timeStr}`; 
         }, 1000);
 
         function updateBadge(id, count) {
@@ -540,6 +575,24 @@
                  else { drawerEl.style.display = 'none'; }
             }
         }
+
+        // Wallpaper logic
+        function handleStudentImgUpload(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                document.getElementById('studentHomeImg').src = e.target.result;
+                localStorage.setItem('studentHomeWallpaper', e.target.result);
+            };
+            reader.readAsDataURL(file);
+        }
+        function removeStudentPicture() {
+            document.getElementById('studentHomeImg').src = "https://images.unsplash.com/photo-1523050854058-8df90110c9f1?auto=format&fit=crop&w=800&q=80";
+            localStorage.removeItem('studentHomeWallpaper');
+        }
+        const savedHomeImg = localStorage.getItem('studentHomeWallpaper');
+        if(savedHomeImg) document.getElementById('studentHomeImg').src = savedHomeImg;
 
         async function initDashboard() {
             try {
@@ -572,7 +625,7 @@
             if(!file) return;
 
             closeProfileMenu();
-            showAppAlert("AI Engine is scanning and uploading the image to secure storage... Please wait.", "SYSTEM VERIFICATION");
+            showAppAlert("Uploading the image to secure storage... Please wait.", "VERIFICATION");
 
             try {
                 const formData = new FormData();
@@ -673,103 +726,79 @@
                 let pending = rawBookings.filter(b => b.status === 'Pending');
                 const accepted = rawBookings.filter(b => b.status === 'Accepted');
 
-                const activeSchoolTrip = accepted.find(b => b.initial_msg && b.initial_msg.includes('[SCHOOL]'));
-                const pendingSchoolTrips = pending.filter(b => b.initial_msg && b.initial_msg.includes('[SCHOOL]'));
+                // Split into School vs Event
+                let pendingSchoolTrips = pending.filter(b => b.initial_msg && b.initial_msg.includes('[SCHOOL]'));
+                let pendingEventTrips = pending.filter(b => !b.initial_msg || !b.initial_msg.includes('[SCHOOL]'));
 
-                if (activeSchoolTrip && pendingSchoolTrips.length > 0) {
+                let activeSchoolTrips = accepted.filter(b => b.initial_msg && b.initial_msg.includes('[SCHOOL]'));
+                let activeEventTrips = accepted.filter(b => !b.initial_msg || !b.initial_msg.includes('[SCHOOL]'));
+
+                // The old logic: if there is an active school trip, delete pending school trips
+                if (activeSchoolTrips.length > 0 && pendingSchoolTrips.length > 0) {
                     pendingSchoolTrips.forEach(pb => {
                         authFetch('/api/delete_account', { 
                             method: 'POST', headers: {'Content-Type': 'application/json'}, 
                             body: JSON.stringify({ booking_id: pb.booking_id, type: 'booking' }) 
                         });
                     });
-                    pending = pending.filter(b => !b.initial_msg.includes('[SCHOOL]'));
+                    pendingSchoolTrips = []; 
                 }
 
-                window.hasActiveSchoolTransport = !!activeSchoolTrip;
+                window.hasActiveSchoolTransport = activeSchoolTrips.length > 0;
 
-                if(pending.length > 0) {
-                    document.getElementById('pendingCard').style.display = 'block';
-                    updateBadge('badgePending', pending.length);
-                    document.getElementById('pendingList').innerHTML = pending.map(b => {
-                        const dObj = allDrivers.find(d => d.username === b.driver_username);
-                        const dPhoto = (dObj && dObj.photo) ? dObj.photo : `https://ui-avatars.com/api/?name=${encodeURIComponent(b.driver_name || 'D')}&background=3498db&color=fff`;
-                        
-                        const chatArr = b.chat || [];
-                        const currentLen = chatArr.length;
-                        const storedLen = chatLengthsCache[b.booking_id] || 0;
-                        let unreadCount = 0;
-                        if (currentLen > storedLen) {
-                            for(let i = storedLen; i < currentLen; i++) {
-                                if(chatArr[i].sender !== myU) unreadCount++;
-                            }
-                        }
-                        const badgeHtml = unreadCount > 0 ? `<span class="chat-badge">+${unreadCount}</span>` : '';
+                // --- PIPELINE: RENDER SCHOOL BOOKINGS ---
+                let schoolUnreadTotal = 0;
+                let sEmpty = true;
+                
+                if(pendingSchoolTrips.length > 0) {
+                    sEmpty = false;
+                    document.getElementById('schoolPendingCard').style.display = 'block';
+                    document.getElementById('schoolPendingList').innerHTML = pendingSchoolTrips.map(b => generateBookingRow(b, true)).join('');
+                } else {
+                    document.getElementById('schoolPendingCard').style.display = 'none';
+                }
 
-                        return `
-                        <div class="list-row" id="row-${escapeHtml(b.booking_id)}">
-                            <div style="display:flex; align-items:center; gap:15px; width: 100%;">
-                                <img src="${dPhoto}" class="driver-avatar" onclick="viewFullProfile('${dPhoto}')">
-                                <div style="display:flex; flex-direction:column; flex: 1; min-width: 0;">
-                                    <b style="font-size:16px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--text-main);">${escapeHtml(b.driver_name)}</b>
-                                    <span class="status-tag" style="color:var(--warning);">AWAITING APPROVAL</span>
-                                </div>
-                            </div>
-                            <div class="btn-group-grid">
-                                <button class="btn btn-chat" onclick="openChat('${escapeHtml(b.booking_id)}', '${escapeHtml(b.driver_name)}', '${dPhoto}', ${currentLen})">CHAT ${badgeHtml}</button>
-                                <button class="btn btn-cancel" onclick="cancelRide('${escapeHtml(b.booking_id)}')">CANCEL RIDE</button>
-                            </div>
-                        </div>`;
+                if(activeSchoolTrips.length > 0) {
+                    sEmpty = false;
+                    document.getElementById('schoolAcceptedCard').style.display = 'block';
+                    document.getElementById('schoolActiveList').innerHTML = activeSchoolTrips.map(b => {
+                        const { html, unread } = generateBookingRow(b, false);
+                        schoolUnreadTotal += unread;
+                        return html;
                     }).join('');
                 } else {
-                    document.getElementById('pendingCard').style.display = 'none';
-                    updateBadge('badgePending', 0);
+                    document.getElementById('schoolAcceptedCard').style.display = 'none';
                 }
+                
+                document.getElementById('schoolEmptyState').style.display = sEmpty ? 'block' : 'none';
+                updateBadge('badgeSchoolActive', schoolUnreadTotal);
 
-                if(accepted.length > 0) {
-                    document.getElementById('acceptedCard').style.display = 'block';
-                    let activeUnreadTotal = 0;
-
-                    document.getElementById('activeList').innerHTML = accepted.map(b => {
-                        const dObj = allDrivers.find(d => d.username === b.driver_username);
-                        const dPhoto = (dObj && dObj.photo) ? dObj.photo : `https://ui-avatars.com/api/?name=${encodeURIComponent(b.driver_name || 'D')}&background=3498db&color=fff`;
-                        
-                        let statusText = (b.tracking_status || "Accepted").toUpperCase();
-                        if(statusText === "DROPPED OFF") {
-                            let lastUpd = new Date(b.last_updated);
-                            if(Math.floor((new Date() - lastUpd)/60000) >= 10) statusText = "ACCEPTED";
-                        }
-
-                        const chatArr = b.chat || [];
-                        const currentLen = chatArr.length;
-                        const storedLen = chatLengthsCache[b.booking_id] || 0;
-                        let unreadCount = 0;
-                        if (currentLen > storedLen) {
-                            for(let i = storedLen; i < currentLen; i++) {
-                                if(chatArr[i].sender !== myU) unreadCount++;
-                            }
-                        }
-                        activeUnreadTotal += unreadCount;
-                        const badgeHtml = unreadCount > 0 ? `<span class="chat-badge">+${unreadCount}</span>` : '';
-
-                        return `
-                        <div class="list-row">
-                            <div style="display:flex; align-items:center; gap:15px; width: 100%;">
-                                <img src="${dPhoto}" class="driver-avatar" onclick="viewFullProfile('${dPhoto}')">
-                                <div style="display:flex; flex-direction:column; flex: 1; min-width: 0;">
-                                    <b style="font-size:16px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--text-main);">${escapeHtml(b.driver_name)}</b>
-                                    <span class="status-tag" style="background: rgba(39, 174, 96, 0.1); border-color: var(--accent); color: var(--accent);">${statusText}</span>
-                                </div>
-                            </div>
-                            <button class="btn btn-primary" onclick="openChat('${escapeHtml(b.booking_id)}', '${escapeHtml(b.driver_name)}', '${dPhoto}', ${currentLen})" style="margin-top:4px;">MESSAGE DRIVER ${badgeHtml}</button>
-                        </div>`;
-                    }).join('');
-
-                    updateBadge('badgeActive', activeUnreadTotal);
+                // --- PIPELINE: RENDER EVENT BOOKINGS ---
+                let eventUnreadTotal = 0;
+                let eEmpty = true;
+                
+                if(pendingEventTrips.length > 0) {
+                    eEmpty = false;
+                    document.getElementById('eventPendingCard').style.display = 'block';
+                    document.getElementById('eventPendingList').innerHTML = pendingEventTrips.map(b => generateBookingRow(b, true)).join('');
                 } else {
-                    document.getElementById('acceptedCard').style.display = 'none';
-                    updateBadge('badgeActive', 0);
+                    document.getElementById('eventPendingCard').style.display = 'none';
                 }
+
+                if(activeEventTrips.length > 0) {
+                    eEmpty = false;
+                    document.getElementById('eventAcceptedCard').style.display = 'block';
+                    document.getElementById('eventActiveList').innerHTML = activeEventTrips.map(b => {
+                        const { html, unread } = generateBookingRow(b, false);
+                        eventUnreadTotal += unread;
+                        return html;
+                    }).join('');
+                } else {
+                    document.getElementById('eventAcceptedCard').style.display = 'none';
+                }
+                
+                document.getElementById('eventEmptyState').style.display = eEmpty ? 'block' : 'none';
+                updateBadge('badgeEventActive', eventUnreadTotal);
 
                 renderHistory();
                 renderDrivers();
@@ -779,10 +808,63 @@
             } catch(e) { console.log("Booking refresh error", e); } 
         }
 
+        // Helper to generate consistent UI rows for bookings
+        function generateBookingRow(b, isPending) {
+            const dObj = allDrivers.find(d => d.username === b.driver_username);
+            const dPhoto = (dObj && dObj.photo) ? dObj.photo : `https://ui-avatars.com/api/?name=${encodeURIComponent(b.driver_name || 'D')}&background=3498db&color=fff`;
+            
+            const chatArr = b.chat || [];
+            const currentLen = chatArr.length;
+            const storedLen = chatLengthsCache[b.booking_id] || 0;
+            let unreadCount = 0;
+            if (currentLen > storedLen) {
+                for(let i = storedLen; i < currentLen; i++) {
+                    if(chatArr[i].sender !== myU) unreadCount++;
+                }
+            }
+            const badgeHtml = unreadCount > 0 ? `<span class="chat-badge">+${unreadCount}</span>` : '';
+
+            if (isPending) {
+                return `
+                <div class="list-row" id="row-${escapeHtml(b.booking_id)}">
+                    <div style="display:flex; align-items:center; gap:15px; width: 100%;">
+                        <img src="${dPhoto}" class="driver-avatar" onclick="viewFullProfile('${dPhoto}')">
+                        <div style="display:flex; flex-direction:column; flex: 1; min-width: 0;">
+                            <b style="font-size:16px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--text-main);">${escapeHtml(b.driver_name)}</b>
+                            <span class="status-tag" style="color:var(--warning);">AWAITING APPROVAL</span>
+                        </div>
+                    </div>
+                    <div class="btn-group-grid">
+                        <button class="btn btn-chat" onclick="openChat('${escapeHtml(b.booking_id)}', '${escapeHtml(b.driver_name)}', '${dPhoto}', ${currentLen})">CHAT ${badgeHtml}</button>
+                        <button class="btn btn-cancel" onclick="cancelRide('${escapeHtml(b.booking_id)}')">CANCEL RIDE</button>
+                    </div>
+                </div>`;
+            } else {
+                let statusText = (b.tracking_status || "Accepted").toUpperCase();
+                if(statusText === "DROPPED OFF") {
+                    let lastUpd = new Date(b.last_updated);
+                    if(Math.floor((new Date() - lastUpd)/60000) >= 10) statusText = "ACCEPTED";
+                }
+                const html = `
+                <div class="list-row">
+                    <div style="display:flex; align-items:center; gap:15px; width: 100%;">
+                        <img src="${dPhoto}" class="driver-avatar" onclick="viewFullProfile('${dPhoto}')">
+                        <div style="display:flex; flex-direction:column; flex: 1; min-width: 0;">
+                            <b style="font-size:16px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--text-main);">${escapeHtml(b.driver_name)}</b>
+                            <span class="status-tag" style="background: rgba(39, 174, 96, 0.1); border-color: var(--accent); color: var(--accent);">${statusText}</span>
+                        </div>
+                    </div>
+                    <button class="btn btn-primary" onclick="openChat('${escapeHtml(b.booking_id)}', '${escapeHtml(b.driver_name)}', '${dPhoto}', ${currentLen})" style="margin-top:4px;">MESSAGE DRIVER ${badgeHtml}</button>
+                </div>`;
+                return { html, unread: unreadCount };
+            }
+        }
+
         function renderDrivers() {
             const pending = rawBookings.filter(b => b.status === 'Pending');
             const accepted = rawBookings.filter(b => b.status === 'Accepted');
-            const hasActiveRide = accepted.length > 0;
+            
+            const activeSchoolTrip = accepted.find(b => b.initial_msg && b.initial_msg.includes('[SCHOOL]'));
 
             const schoolDrivers = allDrivers.filter(d => {
                 if (d.school_code && d.school_code.toUpperCase() === scCode) return true;
@@ -792,8 +874,7 @@
                 return false;
             });
 
-            if(hasActiveRide) {
-                document.getElementById('schoolTransportCard').style.opacity = '1';
+            if(activeSchoolTrip) {
                 document.getElementById('driverList').innerHTML = schoolDrivers.map(d => {
                     const driverPhoto = d.photo ? d.photo : `https://ui-avatars.com/api/?name=${encodeURIComponent(d.name || 'D')}&background=27ae60&color=fff&size=256`;
                     return `
@@ -809,7 +890,6 @@
                     </div>`;
                 }).join('');
             } else {
-                document.getElementById('schoolTransportCard').style.opacity = '1';
                 document.getElementById('driverList').innerHTML = schoolDrivers.map(d => {
                     const driverPhoto = d.photo ? d.photo : `https://ui-avatars.com/api/?name=${encodeURIComponent(d.name || 'D')}&background=27ae60&color=fff&size=256`;
                     const isPendingWithDriver = pending.some(b => b.driver_username === d.username && b.message && b.message.includes('[SCHOOL]'));
@@ -837,7 +917,6 @@
 
         function filterDrivers() {
             const pending = rawBookings.filter(b => b.status === 'Pending');
-            const accepted = rawBookings.filter(b => b.status === 'Accepted');
 
             const textTerm = document.getElementById('driverSearch').value.toLowerCase().trim();
             const locationTerm = document.getElementById('locationSearch').value.toLowerCase().trim();
@@ -863,9 +942,9 @@
                 
                 let btnHtml = "";
                 if (isPendingWithDriver) {
-                    btnHtml = `<button class="btn" style="background:var(--warning); color:#020218; width:100%;" disabled>PENDING</button>`;
+                    btnHtml = `<button class="btn btn-warning" style="margin-top:4px;" disabled>PENDING APPROVAL</button>`;
                 } else {
-                    btnHtml = `<button id="req-btn-${escapeHtml(d.username)}" class="btn btn-secondary" onclick="openRequestModal('${escapeHtml(d.username)}', '${escapeHtml(d.name)}', 'Private')">HIRE NOW</button>`;
+                    btnHtml = `<button id="req-btn-${escapeHtml(d.username)}" class="btn btn-secondary" onclick="openRequestModal('${escapeHtml(d.username)}', '${escapeHtml(d.name)}', 'Private')" style="margin-top:4px;">HIRE NOW</button>`;
                 }
 
                 const serviceType = (d.transport_type || d.driver_mode || 'PRIVATE').toUpperCase().replace(/_/g, ' ');
@@ -895,7 +974,7 @@
                     b.status === 'Accepted' && b.driver_username === du && b.initial_msg && b.initial_msg.includes('[SCHOOL]')
                 );
                 if (activeSchoolTrip) {
-                    return showAppAlert(`Since you are already enrolled with driver ${dn} for your standard School Transport routing lines, please chat with the driver on your active chats above to coordinate your event scheduling details.`, "ENROLLMENT NOTICE");
+                    return showAppAlert(`Since you are already enrolled with driver ${dn} for your standard School Transport routing lines, please chat with the driver on your active chats to coordinate your event scheduling details.`, "ENROLLMENT NOTICE");
                 }
             }
 
@@ -918,7 +997,7 @@
             document.getElementById('requestModalOverlay').classList.remove('show');
             
             const btn = document.getElementById(`req-btn-${targetDriverUser}`);
-            if(btn) { btn.innerText = "PENDING"; btn.disabled = true; btn.style.background = "var(--warning)"; btn.style.color = "#020218"; }
+            if(btn) { btn.innerText = "PENDING"; btn.disabled = true; btn.className = "btn btn-warning"; }
 
             try {
                 await authFetch('/api/student/book', { 
