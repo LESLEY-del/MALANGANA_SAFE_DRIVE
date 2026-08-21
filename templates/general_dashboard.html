@@ -72,7 +72,7 @@
         .hamburger-btn span { display: block; width: 22px; height: 2px; background: white; border-radius: 2px; }
         
         .header-titles { flex: 1; min-width: 0; margin-left: 5px;}
-        .header h1 { margin: 0; font-size: 1.15rem; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .header h1 { margin: 0; font-size: 1.15rem; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; cursor: pointer;}
         .header-overwatch { font-size: 11px; opacity:0.85; display:block; margin-top:2px; white-space: nowrap; font-weight: 400;}
         .header-right { display:flex; align-items:center; gap:12px; flex-shrink: 0; }
         
@@ -147,6 +147,7 @@
         .btn-danger { background: var(--danger); color: white; }
         .btn-warning { background: var(--warning); color: #020218; }
         .btn-pdf { background: #3b82f6; color: white; width: auto; padding: 8px 16px; font-size: 11px;}
+        .btn-hide { background: transparent; border: 1px solid var(--border); color: var(--text-muted); padding: 8px 15px; font-size: 11px; box-shadow: none; border-radius: 8px; width: auto;}
 
         input, select { background: var(--input-bg); border: none; border-bottom: 2px solid var(--border); color: var(--text-main); padding: 14px 15px; border-radius: 8px 8px 0 0; outline: none; width: 100%; box-sizing: border-box; font-family: inherit; margin-bottom: 15px; transition: 0.2s; font-size: 15px;}
         input:focus, select:focus { border-color: var(--accent); background: rgba(0,0,0,0.1); }
@@ -156,7 +157,7 @@
         .search-box { margin-bottom: 0; flex: 1; min-width: 150px; border-radius: 12px; border: 1px solid var(--border); }
 
         .status-tag { font-size: 11px; font-weight: 600; color: var(--text-muted); margin-top: 2px; }
-        .student-avatar { width: 55px; height: 55px; border-radius: 50%; object-fit: cover; background: var(--input-bg); cursor: pointer; flex-shrink: 0; border: 1px solid var(--border); }
+        .driver-avatar { width: 55px; height: 55px; border-radius: 50%; object-fit: cover; background: var(--input-bg); cursor: pointer; flex-shrink: 0; border: 1px solid var(--border); }
 
         #chatOverlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: var(--primary); z-index: 10000; flex-direction: column; overflow: hidden;} 
         #chatMessages { flex: 1; padding: 15px; overflow-y: auto; background: var(--bg-grad-1); display: flex; flex-direction: column; gap: 8px; scroll-behavior: smooth; } 
@@ -189,7 +190,7 @@
             <span></span><span></span><span></span>
         </button>
         <div class="header-titles">
-            <h1>SAFE<span>DRIVE</span> PUBLIC</h1>
+            <h1 onclick="switchView('view-home', null)">SAFE<span>DRIVE</span> PUBLIC</h1>
             <span class="header-overwatch" id="liveClock">00:00:00</span>
         </div>
         <div class="header-right">
@@ -207,7 +208,10 @@
             <div class="sub" id="displayName">Loading...</div>
         </div>
         <div class="drawer-nav">
-            <button class="drawer-item active" data-view="view-monitored" onclick="switchView('view-monitored', this)">
+            <button class="drawer-item active" data-view="view-home" onclick="switchView('view-home', this)">
+                <span class="ico">🏠</span> Home
+            </button>
+            <button class="drawer-item" data-view="view-monitored" onclick="switchView('view-monitored', this)">
                 <span class="ico">🛡️</span> Monitored Children
             </button>
             <button class="drawer-item" data-view="view-find-d2d" onclick="switchView('view-find-d2d', this)">
@@ -328,8 +332,23 @@
             <button class="btn btn-warning" style="padding: 12px;" onclick="document.getElementById('profileUpload').click()">UPLOAD PHOTO</button>
         </div>
 
+        <!-- ===== VIEW: HOME (CLEAN LOGO BANNER) ===== -->
+        <div id="view-home" class="view-section active" style="padding: 20px;">
+            <div style="text-align: center; margin-bottom: 25px;">
+                <img id="mainLogoPic" src="WhatsApp Image 2026-08-22 at 01.31.56.jpeg" alt="Safe Drive Logo" style="width: 100%; max-width: 500px; border-radius: 16px; box-shadow: 0 10px 30px rgba(0,0,0,0.3); border: 1px solid var(--border);">
+                <h2 style="margin: 20px 0 5px 0; font-size: 1.8rem; font-weight: 800; color: var(--text-main);">Welcome,</h2>
+                <p id="homeGreetingName" style="margin: 0; color: var(--text-muted); font-size: 1.1rem;"></p>
+            </div>
+
+            <div style="display: flex; flex-direction: column; gap: 12px; max-width: 500px; margin: 0 auto; width: 100%;">
+                <button class="btn btn-primary" style="height: 55px; font-size: 13px;" onclick="switchView('view-monitored', document.querySelector('[data-view=view-monitored]'))">🛡️ MONITORED CHILDREN</button>
+                <button class="btn btn-secondary" style="height: 55px; font-size: 13px; background: #3b82f6;" onclick="switchView('view-find-d2d', document.querySelector('[data-view=view-find-d2d]'))">🚐 FIND DOOR-TO-DOOR RIDES</button>
+                <button class="btn btn-secondary" style="height: 55px; font-size: 13px; background: #8b5cf6;" onclick="switchView('view-find-event', document.querySelector('[data-view=view-find-event]'))">🎉 FIND EVENT DRIVERS</button>
+            </div>
+        </div>
+
         <!-- ===== VIEW: MONITORED CHILDREN ===== -->
-        <div id="view-monitored" class="view-section active">
+        <div id="view-monitored" class="view-section">
             
             <div id="parentalGate" style="background: var(--card-bg); padding: 25px 20px; margin-bottom: 20px; display:none;"> 
                 <div id="step1_Link"> 
@@ -391,6 +410,14 @@
             <div class="card-header" style="border:none; padding-bottom: 5px;">
                 <h3 style="font-size: 14px; color: var(--accent);">Active Door-to-Door Trips</h3>
             </div>
+            
+            <div id="negotiationCardD2D" class="card" style="display:none; border-left: 4px solid var(--warning); margin-bottom: 20px;">
+                <div class="card-header" style="background: rgba(243, 156, 18, 0.05);">
+                    <h3 style="color: var(--warning);" id="negotiationTitleD2D">⏳ Pending Pursuits</h3>
+                </div>
+                <div id="negotiationListD2D" style="display:block;"></div>
+            </div>
+
             <div id="d2dActiveList" style="display:block; padding-bottom: 30px;"></div> 
         </div>
 
@@ -399,6 +426,14 @@
             <div class="card-header" style="border:none; padding-bottom: 5px; background: transparent;">
                 <h3 style="font-size: 14px; color: #3498db;">Active Event Trips</h3>
             </div>
+
+            <div id="negotiationCardEvent" class="card" style="display:none; border-left: 4px solid var(--warning); margin-bottom: 20px;">
+                <div class="card-header" style="background: rgba(243, 156, 18, 0.05);">
+                    <h3 style="color: var(--warning);" id="negotiationTitleEvent">⏳ Pending Pursuits</h3>
+                </div>
+                <div id="negotiationListEvent" style="display:block;"></div>
+            </div>
+
             <div id="eventActiveList" style="display:block; padding-bottom: 30px;"></div> 
         </div>
 
@@ -427,6 +462,7 @@
             <div id="historyTableBody" style="display: flex; flex-direction: column; padding-bottom: 30px;">
                  <div style="padding: 20px; text-align: center; color: var(--text-muted); font-size: 13px;">No logs found.</div>
             </div>
+            <button class="btn btn-remove" style="margin: 0 20px 30px; width: calc(100% - 40px);" onclick="handleLedgerDelete()">DELETE ALL LOGS</button>
         </div>
 
     </div> 
@@ -478,7 +514,9 @@
                 document.querySelectorAll('.drawer-item[data-view]').forEach(b => b.classList.remove('active'));
                 if (btn) btn.classList.add('active');
                 
-                // When switching, auto-fire the filters just in case
+                // When switching to search tabs, ensure default states render
+                if (viewId === 'view-find-d2d') currentSearchMode = 'Door to Door';
+                if (viewId === 'view-find-event') currentSearchMode = 'Events and School';
                 if (viewId === 'view-find-d2d' || viewId === 'view-find-event') {
                     filterGlobalDrivers();
                 }
@@ -547,7 +585,7 @@
             return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#039;');
         }
 
-        let childStatuses = {}, allSystemDrivers = []; 
+        let childStatuses = {}, allSystemDrivers = [], currentSearchMode = "Door to Door"; 
         let currentChildName = null, currentSupportTarget = null, currentRoomType = ""; 
         let allPublishedTrips = []; 
         let isAddingChildState = false; 
@@ -580,6 +618,7 @@
         })();
 
         document.getElementById('displayName').innerText = myN.toUpperCase();
+        document.getElementById('homeGreetingName').innerText = myN;
         const avatarEl = document.getElementById('userImg');
         if (cachedPhoto && cachedPhoto !== "null" && cachedPhoto !== "") {
             avatarEl.src = cachedPhoto;
@@ -745,7 +784,7 @@
 
         function openRequestModal(du, dn, type) {
             targetDriverUser = du; targetDriverName = dn; targetTripType = type;
-            document.getElementById('requestModalDriverName').innerText = `Target Handler: ${dn} (${type})`;
+            document.getElementById('requestModalDriverName').innerText = `Sending to: ${dn} (${type})`;
             document.getElementById('requestInput').value = '';
             document.getElementById('requestModalOverlay').classList.add('show');
         }
@@ -753,7 +792,7 @@
 
         async function submitRideRequest() {
             const msg = document.getElementById('requestInput').value.trim();
-            if(!msg) return alert("Please type your pickup instructions before sending.");
+            if(!msg) return showAppAlert("Please type your pickup instructions before sending.");
             const fullMessage = `[${targetTripType.toUpperCase()}] ${msg}`;
             closeRequestModal();
 
@@ -800,8 +839,8 @@
                 const data = await res.json();
                 const activeBookings = (data.bookings || []).filter(b => b.status === 'Pending' || b.status === 'Accepted');
 
-                let d2dHtml = "";
-                let eventHtml = "";
+                let d2dPendingHtml = ""; let d2dAcceptedHtml = "";
+                let eventPendingHtml = ""; let eventAcceptedHtml = "";
 
                 for (const b of activeBookings) {
                     const isD2D = b.transport_type === 'Door to Door' || b.message?.includes('[DOOR TO DOOR]');
@@ -811,7 +850,7 @@
                     let roomType = "general_driver_room";
                     let roomId = b.booking_id;
 
-                    const statusText = b.status === "Accepted" ? "APPROVED" : "PENDING";
+                    const statusText = b.status === "Accepted" ? "APPROVED • DRIVER ACCEPTED" : "AWAITING ACCEPTANCE & NEGOTIATING";
                     const statusColor = b.status === "Accepted" ? "var(--success)" : "var(--warning)";
 
                     const msgCount = await getMsgCount(roomId, roomType);
@@ -829,15 +868,36 @@
                             </div>
                         </div>
                         <div class="btn-group-grid">
-                            <button class="btn btn-primary" style="grid-column: span 2;" onclick="openSupportChat('${escapeHtml(roomId)}', 'Driver: ${escapeHtml(b.driver_name)}', '${escapeHtml(roomType)}', '${dPhoto}')">MESSAGE DRIVER ${badgeHtml}</button>
+                            <button class="btn btn-primary" style="grid-column: span 2;" onclick="openSupportChat('${escapeHtml(roomId)}', 'Driver: ${escapeHtml(b.driver_name)}', '${escapeHtml(roomType)}', '${dPhoto}')">CHAT / NEGOTIATE ${badgeHtml}</button>
                         </div>
                     </div>`;
 
-                    if (isD2D) { d2dHtml += rowHtml; } else { eventHtml += rowHtml; }
+                    if (isD2D) {
+                        if (b.status === "Pending") d2dPendingHtml += rowHtml; else d2dAcceptedHtml += rowHtml;
+                    } else {
+                        if (b.status === "Pending") eventPendingHtml += rowHtml; else eventAcceptedHtml += rowHtml;
+                    }
                 }
 
-                document.getElementById('d2dActiveList').innerHTML = d2dHtml || '<p style="padding:25px 20px; color:var(--text-muted); text-align:center; font-size:14px;">No active Door-to-Door bookings.</p>';
-                document.getElementById('eventActiveList').innerHTML = eventHtml || '<p style="padding:25px 20px; color:var(--text-muted); text-align:center; font-size:14px;">No active Event bookings.</p>';
+                // Render D2D logic
+                const d2dPendingCard = document.getElementById('negotiationCardD2D');
+                const d2dPendingList = document.getElementById('negotiationListD2D');
+                if (d2dPendingHtml) {
+                    d2dPendingCard.style.display = 'block'; d2dPendingList.innerHTML = d2dPendingHtml;
+                } else {
+                    d2dPendingCard.style.display = 'none';
+                }
+                document.getElementById('d2dActiveList').innerHTML = d2dAcceptedHtml || '<p style="padding:25px 20px; color:var(--text-muted); text-align:center; font-size:14px;">No active Door-to-Door bookings.</p>';
+
+                // Render Event logic
+                const eventPendingCard = document.getElementById('negotiationCardEvent');
+                const eventPendingList = document.getElementById('negotiationListEvent');
+                if (eventPendingHtml) {
+                    eventPendingCard.style.display = 'block'; eventPendingList.innerHTML = eventPendingHtml;
+                } else {
+                    eventPendingCard.style.display = 'none';
+                }
+                document.getElementById('eventActiveList').innerHTML = eventAcceptedHtml || '<p style="padding:25px 20px; color:var(--text-muted); text-align:center; font-size:14px;">No active Event bookings.</p>';
                 
             } catch(e) {}
         }
@@ -1228,7 +1288,10 @@
             
             const res = await authFetch('/api/support/get_history', { 
                 method: 'POST', headers: {'Content-Type': 'application/json'}, 
-                body: JSON.stringify({ child_username: currentSupportTarget, room_type: currentRoomType }) 
+                body: JSON.stringify({ 
+                    child_username: currentSupportTarget,
+                    room_type: currentRoomType 
+                }) 
             }); 
             const data = await res.json(); 
 
@@ -1297,29 +1360,55 @@
             if(!msgText || !currentRoomType || !currentSupportTarget) return; 
             
             const area = document.getElementById('supportChatMessages');
-            area.innerHTML += `<div class="msg me"><div>${escapeHtml(msgText)}</div></div>`;
+            area.innerHTML += `
+                <div class="msg me">
+                    <div style="font-size:10px; font-weight:700; opacity:0.6; margin-bottom:4px; text-transform:uppercase;">YOU</div>
+                    <div>${escapeHtml(msgText)}</div>
+                </div>`;
             area.scrollTop = area.scrollHeight; 
             i.value = ""; 
 
             try {
                 await authFetch('/api/support/send_msg', { 
-                    method: 'POST', headers: {'Content-Type': 'application/json'}, 
-                    body: JSON.stringify({ room_id: currentSupportTarget, room_type: currentRoomType, message: msgText }) 
+                    method: 'POST', 
+                    headers: {'Content-Type': 'application/json'}, 
+                    body: JSON.stringify({ 
+                        room_id: currentSupportTarget,
+                        room_type: currentRoomType,
+                        message: msgText 
+                    }) 
                 });
+
                 syncChat();
             } catch (err) {}
         }
 
+        function handleLedgerDelete() {
+            const searchVal = document.getElementById('ledgerSearch').value.trim().toLowerCase();
+            const btnHtml = `
+                <button id="confirmLedgerDelBtn" class="btn btn-danger" style="flex:1;">DELETE</button>
+                <button id="cancelLedgerDelBtn" class="btn btn-chat" style="flex:1;">CANCEL</button>
+            `;
+            showAppAlert(`Delete ${searchVal || 'all'} logs?`, "CONFIRM DELETION", null, btnHtml);
+
+            document.getElementById("cancelLedgerDelBtn").onclick = function() { closeAppAlert(); };
+            document.getElementById("confirmLedgerDelBtn").onclick = function() {
+                closeAppAlert();
+                document.getElementById('historyTableBody').innerHTML = '<div style="padding: 20px; text-align: center; color: var(--text-muted); font-size: 13px;">All logs deleted.</div>';
+            };
+        }
+
         function downloadPDF() { 
             const { jsPDF } = window.jspdf; const doc = new jsPDF(); 
-            doc.setFillColor(11, 20, 26); doc.rect(0, 0, 210, 40, 'F');
-            doc.setTextColor(255, 255, 255); doc.setFontSize(22); doc.text("SAFE DRIVE LOGISTICS", 14, 25);
-            doc.setTextColor(100, 100, 100); doc.setFontSize(10); doc.text("PARENT TRAVEL TRANSCRIPT", 14, 35);
-            doc.autoTable({ html: '#safetyTable', startY: 45, headStyles: { fillColor: [37, 211, 102] } }); doc.save("Safe_Drive_Ledger.pdf"); 
+            doc.setFillColor(11, 20, 26); doc.rect(0, 0, 210, 35, 'F');
+            doc.setTextColor(255, 255, 255); doc.setFontSize(22); doc.text("SAFE DRIVE TRANSCRIPT LEDGER", 14, 20);
+            doc.autoTable({ html: '#safetyTable', startY: 45, headStyles: { fillColor: [37, 211, 102] } }); 
+            doc.save("Safe_Drive_Ledger.pdf"); 
         }
 
         function logout() { 
             sessionStorage.clear(); 
+            // Purposely removed indexedDB.deleteDatabase so local monitored children save cross-sessions!
             window.location.replace("login.html"); 
         } 
         
