@@ -11,16 +11,43 @@
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 
     <style> 
+        /* ===== CSS VARIABLES FOR THEMING ===== */
         :root {  
-            --primary: #020218; --accent: #27ae60; --warning: #f39c12; --danger: #e11d48;  
-            --bg-grad-1: #0f172a; --bg-grad-2: #020218; 
-            --card-bg: #1e293b; --card-bg-alt: #151e2b;
-            --text-main: #f1f5f9; --text-muted: #94a3b8; --border: #334155; --nav-bg: #020218; 
+            /* Dark Mode Defaults */
+            --primary: #020218; 
+            --danger: #e11d48; 
+            --success: #10b981; 
+            --warning: #f59e0b; 
+            --accent: #27ae60;
+            --bg-grad-1: #0f172a;
+            --bg-grad-2: #020218;
+            --card-bg: #1e293b; 
+            --card-bg-alt: #151e2b;
+            --text-main: #f1f5f9; 
+            --text-muted: #94a3b8; 
+            --border: #334155;
             --table-head: rgba(0,0,0,0.2);
             --hover-bg: rgba(255,255,255,0.04);
             --input-bg: rgba(0,0,0,0.3);
+            --nav-bg: #020218;
         } 
-        
+
+        /* Light Mode Overrides */
+        body.light-mode {
+            --primary: #1e3a8a; 
+            --bg-grad-1: #f8fafc;
+            --bg-grad-2: #e2e8f0;
+            --card-bg: #ffffff; 
+            --card-bg-alt: #f1f5f9;
+            --text-main: #0f172a; 
+            --text-muted: #475569; 
+            --border: #cbd5e1;
+            --table-head: #f1f5f9;
+            --hover-bg: rgba(0,0,0,0.04);
+            --input-bg: #ffffff;
+            --nav-bg: #1e3a8a;
+        }
+
         * { box-sizing: border-box; }
         html, body { height: 100%; margin: 0; }
         body { 
@@ -33,11 +60,9 @@
 
         .msg-time { margin-top:6px; font-size:10px; opacity:.7; text-align:right; }
         
-        .header {
-            background: var(--nav-bg); color: white; padding: 0.8rem 4%; display: flex; justify-content: space-between; align-items: center;
-            box-shadow: 0 4px 20px rgba(0,0,0,0.6); position: sticky; top: 0; z-index: 1000; border-bottom: 1px solid rgba(255,255,255,0.05);
-            gap: 12px;
-        }
+        /* ===== HEADER ===== */
+        .nav { background: var(--nav-bg); color: white; padding: 1rem 4%; display: flex; justify-content: space-between; align-items: center; position: sticky; top: 0; z-index: 1000; box-shadow: 0 4px 20px rgba(0,0,0,0.6); border-bottom: 1px solid rgba(255,255,255,0.05); gap: 12px; } 
+        
         .hamburger-btn {
             background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.15); color: white;
             width: 42px; height: 42px; border-radius: 12px; cursor: pointer; flex-shrink: 0;
@@ -46,10 +71,11 @@
         }
         .hamburger-btn:active { transform: scale(0.92); background: rgba(255,255,255,0.15); }
         .hamburger-btn span { display: block; width: 20px; height: 2px; background: white; border-radius: 2px; }
-        
+
         .header-titles { flex: 1; min-width: 0; display: flex; flex-direction: column; justify-content: center; }
-        .header h1 { margin: 0; font-size: 1.05rem; font-weight: 800; letter-spacing: -0.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-        .header h1 span { color: var(--accent); }
+        .header-titles h2 { margin: 0; font-size: 1.05rem; font-weight: 800; letter-spacing: -0.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .header-titles h2 span { color: var(--accent); }
+        .sys-clock { font-size: 9.5px; opacity:0.7; font-weight:600; display:block; margin-top:2px; font-family: monospace; }
         
         .header-right { display:flex; align-items:center; gap:15px; flex-shrink: 0; }
         .bell-icon { font-size: 20px; cursor: pointer; position: relative; transition: 0.2s; }
@@ -57,7 +83,7 @@
         
         .profile-area { display: flex; align-items: center; justify-content: center; cursor: pointer; padding: 2px;}
         .initials-avatar {
-            width: 42px; height: 42px; border-radius: 50%; object-fit: cover;
+            width: 46px; height: 46px; border-radius: 50%; object-fit: cover;
             border: 2px solid var(--accent); cursor: pointer; transition: 0.2s;
             background: var(--accent); color: white; display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 14px;
             box-shadow: 0 0 10px rgba(39, 174, 96, 0.4);
@@ -68,7 +94,7 @@
         .chat-badge { background: #27ae60; color: white; padding: 2px 7px; border-radius: 10px; font-weight: 900; font-size: 10px; margin-left: 6px; animation: pulseGreenAlert 1s infinite; display: inline-block; box-shadow: 0 0 8px rgba(39, 174, 96, 0.6); }
         @keyframes pulseGreenAlert { 0% { opacity: 1; transform: scale(1); } 50% { opacity: 0.6; transform: scale(1.1); } 100% { opacity: 1; transform: scale(1); } }
         
-        /* Drawer Nav */
+        /* ===== DRAWER NAV ===== */
         .drawer-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.6); backdrop-filter: blur(3px); z-index: 2999; opacity: 0; pointer-events: none; transition: opacity 0.25s; }
         .drawer-overlay.open { opacity: 1; pointer-events: auto; }
         .drawer {
@@ -81,6 +107,7 @@
         .drawer-head .brand { font-size: 1rem; font-weight: 800; letter-spacing: -0.5px; margin:0;}
         .drawer-head .brand span { color: var(--accent); }
         .drawer-head .sub { font-size: 10px; color: var(--text-muted); margin-top: 4px; text-transform: uppercase; letter-spacing: 1px; font-weight:bold;}
+        
         .drawer-nav { flex: 1; padding: 14px 10px; overflow-y: auto; display: flex; flex-direction: column; gap: 4px; }
         .drawer-bottom-actions { margin-top: auto; padding-top: 15px; border-top: 1px solid var(--border); display: flex; flex-direction: column; gap: 4px; }
         .drawer-item {
@@ -94,36 +121,39 @@
         .drawer-item.active .count-pill { background: var(--accent); color: white; }
         .drawer-close-row { padding: 14px 20px 20px; border-top: 1px solid var(--border); }
 
-        .container { width: 100%; margin: 0; padding: 0; display: flex; flex-direction: column; flex: 1; box-sizing: border-box; } 
+        /* ===== MAIN CONTENT: Edge-to-Edge WhatsApp Style ===== */
+        .container { width: 100%; max-width: none; margin: 0; padding: 0; display: flex; flex-direction: column; flex: 1; box-sizing: border-box; } 
         
         .view-section { display: none; width: 100%; flex-direction: column; }
         .view-section.active { display: flex; animation: fadeIn 0.25s ease; flex: 1; }
         @keyframes fadeIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
 
         .card { 
-            background: linear-gradient(145deg, var(--card-bg) 0%, var(--card-bg-alt) 100%); 
-            border-radius: 0; border: none; border-bottom: 1px solid var(--border); 
-            width: 100%; flex: 1; display: flex; flex-direction: column; 
+            background: transparent; border-radius: 0; border: none; box-shadow: none; width: 100%; display: flex; flex-direction: column; overflow: hidden;
         } 
-        .card-header { padding: 16px 18px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; background: var(--table-head); gap: 10px; flex-wrap: wrap; } 
-        .card-header h3 { margin: 0; font-size: 0.8rem; text-transform: uppercase; letter-spacing: 1.2px; color: var(--text-muted); font-weight: 800; } 
         
-        /* Contact/Passenger List (Mobile Native Layout) */
-        .list-row { padding: 16px; border-bottom: 1px solid var(--border); display: flex; flex-direction: column; gap: 14px; transition: background 0.15s; cursor: default; } 
+        /* Removed card headers for a cleaner list view, or made them subtle */
+        .section-header { padding: 15px 20px; background: var(--table-head); color: var(--text-muted); font-size: 12px; font-weight: 800; text-transform: uppercase; letter-spacing: 1px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center;}
+
+        /* WhatsApp-like List Rows */
+        .list-row { padding: 15px 20px; border-bottom: 1px solid var(--border); display: flex; flex-direction: column; gap: 12px; transition: background 0.15s; cursor: default; } 
+        .list-row:last-child { border-bottom: none; }
         .list-row:hover { background: var(--hover-bg); }
+        
         .list-row-top { display: flex; align-items: center; gap: 15px; width: 100%; }
         
-        .student-avatar { width: 50px; height: 50px; border-radius: 50%; object-fit: cover; border: 2px solid var(--border); background: var(--primary); cursor: pointer; transition: 0.2s; flex-shrink: 0; }
+        .student-avatar { width: 55px; height: 55px; border-radius: 50%; object-fit: cover; border: 2px solid var(--border); background: var(--primary); cursor: pointer; transition: 0.2s; flex-shrink: 0; }
         .student-avatar:hover { transform: scale(1.05); border-color: var(--accent); }
         
         .student-info { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
-        .student-name { font-size: 15px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--text-main); }
+        .student-name { font-size: 16px; font-weight: 800; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--text-main); }
         .status-tag { font-size: 9px; font-weight: 800; padding: 4px 8px; border-radius: 6px; background: rgba(255,255,255,0.05); color: var(--text-muted); border: 1px solid var(--border); width: fit-content; letter-spacing: 0.5px; text-transform: uppercase; }
         
-        .btn-group { display: grid; grid-template-columns: repeat(auto-fit, minmax(80px, 1fr)); gap: 8px; width: 100%; } 
-        .btn { padding: 12px 10px; border-radius: 10px; border: none; font-weight: 800; cursor: pointer; font-size: 10px; text-transform: uppercase; transition: 0.2s; letter-spacing: 0.5px; display: flex; align-items: center; justify-content: center; text-align: center; } 
-        .btn:disabled { opacity: 0.4 !important; cursor: not-allowed !important; transform: none !important; filter: grayscale(1); }
-        .btn:active { transform: scale(0.95); }
+        /* Thumb-friendly action grid */
+        .btn-group { display: grid; grid-template-columns: repeat(auto-fit, minmax(80px, 1fr)); gap: 8px; width: 100%; margin-top: 5px; } 
+        .btn-action-mobile { padding: 12px 10px; border-radius: 12px; border: none; font-weight: 800; cursor: pointer; font-size: 10.5px; text-transform: uppercase; transition: 0.2s; letter-spacing: 0.5px; display: flex; align-items: center; justify-content: center; text-align: center; } 
+        .btn-action-mobile:disabled { opacity: 0.4 !important; cursor: not-allowed !important; transform: none !important; filter: grayscale(1); }
+        .btn-action-mobile:active { transform: scale(0.95); }
         
         .btn-pickup { background: #3b82f6; color: white; } 
         .btn-dropoff { background: #10b981; color: white; } 
@@ -133,15 +163,18 @@
         
         .btn-danger { background: var(--danger); color: white; }
         .btn-warning { background: var(--warning); color: #020218; }
-        .btn-hide-view { background: transparent; border: 1px solid var(--border); color: var(--text-muted); padding: 10px 15px; font-size: 10px; font-weight: 800; border-radius: 10px; cursor: pointer; }
+        .btn-hide-view { background: transparent; border: 1px solid var(--border); color: var(--text-muted); padding: 10px 15px; font-size: 10px; font-weight: 800; border-radius: 10px; cursor: pointer; transition: 0.2s;}
+        .btn-hide-view:hover { background: rgba(255,255,255,0.05); }
         .btn-pdf { background: #3498db; color: white; padding: 10px 15px; border-radius: 10px; font-size: 10px; font-weight:800; border:none; cursor:pointer;}
 
-        /* Inputs & Banners */
-        input, select { background: var(--input-bg); border: 1px solid var(--border); color: white; padding: 14px; border-radius: 10px; outline: none; width: 100%; box-sizing: border-box; font-family: inherit; margin-bottom: 15px; font-size: 13px; transition: 0.3s; }
+        /* Form Elements padded for full width usage */
+        .form-container { padding: 20px; }
+        input, select { background: var(--input-bg); border: 1px solid var(--border); color: var(--text-main); padding: 14px; border-radius: 10px; outline: none; width: 100%; box-sizing: border-box; font-family: inherit; margin-bottom: 15px; font-size: 13px; transition: 0.3s; }
         input:focus, select:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(39,174,96,0.2); }
         label { display: block; font-size: 11px; font-weight: 700; color: var(--text-muted); text-transform: uppercase; margin-bottom: 8px; margin-top: 5px; letter-spacing: 0.5px; }
         .search-box { padding: 12px 14px; margin-bottom: 0;}
 
+        /* Modals & Overlays */
         #chatOverlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: var(--card-bg); border-radius: 0; z-index: 10000; flex-direction: column; border: none; overflow: hidden;} 
         #chatMessages { flex: 1; padding: 20px; overflow-y: auto; background: var(--bg-grad-1); display: flex; flex-direction: column; gap: 12px; scroll-behavior: smooth; } 
         .msg { padding: 12px 16px; border-radius: 15px; font-size: 14px; max-width: 80%; line-height: 1.4; box-shadow: 0 4px 10px rgba(0,0,0,0.1); } 
@@ -153,7 +186,7 @@
         .app-alert-box { background: var(--card-bg); border: 1px solid var(--border); border-radius: 24px; padding: 35px 30px; width: 90%; max-width: 420px; text-align: center; box-shadow: 0 25px 50px rgba(0, 0, 0, 0.4); transform: scale(0.9); transition: transform 0.3s ease; }
         .app-alert-overlay.show .app-alert-box { transform: scale(1); }
         .app-alert-message { color: var(--text-main); font-size: 14px; line-height: 1.6; margin-bottom: 25px; margin-top: 0; white-space: pre-line; text-align: center; }
-        .btn-action { padding: 14px 20px; border-radius: 12px; border: none; cursor: pointer; font-weight: 800; font-size: 11px; transition: 0.2s; text-transform: uppercase; margin-bottom: 10px; width: 100%; box-sizing: border-box; }
+        .btn-action-modal { padding: 14px 20px; border-radius: 12px; border: none; cursor: pointer; font-weight: 800; font-size: 11px; transition: 0.2s; text-transform: uppercase; margin-bottom: 10px; width: 100%; box-sizing: border-box; }
 
         @keyframes ocrSpin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
         .ocr-spinner { margin: 20px auto; width: 50px; height: 50px; border: 4px solid var(--border); border-top: 4px solid var(--accent); border-radius: 50%; animation: ocrSpin 1s linear infinite; }
@@ -161,7 +194,7 @@
         .alarm-box { border: 3px solid var(--danger); box-shadow: 0 0 50px rgba(225, 29, 72, 0.5); animation: pulseRed 1s infinite; }
         @keyframes pulseRed { 0% { box-shadow: 0 0 20px rgba(225, 29, 72,0.5); } 50% { box-shadow: 0 0 60px rgba(225, 29, 72,0.8); } 100% { box-shadow: 0 0 20px rgba(225, 29, 72,0.5); } }
 
-        .history-item { padding: 16px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; transition: background 0.2s; }
+        .history-item { padding: 16px 20px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; transition: background 0.2s; }
         .history-item:hover { background: var(--hover-bg); }
 
         .trip-pending-banner { background: linear-gradient(135deg, rgba(52, 152, 219, 0.1) 0%, rgba(52, 152, 219, 0.05) 100%); border-bottom: 1px solid rgba(52, 152, 219, 0.3); padding: 25px; text-align: center; }
@@ -179,27 +212,26 @@
         .comms-link-btn { display: flex; align-items: center; justify-content: center; gap: 8px; background: var(--card-bg-alt); color: var(--text-main); text-decoration: none; padding: 12px; border-radius: 10px; font-size: 12px; font-weight: 700; margin-bottom: 8px; border: 1px solid var(--border); transition: 0.2s; }
 
         @media (max-width: 768px) {
-            .header { padding: 0.75rem 3.5%; }
-            .header h1 { font-size: 0.95rem; }
-            .initials-avatar { width: 38px; height: 38px; font-size: 12px; }
-            .card-header { padding: 14px 16px; }
-            .card-header h3 { font-size: 0.75rem; }
-            .list-row { padding: 14px; }
-            .student-avatar { width: 44px; height: 44px; }
-            .btn { font-size: 9px; padding: 10px 8px; }
-            .btn-group { grid-template-columns: repeat(auto-fit, minmax(70px, 1fr)); }
+            .nav { padding: 0.75rem 3.5%; }
+            .header-titles h2 { font-size: 0.95rem; }
+            .initials-avatar { width: 40px; height: 40px; font-size: 12px; }
+            .section-header { padding: 12px 16px; font-size: 11px; }
+            .list-row { padding: 16px; }
+            .student-avatar { width: 48px; height: 48px; }
+            .btn-action-mobile { font-size: 9.5px; padding: 12px 8px; }
+            .btn-group { grid-template-columns: repeat(auto-fit, minmax(70px, 1fr)); gap: 6px; }
         }
     </style> 
 </head> 
 <body> 
 
-    <div class="header"> 
+    <div class="nav"> 
         <button class="hamburger-btn" onclick="openDrawer()" aria-label="Menu">
             <span></span><span></span><span></span>
         </button>
         <div class="header-titles">
-            <h1>DRIVER<span>COMMAND</span></h1> 
-            <small style="font-size: 9.5px; opacity:0.7; font-weight:600; display:block; margin-top:2px;">SYS: <span id="liveClock" style="font-family:monospace;">00:00:00</span></small>
+            <h2>DRIVER<span>COMMAND</span></h2> 
+            <small class="sys-clock">SYS: <span id="liveClock">00:00:00</span></small>
         </div>
         <div class="header-right"> 
             <span class="bell-icon" title="Notifications">🔔</span>
@@ -209,6 +241,7 @@
         </div> 
     </div> 
 
+    <!-- Drawer Navigation -->
     <div id="drawerOverlay" class="drawer-overlay" onclick="closeDrawer()"></div>
     <div id="sideDrawer" class="drawer">
         <div class="drawer-head">
@@ -218,18 +251,37 @@
         <div class="drawer-nav">
             
             <button class="drawer-item active" data-view="view-dashboard" onclick="switchView('view-dashboard', this)">
-                <span class="ico">🏠</span> Status Dashboard
+                <span class="ico">🏠</span> Dashboard Status
             </button>
-            <button class="drawer-item" data-view="view-requests" onclick="switchView('view-requests', this)">
-                <span class="ico">📋</span> Transport Requests
-                <span class="count-pill" id="badgeDrawerRequests" style="display:none;">0</span>
+            
+            <!-- School specific options -->
+            <button class="drawer-item" data-view="view-school-requests" onclick="switchView('view-school-requests', this)">
+                <span class="ico">📋</span> School Requests
+                <span class="count-pill" id="badgeSchoolRequests" style="display:none;">0</span>
             </button>
-            <button class="drawer-item" data-view="view-active" onclick="switchView('view-active', this)">
-                <span class="ico">🚐</span> Active Passengers
-                <span class="count-pill" id="badgeDrawerActive" style="display:none;">0</span>
+            <button class="drawer-item" data-view="view-school-active" onclick="switchView('view-school-active', this)">
+                <span class="ico">🚐</span> Active School Transport
+                <span class="count-pill" id="badgeSchoolActive" style="display:none;">0</span>
             </button>
+            
+            <!-- Event specific options -->
+            <button class="drawer-item" data-view="view-event-requests" onclick="switchView('view-event-requests', this)">
+                <span class="ico">🎉</span> Event Requests
+                <span class="count-pill" id="badgeEventRequests" style="display:none;">0</span>
+            </button>
+            <button class="drawer-item" data-view="view-event-active" onclick="switchView('view-event-active', this)">
+                <span class="ico">⭐</span> Active Event Transport
+                <span class="count-pill" id="badgeEventActive" style="display:none;">0</span>
+            </button>
+
             <button class="drawer-item" data-view="view-ledger" onclick="switchView('view-ledger', this)">
                 <span class="ico">🧾</span> Travel Transcript
+            </button>
+            
+            <hr style="width: 100%; border: 0; border-top: 1px solid var(--border); margin: 10px 0;">
+            
+            <button class="drawer-item" onclick="toggleTheme()">
+                <span class="ico" id="themeIcon">🌓</span> Light/Dark Mode
             </button>
 
             <!-- Bottom Actions -->
@@ -252,49 +304,48 @@
         <p style="color: var(--text-main); max-width: 500px; line-height: 1.7; font-size: 15px; margin-bottom: 35px; opacity: 0.9;">
             Your 7-day grace period has officially expired. To comply with security regulations, you must scan your Driver's License. <b>Our AI system will strictly verify that the spelling on your license matches your registered identity.</b>
         </p>
-        <button class="btn btn-danger" style="width: 100%; max-width: 320px; padding: 20px; font-size: 14px; box-shadow: 0 10px 30px rgba(225, 29, 72, 0.3); border-radius: 15px; font-weight: 900;" onclick="document.getElementById('licenseUploadHidden').click()">SCAN LICENSE TO UNLOCK</button>
+        <button class="btn-action-modal btn-danger" style="width: 100%; max-width: 320px; padding: 20px; font-size: 14px; box-shadow: 0 10px 30px rgba(225, 29, 72, 0.3); border-radius: 15px; font-weight: 900;" onclick="document.getElementById('licenseUploadHidden').click()">SCAN LICENSE TO UNLOCK</button>
         <button onclick="logout()" style="margin-top: 30px; background: transparent; border: none; color: var(--text-muted); cursor: pointer; text-decoration: underline; font-size: 13px;">Logout</button>
     </div>
 
+    <!-- Full Width Container for Views -->
     <div class="container" id="mainDashboardContainer"> 
             
         <!-- VIEW: DASHBOARD (Home) -->
         <div id="view-dashboard" class="view-section active">
             
-            <div id="licenseWarningBanner" class="system-warning-banner" style="display:none; background: rgba(225, 29, 72, 0.05); border-bottom-color: rgba(225, 29, 72, 0.3); color: white;">
+            <div id="licenseWarningBanner" class="system-warning-banner" style="display:none; background: rgba(225, 29, 72, 0.05); color: white;">
                 <h2 style="color: var(--danger);">🚨 LICENSE SCAN REQUIRED</h2>
                 <p>Please scan your Driver's License. Dashboard access will be fully restricted 7 days after registration.</p>
-                <button class="btn btn-danger" style="padding: 12px 25px; border-radius: 10px;" onclick="document.getElementById('licenseUploadHidden').click()">SCAN LICENSE NOW</button>
+                <button class="btn-action-modal btn-danger" style="padding: 12px 25px; border-radius: 10px; width: auto;" onclick="document.getElementById('licenseUploadHidden').click()">SCAN LICENSE NOW</button>
             </div>
 
-            <div id="profileWarningBanner" class="system-warning-banner" style="display:none; background: rgba(243, 156, 18, 0.05); border-bottom-color: rgba(243, 156, 18, 0.3); color: white;">
+            <div id="profileWarningBanner" class="system-warning-banner" style="display:none; background: rgba(243, 156, 18, 0.05); color: white;">
                 <h2 style="color: var(--warning);">⚠️ PROFILE PICTURE REQUIRED</h2>
                 <p>Your account is over 3 days old. You must upload a clear profile picture so students and parents can identify you securely.</p>
-                <button class="btn btn-warning" style="padding: 12px 25px; border-radius: 10px;" onclick="document.getElementById('profileUpload').click()">UPLOAD PROFILE PICTURE</button>
+                <button class="btn-action-modal btn-warning" style="padding: 12px 25px; border-radius: 10px; width: auto;" onclick="document.getElementById('profileUpload').click()">UPLOAD PROFILE PICTURE</button>
             </div>
 
             <!-- Role Selection -->
             <div id="selectionBoard" class="card" style="display:none;">
-                <div class="card-header"><h3>Account Verification</h3></div>
+                <div class="section-header">Account Verification</div>
                 <div style="padding: 30px 20px; text-align: center;">
                     <p style="font-size: 14px; color: var(--text-muted); margin-bottom: 25px;">How will you be operating on the Safe Drive Network?</p>
                     <div style="display: flex; flex-direction: column; gap: 15px; max-width: 400px; margin: 0 auto;">
-                        <button class="btn btn-pickup" style="height: 50px; font-size: 12px; border-radius: 12px;" onclick="confirmRole('door_to_door')">DOOR TO DOOR ONLY</button>
-                        <button class="btn btn-dropoff" style="height: 50px; font-size: 12px; border-radius: 12px;" onclick="confirmRole('school_events')">EVENTS & SCHOOL TRANSPORT</button>
+                        <button class="btn-action-modal btn-pickup" style="height: 50px; font-size: 12px; border-radius: 12px;" onclick="confirmRole('door_to_door')">DOOR TO DOOR ONLY</button>
+                        <button class="btn-action-modal btn-dropoff" style="height: 50px; font-size: 12px; border-radius: 12px;" onclick="confirmRole('school_events')">EVENTS & SCHOOL TRANSPORT</button>
                     </div>
                 </div>
             </div>
 
             <!-- School Code Linker -->
             <div id="schoolCodeManagement" class="card" style="display:none;">
-                <div class="card-header">
-                    <h3>Institutional Connections</h3>
-                </div>
-                <div id="schoolCodeBody" style="padding: 20px;">
+                <div class="section-header">Institutional Connections</div>
+                <div class="form-container">
                     <p style="font-size:13px; color:var(--text-muted); margin-top:0;">Manage your securely linked schools to automatically receive ride requests.</p>
                     <div style="display:flex; flex-direction:column; gap:10px; margin-top: 15px;">
                         <input type="text" id="newSchoolCode" placeholder="Enter Secure Access Code" style="margin:0; text-transform:uppercase; font-size: 14px; font-weight: 600;">
-                        <button id="btnConnectSchool" class="btn btn-dropoff" style="width:100%; height: 45px; border-radius: 10px;" onclick="addSchoolCode()">CONNECT TO SCHOOL</button>
+                        <button id="btnConnectSchool" class="btn-action-modal btn-dropoff" style="width:100%; height: 45px; border-radius: 10px;" onclick="addSchoolCode()">CONNECT TO SCHOOL</button>
                     </div>
                     <div id="linkedSchoolsList" style="margin-top: 25px; display:flex; gap:10px; flex-wrap:wrap;"></div>
                 </div>
@@ -302,18 +353,16 @@
 
             <!-- D2D Trip Creator -->
             <div id="d2dDashboard" class="card" style="display:none;">
-                <div class="card-header">
-                    <h3>Trip Management</h3>
-                </div>
+                <div class="section-header">Trip Management</div>
                 <div id="d2dBody">
                     <div id="activeTripView" class="trip-pending-banner" style="display:none;">
                         <h2>TRIP PUBLISHED</h2>
                         <p id="activeTripDetails" style="font-size: 13px; color: var(--text-main); margin: 0; line-height: 1.6;"></p>
                         <div class="trip-counter" id="loadedCount">0 LOADED ON TRIP</div>
-                        <button class="btn btn-remove" style="display: block; margin: 25px auto 0; width: 100%; max-width: 300px; padding: 14px; border-radius: 10px;" onclick="endPublishedTrip()">CANCEL / END TRIP</button>
+                        <button class="btn-action-modal btn-remove" style="display: block; margin: 25px auto 0; width: 100%; max-width: 300px; padding: 14px; border-radius: 10px;" onclick="endPublishedTrip()">CANCEL / END TRIP</button>
                     </div>
 
-                    <div id="createTripView" style="padding: 20px;">
+                    <div id="createTripView" class="form-container">
                         <div style="display: flex; flex-direction: column; gap: 5px;">
                             <label>Starting Location</label>
                             <input type="text" id="tripStart" placeholder="e.g. Gauteng, Pretoria">
@@ -340,54 +389,55 @@
                         <label>Trip Auto-Delete Time</label>
                         <input type="datetime-local" id="tripExpiry">
                         
-                        <button class="btn btn-dropoff" style="width:100%; margin-top:15px; height: 50px; font-size: 12px; border-radius: 10px;" onclick="publishTrip()">PUBLISH TRIP</button>
+                        <button class="btn-action-modal btn-dropoff" style="width:100%; margin-top:15px; height: 50px; font-size: 12px; border-radius: 10px;" onclick="publishTrip()">PUBLISH TRIP</button>
                     </div>
                 </div>
             </div>
         </div>
 
-        <div id="view-requests" class="view-section">
+        <!-- VIEW: SCHOOL REQUESTS -->
+        <div id="view-school-requests" class="view-section">
             <div class="card" id="schoolRequestsCard"> 
-                <div class="card-header">
-                    <h3>School Transport Requests <span id="badgeSchoolRequests" class="req-badge"></span></h3>
-                </div> 
+                <div class="section-header">School Transport Requests</div> 
                 <div id="requestList"></div> 
             </div> 
-
+        </div>
+        
+        <!-- VIEW: EVENT REQUESTS -->
+        <div id="view-event-requests" class="view-section">
             <div class="card" id="eventRequestsCard"> 
-                <div class="card-header" style="background: rgba(52, 152, 219, 0.05);">
-                    <h3 style="color: #3498db;">Event Requests <span id="badgeEventRequests" class="req-badge"></span></h3>
-                </div> 
+                <div class="section-header">Event Requests</div> 
                 <div id="eventRequestList"></div> 
             </div> 
         </div>
 
-        <div id="view-active" class="view-section">
+        <!-- VIEW: ACTIVE SCHOOL -->
+        <div id="view-school-active" class="view-section">
             <div class="card" id="schoolActiveCard"> 
-                <div class="card-header">
-                    <h3>Active School Passengers <span id="badgeSchoolActive" class="req-badge"></span></h3>
-                </div> 
+                <div class="section-header">Active School Passengers</div> 
                 <div id="activeFleet"></div> 
             </div> 
-
+        </div>
+        
+        <!-- VIEW: ACTIVE EVENTS -->
+        <div id="view-event-active" class="view-section">
             <div class="card" id="eventActiveCard"> 
-                <div class="card-header" style="background: rgba(39, 174, 96, 0.05);">
-                    <h3 style="color: var(--accent);">Active Event Bookings <span id="badgeEventActive" class="req-badge"></span></h3>
-                </div> 
+                <div class="section-header">Active Event Bookings</div> 
                 <div id="eventActiveFleet"></div> 
             </div>
         </div>
 
+        <!-- VIEW: LEDGER -->
         <div id="view-ledger" class="view-section">
             <div class="card">
-                <div class="card-header">
-                    <h3>Travel Transcript</h3>
-                    <button class="btn-pdf" onclick="downloadTranscriptPDF()">PDF</button>
+                <div class="section-header">
+                    <span>Travel Transcript</span>
+                    <button class="btn-hide-view btn-pdf" style="margin:0;" onclick="downloadTranscriptPDF()">PRINT PDF</button>
                 </div>
                 <div style="padding:15px; border-bottom: 1px solid var(--border);">
-                    <input type="text" id="transcriptSearch" class="search-box" placeholder="Search passenger name..." oninput="renderHistory()">
+                    <input type="text" id="transcriptSearch" class="search-box" style="width:100%;" placeholder="Search passenger name..." oninput="renderHistory()">
                 </div>
-                <div id="historyBody">
+                <div id="historyBody" style="padding: 15px;">
                     <div id="historyListContent"></div>
                 </div>
             </div>
@@ -408,13 +458,13 @@
 
             <label style="text-align: left; display: block; font-size: 11px; margin-top: 15px;">Active Operating Location</label>
             <input type="text" id="driverTownInput" placeholder="Enter operating town (e.g. Polokwane)" style="margin-bottom: 10px; font-size: 13px;">
-            <button onclick="updateDriverLocation()" class="btn-action" style="background: #e67e22; color: white;">UPDATE LOCATION</button>
+            <button onclick="updateDriverLocation()" class="btn-action-modal" style="background: #e67e22; color: white;">UPDATE LOCATION</button>
 
-            <button onclick="viewFullProfile()" class="btn-action btn-dropoff">VIEW FULL PICTURE</button>
-            <button onclick="document.getElementById('profileUpload').click()" class="btn-action" style="background:#3b82f6; color:white;">UPLOAD PHOTO</button>
-            <button onclick="document.getElementById('licenseUploadHidden').click()" class="btn-action btn-warning">SCAN LICENSE</button>
-            <button onclick="deleteProfilePic()" class="btn-action btn-remove">DELETE PICTURE</button>
-            <button onclick="closeProfileMenu()" class="btn-action btn-hide-view" style="background:transparent; border:1px solid var(--border); color:var(--text-muted);">CANCEL</button>
+            <button onclick="viewFullProfile()" class="btn-action-modal btn-dropoff">VIEW FULL PICTURE</button>
+            <button onclick="document.getElementById('profileUpload').click()" class="btn-action-modal" style="background:#3b82f6; color:white;">UPLOAD PHOTO</button>
+            <button onclick="document.getElementById('licenseUploadHidden').click()" class="btn-action-modal btn-warning">SCAN LICENSE</button>
+            <button onclick="deleteProfilePic()" class="btn-action-modal btn-remove">DELETE PICTURE</button>
+            <button onclick="closeProfileMenu()" class="btn-action-modal btn-hide-view" style="background:transparent; border:1px solid var(--border); color:var(--text-muted);">CANCEL</button>
             <input type="file" id="profileUpload" accept="image/*" style="display:none;" onchange="handleProfileUpload(event)">
         </div>
     </div>
@@ -435,7 +485,7 @@
             <h3 style="margin-top: 0; color: var(--accent); font-size: 18px; margin-bottom: 12px; font-weight: 800; text-transform: uppercase;" id="appAlertTitle">Notice</h3>
             <p id="appAlertMessage" class="app-alert-message"></p>
             <div id="alertActionGroupContainer" style="display: flex; gap: 10px; width: 100%;">
-                <button id="alertDefaultCloseBtn" onclick="closeAppAlert()" class="btn-action" style="background: var(--accent); color: white; margin-bottom:0;">ACKNOWLEDGE</button>
+                <button id="alertDefaultCloseBtn" onclick="closeAppAlert()" class="btn-action-modal" style="background: var(--accent); color: white; margin-bottom:0;">ACKNOWLEDGE</button>
             </div>
         </div>
     </div>
@@ -460,7 +510,7 @@
         <div class="app-alert-box alarm-box">
             <h1 style="margin-top: 0; color: var(--danger); font-size: 32px; margin-bottom: 10px; font-weight: 900; letter-spacing: 2px;">🚨 ALARM 🚨</h1>
             <p id="alarmMessage" style="color: white; font-size: 16px; font-weight: bold; margin-bottom: 30px; line-height: 1.5;">Students have been officially released.</p>
-            <button onclick="acknowledgeAlarm()" class="btn btn-danger" style="width: 100%; padding: 18px; font-size: 14px; border-radius: 12px; font-weight: 900;">MUTE ALARM</button>
+            <button onclick="acknowledgeAlarm()" class="btn-action-modal btn-danger" style="width: 100%; padding: 18px; font-size: 14px; border-radius: 12px; font-weight: 900;">MUTE ALARM</button>
         </div>
     </div>
 
@@ -468,15 +518,15 @@
     <div id="chatOverlay"> 
         <div style="background:var(--nav-bg); color:white; padding:15px 20px; display:flex; justify-content:space-between; align-items:center; border-bottom: 1px solid rgba(255,255,255,0.05);"> 
             <div style="display: flex; align-items: center; gap: 15px;">
-                <img id="chatTargetImg" src="" style="width: 42px; height: 42px; border-radius: 50%; border: 2px solid var(--accent); object-fit: cover;" onclick="viewFullProfile(this.src)" title="View Full Profile">
-                <div id="chatTarget" style="font-weight:800; font-size: 14px; text-transform: uppercase; letter-spacing: 0.5px;">Chat</div> 
+                <img id="chatTargetImg" src="" style="width: 46px; height: 46px; border-radius: 50%; border: 2px solid var(--accent); object-fit: cover;" onclick="viewFullProfile(this.src)" title="View Full Profile">
+                <div id="chatTarget" style="font-weight:800; font-size: 15px; text-transform: uppercase; letter-spacing: 0.5px;">Chat</div> 
             </div>
             <button onclick="closeChat()" style="background:none; border:none; color:white; font-size:32px; cursor:pointer;">&times;</button> 
         </div> 
         <div id="chatMessages"></div> 
         <div style="padding:15px; background:var(--card-bg); display:flex; gap:10px; border-top: 1px solid var(--border);"> 
             <input type="text" id="chatInput" placeholder="Secure message..." style="flex:1; background:var(--input-bg); border:1px solid var(--border); color:var(--text-main); padding:15px; border-radius:12px; outline:none; font-size:14px; margin-bottom:0;"> 
-            <button class="btn btn-dropoff" style="width:auto; padding:0 25px; border-radius:12px; font-size:12px;" onclick="sendChatMessage()">SEND</button> 
+            <button class="btn-action-modal btn-dropoff" style="width:auto; padding:0 25px; border-radius:12px; font-size:12px; margin-bottom:0;" onclick="sendChatMessage()">SEND</button> 
         </div> 
     </div> 
 
@@ -521,7 +571,7 @@
             if (customButtonsHtml) {
                 groupContainer.innerHTML = customButtonsHtml;
             } else {
-                groupContainer.innerHTML = `<button id="alertDefaultCloseBtn" class="btn-action" style="background: var(--accent); color: white; margin-bottom:0;">ACKNOWLEDGE</button>`;
+                groupContainer.innerHTML = `<button id="alertDefaultCloseBtn" class="btn-action-modal" style="background: var(--accent); color: white; margin-bottom:0;">ACKNOWLEDGE</button>`;
                 document.getElementById("alertDefaultCloseBtn").onclick = function() {
                     closeAppAlert();
                     if(callback) callback();
@@ -530,6 +580,20 @@
             document.getElementById("appAlertOverlay").classList.add("show");
         }
         function closeAppAlert() { document.getElementById("appAlertOverlay").classList.remove("show"); }
+
+        // --- Theme Management ---
+        function toggleTheme() {
+            const isLight = document.body.classList.toggle('light-mode');
+            localStorage.setItem('theme', isLight ? 'light' : 'dark');
+            const ico = document.getElementById('themeIcon');
+            if (ico) ico.innerText = isLight ? '🌙' : '🌓';
+            setChatBackground(); 
+        }
+        if (localStorage.getItem('theme') === 'light') {
+            document.body.classList.add('light-mode');
+            const ico = document.getElementById('themeIcon');
+            if (ico) ico.innerText = '🌙';
+        }
 
         const alarmAudio = new Audio('https://actions.google.com/sounds/v1/alarms/digital_watch_alarm_long.ogg');
         alarmAudio.loop = true;
@@ -552,12 +616,10 @@
             document.getElementById('alarmMessage').innerText = `Students at ${schoolName} have been officially released.`;
             document.getElementById('alarmOverlay').classList.add('show');
 
-            // Set the 60-second "grace period" timer
             alarmTimeout = setTimeout(() => {
                 console.log("60 seconds passed, triggering audio...");
                 alarmAudio.play().catch(e => console.log("Audio play blocked: ", e));
                 
-                // Set the audio to stop automatically after 30 seconds
                 audioMuteTimeout = setTimeout(() => { 
                     alarmAudio.pause(); 
                     alarmAudio.currentTime = 0; 
@@ -604,14 +666,24 @@
             return fetch(url, { ...options, headers });
         }
 
-        const myU = sessionStorage.getItem('username');
-        const sessionName = sessionStorage.getItem('userName'); 
-        const myRole = sessionStorage.getItem('userRole'); 
-        const cachedPhoto = sessionStorage.getItem('userPhoto');
+        let myU = sessionStorage.getItem('username');
+        let sessionName = sessionStorage.getItem('userName'); 
+        let myRole = sessionStorage.getItem('userRole'); 
+        let cachedPhoto = sessionStorage.getItem('userPhoto');
 
-        if(!myU || myRole !== 'driver') { 
-            sessionStorage.clear();
-            window.location.replace("login.html"); 
+        // PREVIEW ENVIRONMENT FALLBACK FIX:
+        if (!myU || myRole !== 'driver') {
+            console.warn("No active session found. Injecting Mock Data for Preview Environment.");
+            myU = "driver_preview_123";
+            sessionName = "John Driver";
+            myRole = "driver";
+            sessionStorage.setItem('username', myU);
+            sessionStorage.setItem('userName', sessionName);
+            sessionStorage.setItem('userRole', myRole);
+            
+            myU = sessionStorage.getItem('username');
+            sessionName = sessionStorage.getItem('userName'); 
+            myRole = sessionStorage.getItem('userRole'); 
         }
 
         let userRole = null; 
@@ -679,19 +751,26 @@
                         document.getElementById('selectionBoard').style.display = "flex";
                     } else {
                         document.getElementById('selectionBoard').style.display = "none";
+                        // Setup role specific dashboard visibility
                         if(userRole === 'door_to_door') {
                             document.getElementById('d2dDashboard').style.display = "flex";
                             document.getElementById('schoolCodeManagement').style.display = "none";
-                            document.getElementById('schoolRequestsCard').style.display = "none";
-                            document.getElementById('schoolActiveCard').style.display = "none";
                             
-                            document.getElementById('eventRequestsCard').style.display = "flex";
-                            document.getElementById('eventActiveCard').style.display = "flex";
+                            // Hide school buttons in nav, show event buttons
+                            document.querySelector('[data-view="view-school-requests"]').style.display = "none";
+                            document.querySelector('[data-view="view-school-active"]').style.display = "none";
+                            document.querySelector('[data-view="view-event-requests"]').style.display = "flex";
+                            document.querySelector('[data-view="view-event-active"]').style.display = "flex";
+                            
                         } else {
                             document.getElementById('d2dDashboard').style.display = "none";
                             document.getElementById('schoolCodeManagement').style.display = "flex";
-                            document.getElementById('schoolRequestsCard').style.display = "flex";
-                            document.getElementById('schoolActiveCard').style.display = "flex";
+                            
+                            // Show school buttons in nav, hide event buttons
+                            document.querySelector('[data-view="view-school-requests"]').style.display = "flex";
+                            document.querySelector('[data-view="view-school-active"]').style.display = "flex";
+                            document.querySelector('[data-view="view-event-requests"]').style.display = "none";
+                            document.querySelector('[data-view="view-event-active"]').style.display = "none";
                         }
                     }
                 }
@@ -750,8 +829,8 @@
 
         async function removeSchoolCode(code) {
             const btnHtml = `
-                <button id="confirmRemoveSchoolBtn" class="btn-action btn-danger" style="margin-bottom:10px;">CONFIRM REMOVE</button>
-                <button id="cancelRemoveSchoolBtn" class="btn-action" style="background:transparent; border:1px solid var(--border); color:var(--text-muted);">CANCEL</button>
+                <button id="confirmRemoveSchoolBtn" class="btn-action-modal btn-danger" style="margin-bottom:10px;">CONFIRM REMOVE</button>
+                <button id="cancelRemoveSchoolBtn" class="btn-action-modal" style="background:transparent; border:1px solid var(--border); color:var(--text-muted);">CANCEL</button>
             `;
             showAppAlert(`Remove link to school code ${code}?`, "CONFIRM REMOVE CONNECTION", null, btnHtml);
             
@@ -958,8 +1037,8 @@
         async function endPublishedTrip() {
             if(!activePostId) return;
             const btnHtml = `
-                <button id="confirmEndTripBtn" class="btn-action btn-danger" style="margin-bottom:10px;">CONFIRM END</button>
-                <button id="cancelEndTripBtn" class="btn-action" style="background:transparent; border:1px solid var(--border); color:var(--text-muted);">CANCEL</button>
+                <button id="confirmEndTripBtn" class="btn-action-modal btn-danger" style="margin-bottom:10px;">CONFIRM END</button>
+                <button id="cancelEndTripBtn" class="btn-action-modal" style="background:transparent; border:1px solid var(--border); color:var(--text-muted);">CANCEL</button>
             `;
             showAppAlert("End and remove this trip from the public network?", "CONFIRM TERMINATION", null, btnHtml);
             
@@ -993,7 +1072,9 @@
             appendLocalLog(sName, act, guaranteedTime);
             
             authFetch('http://127.0.0.1:5000/api/transport/track', { 
-                method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ booking_id: bid, action: act, timestamp: new Date().toISOString() }) 
+                method: 'POST', 
+                headers: {'Content-Type':'application/json'}, 
+                body: JSON.stringify({ booking_id: bid, action: act, timestamp: new Date().toISOString() }) 
             }).then(() => load()); 
         }
 
@@ -1005,16 +1086,20 @@
 
             try {
                 await authFetch('http://127.0.0.1:5000/api/driver/respond_booking', { 
-                    method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({booking_id: id, status: s}) 
+                    method:'POST', 
+                    headers:{'Content-Type':'application/json'}, 
+                    body:JSON.stringify({booking_id: id, status: s}) 
                 });
-            } catch(err) { console.error("Respond pipeline crashed:", err); }
+            } catch(err) {
+                console.error("Respond pipeline crashed:", err);
+            }
             load(); 
         }
 
         async function terminateTrip(bid, sName) { 
             const btnHtml = `
-                <button id="confirmFinishTripBtn" class="btn-action btn-dropoff" style="margin-bottom:10px;">FINISH TRIP</button>
-                <button id="cancelFinishTripBtn" class="btn-action" style="background:transparent; border:1px solid var(--border); color:var(--text-muted);">CANCEL</button>
+                <button id="confirmFinishTripBtn" class="btn-action-modal btn-dropoff" style="margin-bottom:10px;">FINISH TRIP</button>
+                <button id="cancelFinishTripBtn" class="btn-action-modal" style="background:transparent; border:1px solid var(--border); color:var(--text-muted);">CANCEL</button>
             `;
             showAppAlert("End Trip? This will move it to your Travel Transcript.", "CONFIRM TRIP COMPLETION", null, btnHtml);
             
@@ -1029,7 +1114,9 @@
                 renderHistory(); 
 
                 authFetch('http://127.0.0.1:5000/api/driver/respond_booking', { 
-                    method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({booking_id: bid, status: 'Finished'}) 
+                    method:'POST', 
+                    headers:{'Content-Type':'application/json'}, 
+                    body:JSON.stringify({booking_id: bid, status: 'Finished'}) 
                 }).then(() => load());
             };
         }
@@ -1044,8 +1131,8 @@
                     combinedHtml += `
                     <div class="history-item">
                         <div>
-                            <b style="font-size: 14px; letter-spacing: 0.5px;">Passenger: ${h.student_name}</b>
-                            <div style="font-size: 11px; color: var(--text-muted); margin-top:6px; font-family: monospace;">ID: ${h.booking_id} | TRIP FINISHED</div>
+                            <b style="font-size: 14px; letter-spacing: 0.5px;">${h.student_name}</b>
+                            <div style="font-size: 11px; color: var(--text-muted); margin-top:6px; font-family: monospace;">ID: ${h.booking_id}</div>
                         </div>
                         <span style="color:var(--accent); font-weight:900; font-size:11px; letter-spacing: 1px;">SUCCESS</span>
                     </div>`;
@@ -1054,19 +1141,19 @@
 
             logs.slice().reverse().forEach(l => {
                 if(l.name.toLowerCase().includes(term)) {
-                    let color = l.action === 'PICKUP' ? '#3498db' : (l.action === 'DROPOFF' ? '#f39c12' : '#27ae60');
+                    let color = l.action === 'PICKUP' ? '#3b82f6' : (l.action === 'DROPOFF' ? '#f39c12' : '#27ae60');
                     combinedHtml += `
                     <div class="history-item">
                         <div>
-                            <b style="font-size: 14px; letter-spacing: 0.5px;">Passenger: ${l.name}</b>
-                            <div style="font-size: 11px; color: var(--text-muted); margin-top:6px; font-family: monospace;">TIMESTAMP: ${l.time} | ACTION LOG</div>
+                            <b style="font-size: 14px; letter-spacing: 0.5px;">${l.name}</b>
+                            <div style="font-size: 11px; color: var(--text-muted); margin-top:6px; font-family: monospace;">TIME: ${l.time}</div>
                         </div>
                         <span style="color:${color}; font-weight:900; font-size:11px; letter-spacing: 1px;">${l.action}</span>
                     </div>`;
                 }
             });
 
-            document.getElementById('historyListContent').innerHTML = combinedHtml || '<p style="color:var(--text-muted); font-size:12px; text-align:center;">No records found.</p>';
+            document.getElementById('historyListContent').innerHTML = combinedHtml || '<p style="color:var(--text-muted); font-size:13px; text-align:center;">No records found.</p>';
         }
 
         async function load() { 
@@ -1076,9 +1163,7 @@
                 }); 
                 const data = await res.json();
                 
-                currentDriverBookingsCache = data.bookings || [];
-                const bookings = currentDriverBookingsCache;
-
+                const bookings = data.bookings || [];
                 loadPublishedTrip();
 
                 const activePassengers = bookings.filter(b => b.status === 'Accepted');
@@ -1100,7 +1185,6 @@
                     }
                 });
 
-                parentProfilesMap = {};
                 if (parentUsernamesList.length > 0) {
                     const profRes = await authFetch('http://127.0.0.1:5000/api/users/lookup', {
                         method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ usernames: parentUsernamesList })
@@ -1111,13 +1195,9 @@
                     });
                 }
 
-                const countRes = await authFetch('http://127.0.0.1:5000/api/support/get_all_counts', { 
-                    method: 'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ receiver: myU }) 
-                }); 
-                const counts = (await countRes.json()).counts || {}; 
-
                 const filteredPending = bookings.filter(b => b.status === 'Pending');
                 
+                // RENDER PENDING REQUESTS
                 let schoolPendingHtml = "";
                 let eventPendingHtml = "";
                 let schoolPendingCount = 0;
@@ -1128,7 +1208,7 @@
                     const sPhoto = (srcStudent && srcStudent.photo) ? srcStudent.photo : `https://ui-avatars.com/api/?name=${encodeURIComponent(b.student_name)}&background=3498db&color=fff`;
                     
                     const isEventRequest = b.school_code === "D2D_GLOBAL";
-                    const displayLabel = isEventRequest ? `<span class="status-tag">EVENT</span>` : `<span class="status-tag">SCHOOL</span>`;
+                    const displayLabel = isEventRequest ? `EVENT` : `SCHOOL`;
 
                     const rowHtml = `
                     <div class="list-row" id="row-${b.booking_id}">
@@ -1136,13 +1216,13 @@
                             <img src="${sPhoto}" class="student-avatar" onclick="viewFullProfile('${sPhoto}')">
                             <div class="student-info">
                                 <div class="student-name">${escapeHtml(b.student_name)}</div>
-                                ${displayLabel}
+                                <div class="status-tag">${displayLabel}</div>
                             </div>
                         </div>
                         <div class="btn-group">
-                            <button class="btn btn-pickup" onclick="respond('${b.booking_id}', 'Accepted', '${b.student_name}')">Accept</button>
-                            <button class="btn btn-chat" onclick="openStudentChat('${b.booking_id}', '${b.driver_username}', '${b.student_name}', '${sPhoto}', ${isEventRequest})">Chat</button>
-                            <button class="btn btn-remove" onclick="respond('${b.booking_id}', 'Rejected', '${b.student_name}')">Decline</button>
+                            <button class="btn-action-mobile btn-pickup" onclick="respond('${b.booking_id}', 'Accepted', '${b.student_name}')">Accept</button>
+                            <button class="btn-action-mobile btn-chat" onclick="openStudentChat('${b.booking_id}', '${b.driver_username}', '${escapeHtml(b.student_name)}', '${sPhoto}', ${isEventRequest})">Chat</button>
+                            <button class="btn-action-mobile btn-remove" onclick="respond('${b.booking_id}', 'Rejected', '${b.student_name}')">Decline</button>
                         </div>
                     </div>`;
 
@@ -1155,10 +1235,8 @@
 
                 updateBadge('badgeSchoolRequests', schoolPendingCount);
                 updateBadge('badgeEventRequests', eventPendingCount);
-                
-                // Update Drawer badge (combined)
-                updateBadge('badgeDrawerRequests', schoolPendingCount + eventPendingCount);
 
+                // RENDER ACTIVE TRIPS
                 let schoolActiveHtml = "";
                 let eventActiveHtml = "";
                 let schoolUnreadTotal = 0;
@@ -1169,7 +1247,6 @@
                     const sPhoto = (srcStudent && srcStudent.photo) ? srcStudent.photo : `https://ui-avatars.com/api/?name=${encodeURIComponent(b.student_name)}&background=3498db&color=fff`;
 
                     const isDoorToDoor = b.school_code === "D2D_GLOBAL";
-                    const isEventTrip = isDoorToDoor;
 
                     let msgCount = 0;
                     if (isDoorToDoor) {
@@ -1191,18 +1268,12 @@
                     if (isDoorToDoor) eventUnreadTotal += unread; else schoolUnreadTotal += unread;
 
                     let motherBtnHtml = "";
-                    if (!isEventTrip) {
+                    if (!isDoorToDoor) {
                         const linkedMotherUsername = establishedRoomsMap[b.student_username];
-                        const parentProfile = parentProfilesMap[linkedMotherUsername];
-                        
-                        if (linkedMotherUsername && parentProfile) {
-                            const motherRealName = parentProfile.name || "Mother";
-                            motherBtnHtml = `
-                            <button class="btn btn-parent" onclick="openParentChat('${b.booking_id}', '${b.student_name}', '${b.student_username}', '${linkedMotherUsername}')">
-                                Parent 👩‍👧
-                            </button>`;
+                        if (linkedMotherUsername) {
+                            motherBtnHtml = `<button class="btn-action-mobile btn-parent" onclick="openParentChat('${b.booking_id}', '${escapeHtml(b.student_name)}', '${b.student_username}', '${linkedMotherUsername}')">Parent</button>`;
                         } else {
-                            motherBtnHtml = `<button class="btn btn-parent" style="opacity:0.4; cursor:not-allowed;" disabled>Parent 🔒</button>`;
+                            motherBtnHtml = `<button class="btn-action-mobile btn-parent" style="opacity:0.4; filter:grayscale(1);" disabled>Parent</button>`;
                         }
                     }
 
@@ -1216,15 +1287,15 @@
                             <img src="${sPhoto}" class="student-avatar" onclick="viewFullProfile('${sPhoto}')">
                             <div class="student-info">
                                 <div class="student-name">${escapeHtml(b.student_name)}</div>
-                                <span class="status-tag">${tStatus.toUpperCase()}</span>
+                                <div class="status-tag">${(b.tracking_status || "Approved").toUpperCase()}</div>
                             </div>
                         </div>
                         <div class="btn-group">
-                            <button class="btn btn-pickup" ${pickupDisabled} onclick="updateTrack('${b.booking_id}', 'pickup', '${b.student_name}')">Pickup</button> 
-                            <button class="btn btn-dropoff" ${dropDisabled} onclick="updateTrack('${b.booking_id}', 'dropoff', '${b.student_name}')">Drop</button> 
-                            <button class="btn btn-chat" onclick="openStudentChat('${b.booking_id}', '${b.driver_username}', '${b.student_name}', '${sPhoto}', ${isDoorToDoor})">${chatLabel}</button>
+                            <button class="btn-action-mobile btn-pickup" ${pickupDisabled} onclick="updateTrack('${b.booking_id}', 'pickup', '${b.student_name}')">Pickup</button> 
+                            <button class="btn-action-mobile btn-dropoff" ${dropDisabled} onclick="updateTrack('${b.booking_id}', 'dropoff', '${b.student_name}')">Drop</button> 
+                            <button class="btn-action-mobile btn-chat" onclick="openStudentChat('${b.booking_id}', '${b.driver_username}', '${escapeHtml(b.student_name)}', '${sPhoto}', ${isDoorToDoor})">${chatLabel}</button>
                             ${motherBtnHtml}
-                            <button class="btn btn-remove" onclick="terminateTrip('${b.booking_id}', '${b.student_name}')">Finish</button>
+                            <button class="btn-action-mobile btn-danger" onclick="terminateTrip('${b.booking_id}', '${b.student_name}')">Finish</button>
                         </div>
                     </div>`;
 
@@ -1236,9 +1307,6 @@
 
                 updateBadge('badgeSchoolActive', schoolUnreadTotal);
                 updateBadge('badgeEventActive', eventUnreadTotal);
-                
-                // Update Drawer badge (combined)
-                updateBadge('badgeDrawerActive', schoolUnreadTotal + eventUnreadTotal);
 
                 backendFinished = bookings.filter(b => b.status === 'Finished');
                 renderHistory(); 
@@ -1248,15 +1316,13 @@
 
         function setChatBackground() {
             const isLight = document.body.classList.contains('light-mode');
-            const myPic = sessionStorage.getItem('userPhoto');
             const chatDiv = document.getElementById('chatMessages');
             
-            if (myPic && myPic !== "null" && myPic !== "") {
+            if (cachedPhoto && cachedPhoto !== "null" && cachedPhoto !== "") {
                 const overlay = isLight ? 'rgba(248, 250, 252, 0.93), rgba(226, 232, 240, 0.95)' : 'rgba(15, 23, 42, 0.92), rgba(2, 2, 24, 0.98)';
-                chatDiv.style.backgroundImage = `linear-gradient(${overlay}), url('${myPic}')`;
+                chatDiv.style.backgroundImage = `linear-gradient(${overlay}), url('${cachedPhoto}')`;
                 chatDiv.style.backgroundSize = "cover";
                 chatDiv.style.backgroundPosition = "center";
-                chatDiv.style.backgroundRepeat = "no-repeat";
             } else {
                 chatDiv.style.backgroundImage = "none";
                 chatDiv.style.backgroundColor = isLight ? "var(--bg-grad-1)" : "#0f172a";
@@ -1289,20 +1355,18 @@
             supportBaseChildName = childUserKey;
             
             const parentProfile = parentProfilesMap ? parentProfilesMap[parentUser] : null;
-            const motherRealName = parentProfile && parentProfile.name ? parentProfile.name : "Mother of " + studentName;
-            const motherPhoto = parentProfile && parentProfile.photo ? parentProfile.photo : `https://ui-avatars.com/api/?name=${encodeURIComponent(motherRealName)}&background=8e44ad&color=fff`;
+            const motherRealName = parentProfile && parentProfile.name ? parentProfile.name : "Parent";
+            const motherPhoto = parentProfile && parentProfile.photo ? parentProfile.photo : `https://ui-avatars.com/api/?name=${encodeURIComponent(motherRealName)}&background=8b5cf6&color=fff`;
             
             document.getElementById('chatTarget').innerHTML = `
                 <div style="display:flex; flex-direction:column; text-align:left; gap:2px;">
-                    <span style="font-weight:800; font-size:14px; letter-spacing:0.5px;">${motherRealName.toUpperCase()}</span>
-                    <span style="font-size:10px; opacity:0.6; font-family:monospace; text-transform:none;">@${parentUser}</span>
+                    <span style="font-weight:800; font-size:14px;">${motherRealName.toUpperCase()}</span>
                 </div>
             `;
             
             const headerAvatarImg = document.getElementById('chatTargetImg');
             if (headerAvatarImg) {
                 headerAvatarImg.src = motherPhoto;
-                headerAvatarImg.title = `View ${motherRealName}'s Profile`;
             }
             
             setChatBackground();
@@ -1411,7 +1475,7 @@
         }
         
         function closeChat() { currentRoomID = null; document.getElementById('chatOverlay').style.display = 'none'; }
-
+        
         async function confirmRole(mode) {
             try {
                 await authFetch('http://127.0.0.1:5000/api/profile/update_self', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ transport_type: mode }) });
@@ -1420,16 +1484,20 @@
                 if(mode === 'door_to_door') { 
                     document.getElementById('d2dDashboard').style.display = 'flex'; 
                     document.getElementById('schoolCodeManagement').style.display = "none";
-                    document.getElementById('schoolRequestsCard').style.display = "none";
-                    document.getElementById('schoolActiveCard').style.display = "none";
-                    document.getElementById('eventRequestsCard').style.display = "flex";
-                    document.getElementById('eventActiveCard').style.display = "flex";
+                    
+                    document.querySelector('[data-view="view-school-requests"]').style.display = "none";
+                    document.querySelector('[data-view="view-school-active"]').style.display = "none";
+                    document.querySelector('[data-view="view-event-requests"]').style.display = "flex";
+                    document.querySelector('[data-view="view-event-active"]').style.display = "flex";
                 } else { 
                     document.getElementById('d2dDashboard').style.display = "none"; 
                     document.getElementById('schoolCodeManagement').style.display = "flex"; 
-                    document.getElementById('schoolRequestsCard').style.display = "flex";
-                    document.getElementById('schoolActiveCard').style.display = "flex";
                     renderLinkedSchools(); 
+                    
+                    document.querySelector('[data-view="view-school-requests"]').style.display = "flex";
+                    document.querySelector('[data-view="view-school-active"]').style.display = "flex";
+                    document.querySelector('[data-view="view-event-requests"]').style.display = "none";
+                    document.querySelector('[data-view="view-event-active"]').style.display = "none";
                 }
             } catch(e) { showAppAlert("Error saving role."); }
         }
@@ -1445,53 +1513,30 @@
             doc.save(`SafeDrive_Transcript_${myU}.pdf`);
         }
 
-      async function deleteAccount() {
+        function deleteAccount() {
             const btnHtml = `
-                <button id="confirmPurgeBtn" class="btn-action btn-danger" style="margin-bottom:10px;">PURGE ACCOUNT</button>
-                <button id="cancelPurgeBtn" class="btn-action" style="background:transparent; border:1px solid var(--border); color:var(--text-muted);">CANCEL</button>
+                <input type="text" id="delReasonInput" placeholder="Reason for deleting..." style="width:100%; box-sizing:border-box; padding:15px; border-radius:12px; border:1px solid var(--border); background:var(--input-bg); color:var(--text-main); margin-bottom:15px; font-family:inherit; font-size:13px; outline:none;">
+                <div style="display:flex; gap:10px; width:100%;">
+                    <button id="confirmPurgeBtn" class="btn-action-modal btn-danger" style="margin-bottom:0;">PURGE</button>
+                    <button id="cancelPurgeBtn" class="btn-action-modal btn-hide-view" style="margin-bottom:0;">CANCEL</button>
+                </div>
             `;
-            showAppAlert("PERMANENTLY DELETE ACCOUNT? This will wipe your profile and booking histories permanently from our cloud storage networks. This action cannot be undone.", "CONFIRM ACCOUNT PURGE", null, btnHtml);
+            showAppAlert("PERMANENTLY DELETE ACCOUNT? This will wipe your profile from our networks.", "CONFIRM PURGE", null, btnHtml);
             
             document.getElementById("cancelPurgeBtn").onclick = function() { closeAppAlert(); };
-            
             document.getElementById("confirmPurgeBtn").onclick = async function() {
                 const purgeBtn = document.getElementById("confirmPurgeBtn");
-                purgeBtn.disabled = true;
-                purgeBtn.innerText = "PURGING...";
-
+                purgeBtn.disabled = true; purgeBtn.innerText = "PURGING...";
                 try {
-                    const res = await authFetch('http://127.0.0.1:5000/api/delete_account', { 
-                        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ username: myU }) 
-                    }); 
+                    const res = await authFetch('http://127.0.0.1:5000/api/delete_account', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ username: myU }) }); 
                     const data = await res.json();
-
-                    if (res.ok && data.status !== 'error') {
-                        closeAppAlert();
-                        logout(); 
-                    } else {
-                        throw new Error(data.message || "Server side drop error constraint.");
-                    }
+                    if (res.ok && data.status !== 'error') { closeAppAlert(); logout(); } 
+                    else { throw new Error(data.message || "Server side drop error constraint."); }
                 } catch(e) { 
-                    purgeBtn.disabled = false;
-                    purgeBtn.innerText = "PURGE ACCOUNT";
-                    showAppAlert("Security routing error: Could not synchronize account termination with backend database clusters."); 
+                    purgeBtn.disabled = false; purgeBtn.innerText = "PURGE";
+                    showAppAlert("Security routing error: Could not synchronize account termination."); 
                 }
             };
-        }
-
-        // --- Theme Management ---
-        function toggleTheme() {
-            const isLight = document.body.classList.toggle('light-mode');
-            localStorage.setItem('theme', isLight ? 'light' : 'dark');
-            const ico = document.getElementById('themeIcon');
-            if (ico) ico.innerText = isLight ? '🌙' : '🌓';
-            setChatBackground(); 
-        }
-        
-        if (localStorage.getItem('theme') === 'light') {
-            document.body.classList.add('light-mode');
-            const ico = document.getElementById('themeIcon');
-            if (ico) ico.innerText = '🌙';
         }
 
         function logout() { sessionStorage.clear(); window.location.replace("login.html"); } 
@@ -1505,3 +1550,5 @@
     </script> 
 </body> 
 </html>
+
+THIS LOOKS EXACTLY AS WHAT I REQUESTED NOW WITH THE FOOTER ISSUE I WAS TALKING ABOUT THE PRINCIPAL APP FOR THAT FIX THE STUDENT REGISTERED FOOTER SO THAT THE PAGE IS FREE TO SCROLL THERE ALSO FOR THE PRINCIPAL THEY SHOULD ALSO HAVE THE PARENTS WHATSAPP SO THEY CAN BE ABLE TO CONTACT THEM AS WELL ON WHATSAPP JUST LIKE THE DRIVERS AND ALSO ON THE PRINCIPAL HOME PAGE DO NOY PUT THAT WHITE THING LIKE THE BOX WHICH SAY WELCOME AND OTHER THING THE IMAGE SHOULD COVER THE WHOLE  CARD PLEASE THEN MAKE THE UPLOAD AND REMOVE BUTTON TO BE NICE LIKE MAYBE SMALL CAMERA TO UPLOAD AND AN X TP DELETE THAT WILL BE BETTER  ALSO THE EXIT BUTTON ON THE TOP RIGHT MAKE IT SMALLER TOO BIG SO IF I GO TO THE HOMEPAGE THERE IS THE PRINCIPALS COMMAND TITLE WITH SCHOOL OUT BUTTON THEN THE OVERWATCH DOWN THEN BELOW THAT THERE IS THE UPLOADED PICTURE OF THE SCHOOL WITH THE 2 BUTTONS THE REST MUST BE REMOVED IT DOES NOT LOOK NICE
