@@ -2,279 +2,491 @@
 <html lang="en"> 
 <head> 
     <meta charset="UTF-8"> 
-    <meta name="viewport" content="width=device-width, initial-scale=1.0"> 
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"> 
     <title>Public Portal | Safe Drive Logistics</title> 
     
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700;800&display=swap" rel="stylesheet"> 
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet"> 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script> 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.23/jspdf.plugin.autotable.min.js"></script> 
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <style> 
+        /* ===== CSS VARIABLES FOR THEMING ===== */
         :root {  
-            --primary: #020218; --accent: #3498db; --bg: #0f172a; --card-bg: #1e293b;  
-            --white: #ffffff; --success: #10b981; --danger: #ef4444; --warning: #f39c12;
-            --text-main: #f1f5f9; --text-muted: #94a3b8; --border: #334155; 
+            /* WhatsApp-inspired Dark Mode Defaults */
+            --primary: #0b141a; 
+            --accent: #25D366; 
+            --warning: #f39c12; 
+            --danger: #ef4444;  
+            --bg-grad-1: #0b141a;
+            --bg-grad-2: #111b21;
+            --card-bg: #111b21;  
+            --card-bg-alt: #111b21;
+            --text-main: #e9edef;  
+            --text-muted: #8696a0;  
+            --border: rgba(255,255,255,0.08);
+            --nav-bg: #202c33; 
+            --hover-bg: #202c33;
+            --input-bg: #2a3942;
         } 
-        body { background: var(--bg); font-family: 'Inter', sans-serif; margin: 0; color: var(--text-main); } 
-        .nav { background: var(--primary); color: white; padding: 1.2rem 5%; display: flex; justify-content: space-between; align-items: center; position: sticky; top: 0; z-index: 1000; box-shadow: 0 4px 15px rgba(0,0,0,0.4); } 
-        .nav-brand { font-size: 1.4rem; font-weight: 700; letter-spacing: -0.5px; } 
-        .nav-brand span { color: var(--accent); } 
-        .nav-actions { display: flex; align-items: center; gap: 25px; } 
-        .profile-area { display: flex; align-items: center; gap: 15px; cursor: pointer; transition: 0.2s; } 
-        .profile-area:hover { transform: scale(1.05); }
-        .user-avatar { width: 45px; height: 45px; border-radius: 50%; border: 2px solid var(--accent); object-fit: cover; box-shadow: 0 0 10px rgba(52, 152, 219, 0.4); } 
-        .btn-logout { background: rgba(255,255,255,0.1); color: white; border: 1px solid rgba(255,255,255,0.3); padding: 8px 16px; border-radius: 8px; font-weight: 700; cursor: pointer; font-size: 11px; } 
-
-        button:active { transform: scale(0.95); opacity: 0.8; } 
         
-        .container { width: 80%; max-width: 1050px; margin: 40px auto; display: flex; flex-direction: column; gap: 40px; } 
+        /* Light Mode Overrides */
+        body.light-mode {
+            --primary: #008069; 
+            --bg-grad-1: #efeae2;
+            --bg-grad-2: #efeae2;
+            --card-bg: #ffffff; 
+            --card-bg-alt: #ffffff;
+            --text-main: #111b21; 
+            --text-muted: #667781; 
+            --border: rgba(0,0,0,0.08);
+            --nav-bg: #008069;
+            --hover-bg: #f0f2f5;
+            --input-bg: #f0f2f5;
+        }
         
-        .card { background: var(--card-bg); border-radius: 18px; box-shadow: 0 10px 30px rgba(0,0,0,0.3); border: 1px solid var(--border); overflow: hidden; width: 100%;} 
-        .card-header { padding: 22px 28px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; background: rgba(0,0,0,0.2); } 
-        .card-header h3 { margin: 0; font-size: 1.05rem; font-weight: 800; color: var(--white); text-transform: uppercase; } 
-        .body-content { padding: 28px; } 
+        * { box-sizing: border-box; } 
+        html, body { height: 100%; margin: 0; } 
+        body { 
+            background: var(--bg-grad-1); 
+            font-family: 'Inter', sans-serif; 
+            color: var(--text-main); line-height: 1.6;
+            -webkit-tap-highlight-color: transparent;
+            display: flex; flex-direction: column; min-height: 100vh;
+        }
 
-        .btn-toggle { background: #334155; border: none; padding: 8px 15px; border-radius: 8px; font-size: 11px; font-weight: 700; cursor: pointer; color: var(--white); transition: 0.3s; } 
-        .btn-book { background: var(--accent); color: white; border: none; padding: 12px 25px; border-radius: 10px; font-weight: 700; cursor: pointer; text-transform: uppercase; font-size: 11px; transition: 0.3s;} 
-        .status-badge { font-size: 10px; font-weight: 800; padding: 12px; border-radius: 10px; text-transform: uppercase; color: white; background: #0f172a; margin: 10px 0; display: block; border: 1.5px solid var(--border); text-align: center;} 
-          
-        .monitor-stack { display: flex; flex-direction: column; gap: 20px; align-items: center; width: 100%; } 
-        .child-monitor-card { width: 100%; max-width: 700px; background: rgba(255,255,255,0.02); border: 1px solid var(--border); border-radius: 20px; padding: 25px; text-align: center; border-top: 4px solid var(--accent); position: relative;} 
-        .child-monitor-card img { width: 90px; height: 90px; border-radius: 50%; border: 2.5px solid var(--accent); object-fit: cover; } 
+        .msg-time{ margin-top:6px; font-size:10px; opacity:.7; text-align:right; }
         
-        .search-bar { width: 100%; padding: 14px 18px; border-radius: 12px; border: 1.5px solid var(--border); margin-bottom: 20px; outline: none; background: var(--bg); color: white; text-align: center; box-sizing: border-box; } 
+        /* ===== HEADER ===== */
+        .header {
+            background: var(--nav-bg); color: white; padding: 0.8rem 15px; display: flex; justify-content: space-between; align-items: center;
+            position: sticky; top: 0; z-index: 1000; box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+            gap: 12px;
+        }
+        .hamburger-btn {
+            background: transparent; border: none; color: white;
+            width: 40px; height: 40px; border-radius: 50%; cursor: pointer; flex-shrink: 0;
+            display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 5px;
+            transition: 0.2s; padding: 0;
+        }
+        .hamburger-btn:active { background: rgba(255,255,255,0.1); }
+        .hamburger-btn span { display: block; width: 22px; height: 2px; background: white; border-radius: 2px; }
         
-        .d2d-search-bar { width: 100%; padding: 14px 18px; border-radius: 12px; border: 1px solid var(--border); margin-bottom: 12px; outline: none; background: rgba(0,0,0,0.2); color: white; box-sizing: border-box; font-family: inherit; font-size: 13px; transition: 0.3s; text-align: left; }
-        .d2d-search-bar:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(52, 152, 219, 0.2); }
+        .header-titles { flex: 1; min-width: 0; margin-left: 5px;}
+        .header h1 { margin: 0; font-size: 1.15rem; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .header-overwatch { font-size: 11px; opacity:0.85; display:block; margin-top:2px; white-space: nowrap; font-weight: 400;}
+        .header-right { display:flex; align-items:center; gap:12px; flex-shrink: 0; }
+        
+        .profile-area { display: flex; align-items: center; justify-content: center; cursor: pointer; }
+        .initials-avatar {
+            width: 40px; height: 40px; border-radius: 50%; object-fit: cover;
+            border: 2px solid transparent; cursor: pointer; transition: 0.2s;
+            background: var(--accent); color: white; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 14px;
+        }
+        .initials-avatar:active { transform: scale(0.95); opacity: 0.8; }
 
-        .btn-mode { background: #0f172a; border: 1px solid var(--border); color: white; padding: 12px 25px; border-radius: 10px; font-weight: 800; font-size: 11px; cursor: pointer; flex: 1; text-transform: uppercase; transition: 0.3s;}
-        .btn-mode.active { background: var(--accent); border-color: var(--accent); box-shadow: 0 5px 15px rgba(52, 152, 219, 0.4); }
-        .driver-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 20px; margin-top: 20px; }
-        .driver-card-mini { background: rgba(255,255,255,0.02); border: 1px solid var(--border); border-radius: 15px; padding: 20px; text-align: center; transition: 0.3s; }
-        .mini-avatar { width: 60px; height: 60px; border-radius: 50%; background: var(--accent); color: white; display: flex; align-items: center; justify-content: center; font-size: 20px; font-weight: 800; margin: 0 auto 10px; border: 2px solid white; object-fit: cover; cursor: pointer; transition: 0.2s;}
-        .mini-avatar:hover { transform: scale(1.1); }
-        .chat-badge { background: #27ae60; color: white; padding: 3px 7px; border-radius: 10px; font-weight: 900; font-size: 10px; margin-left: 6px; animation: pulseGreenAlert 1s infinite; display: inline-block; box-shadow: 0 0 8px rgba(39, 174, 96, 0.6); }
-@keyframes pulseGreenAlert { 0% { opacity: 1; transform: scale(1); } 50% { opacity: 0.6; transform: scale(1.1); } 100% { opacity: 1; transform: scale(1); } }
+        .chat-badge { background: var(--accent); color: white; padding: 2px 6px; border-radius: 10px; font-weight: 800; font-size: 10px; margin-left: 6px; display: inline-block; }
+        
+        /* Edge to Edge Container */
+        .container { width: 100%; max-width: 100%; margin: 0; padding: 0; box-sizing: border-box; flex: 1; display: flex; flex-direction: column; overflow-x: hidden;} 
+        
+        /* Drawer Navigation */
+        .drawer-overlay {
+            position: fixed; inset: 0; background: rgba(0,0,0,0.6); backdrop-filter: blur(2px);
+            z-index: 2999; opacity: 0; pointer-events: none; transition: opacity 0.25s;
+        }
+        .drawer-overlay.open { opacity: 1; pointer-events: auto; }
+        .drawer {
+            position: fixed; top: 0; left: -300px; width: 80vw; max-width: 320px; height: 100%;
+            background: var(--card-bg);
+            border-right: 1px solid var(--border); z-index: 3000; transition: left 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+            display: flex; flex-direction: column; box-shadow: 2px 0 12px rgba(0,0,0,0.5);
+        }
+        .drawer.open { left: 0; }
+        .drawer-head { padding: 30px 20px 20px; border-bottom: 1px solid var(--border); color: var(--text-main); background: var(--nav-bg); }
+        .drawer-head .brand { font-size: 1.2rem; font-weight: 700; color: white;}
+        .drawer-head .sub { font-size: 12px; color: rgba(255,255,255,0.7); margin-top: 6px; text-transform: uppercase; letter-spacing: 1px; font-weight: 600;}
+        
+        .drawer-nav { flex: 1; padding: 10px 0; overflow-y: auto; display: flex; flex-direction: column; }
+        .drawer-bottom-actions { margin-top: auto; border-top: 1px solid var(--border); display: flex; flex-direction: column; padding: 5px 0;}
+        
+        .drawer-item {
+            display: flex; align-items: center; gap: 18px; width: 100%; text-align: left;
+            background: transparent; border: none; color: var(--text-main); padding: 14px 20px;
+            font-size: 15px; font-weight: 600; cursor: pointer; transition: background 0.2s;
+        }
+        .drawer-item .ico { font-size: 20px; width: 24px; text-align: center; flex-shrink: 0; }
+        .drawer-item:active { background: var(--hover-bg); }
+        .drawer-item.active { background: rgba(37, 211, 102, 0.08); color: var(--accent); }
+        .drawer-item .count-pill { margin-left: auto; background: var(--accent); color: white; font-size: 11px; font-weight: 800; padding: 3px 8px; border-radius: 12px; display: none; }
+        
+        /* View Sections - Edge to Edge */
+        .view-section { display: none; flex-direction: column; animation: fadeIn 0.2s ease; width: 100%; }
+        .view-section.active { display: flex; }
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
 
-        .ledger-table { width: 100%; border-collapse: collapse; margin-top: 20px; background: rgba(0,0,0,0.1); border-radius: 12px; overflow: hidden; }
-        .ledger-table th { text-align: left; padding: 15px; color: var(--text-muted); border-bottom: 2px solid var(--border); font-size: 11px; text-transform: uppercase; letter-spacing: 1px; }
-        .ledger-table td { padding: 15px; border-bottom: 1px solid var(--border); font-size: 13px; color: var(--text-main); }
-        .ledger-search { background: var(--primary); border: 1px solid var(--border); padding: 10px 20px; border-radius: 10px; color: white; outline: none; font-size: 12px; width: 250px; transition: 0.3s; }
+        .card { background: var(--card-bg); width: 100%; border-bottom: 8px solid var(--bg-grad-1); } 
+        .card-header { padding: 15px 20px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; background: var(--card-bg-alt); flex-wrap: wrap; gap: 10px;} 
+        .card-header h3 { margin: 0; font-size: 0.95rem; letter-spacing: 0.5px; color: var(--text-muted); font-weight: 700; text-transform: uppercase; display: flex; align-items: center;} 
+        
+        /* WhatsApp Style List Row */
+        .list-row { padding: 15px 20px; border-bottom: 1px solid var(--border); display: flex; flex-direction: column; gap: 12px; transition: background 0.15s; background: var(--card-bg);} 
+        .list-row:last-child { border-bottom: none; }
+        .list-row:active { background: var(--hover-bg); }
+        
+        /* Thumb-friendly grid for actions */
+        .btn-group-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; width: 100%; margin-top: 4px;} 
+        
+        .btn { padding: 14px 15px; border-radius: 10px; border: none; font-weight: 700; cursor: pointer; font-size: 13px; transition: 0.2s; letter-spacing: 0.2px; width: 100%; display: flex; align-items: center; justify-content: center; } 
+        .btn:disabled { opacity: 0.5 !important; cursor: not-allowed !important; filter: grayscale(1); }
+        .btn:active:not(:disabled) { transform: scale(0.97); }
+        
+        .btn-primary { background: var(--accent); color: white; } 
+        .btn-secondary { background: #3b82f6; color: white; } 
+        .btn-chat { background: var(--input-bg); color: var(--text-main); border: 1px solid var(--border); }
+        .btn-cancel { background: transparent; color: var(--danger); border: 1px solid var(--border); } 
+        .btn-danger { background: var(--danger); color: white; }
+        .btn-warning { background: var(--warning); color: #020218; }
+        .btn-pdf { background: #3b82f6; color: white; width: auto; padding: 8px 16px; font-size: 11px;}
 
-        .app-alert-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.85); display: none; justify-content: center; align-items: center; z-index: 9999; backdrop-filter: blur(5px); opacity: 0; transition: opacity 0.2s ease; }
+        input, select { background: var(--input-bg); border: none; border-bottom: 2px solid var(--border); color: var(--text-main); padding: 14px 15px; border-radius: 8px 8px 0 0; outline: none; width: 100%; box-sizing: border-box; font-family: inherit; margin-bottom: 15px; transition: 0.2s; font-size: 15px;}
+        input:focus, select:focus { border-color: var(--accent); background: rgba(0,0,0,0.1); }
+        label { display: block; font-size: 12px; font-weight: 600; color: var(--text-muted); margin-bottom: 6px; margin-top: 10px; }
+
+        .search-container { display: flex; gap: 10px; align-items: center; width: 100%; flex-wrap: wrap;}
+        .search-box { margin-bottom: 0; flex: 1; min-width: 150px; border-radius: 12px; border: 1px solid var(--border); }
+
+        .status-tag { font-size: 11px; font-weight: 600; color: var(--text-muted); margin-top: 2px; }
+        .student-avatar { width: 55px; height: 55px; border-radius: 50%; object-fit: cover; background: var(--input-bg); cursor: pointer; flex-shrink: 0; border: 1px solid var(--border); }
+
+        #chatOverlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: var(--primary); z-index: 10000; flex-direction: column; overflow: hidden;} 
+        #chatMessages { flex: 1; padding: 15px; overflow-y: auto; background: var(--bg-grad-1); display: flex; flex-direction: column; gap: 8px; scroll-behavior: smooth; } 
+        .msg { padding: 8px 12px; border-radius: 12px; font-size: 14px; max-width: 85%; line-height: 1.4; box-shadow: 0 1px 2px rgba(0,0,0,0.1); position: relative; } 
+        .msg.me { background: #005c4b; color: #e9edef; align-self: flex-end; border-top-right-radius: 4px; } 
+        .msg.them { background: #202c33; color: #e9edef; align-self: flex-start; border-top-left-radius: 4px; } 
+        body.light-mode .msg.me { background: #d9fdd3; color: #111b21; }
+        body.light-mode .msg.them { background: #ffffff; color: #111b21; }
+
+        .app-alert-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.8); display: none; justify-content: center; align-items: center; z-index: 9999; opacity: 0; pointer-events: auto; backdrop-filter: blur(2px); transition: opacity 0.2s ease; padding: 20px;}
         .app-alert-overlay.show { display: flex !important; opacity: 1; }
-        .app-alert-box { background: var(--card-bg); border: 1px solid #475569; border-radius: 20px; padding: 30px 25px; width: 85%; max-width: 450px; text-align: center; box-shadow: 0 25px 50px rgba(0, 0, 0, 0.5); transform: scale(0.9); transition: transform 0.3s ease; }
+        .app-alert-box { background: var(--card-bg); border-radius: 16px; padding: 25px 20px; width: 100%; max-width: 380px; text-align: center; box-shadow: 0 15px 30px rgba(0, 0, 0, 0.4); transform: scale(0.95); transition: transform 0.2s ease; }
         .app-alert-overlay.show .app-alert-box { transform: scale(1); }
-        .app-alert-message { color: var(--text-main); font-size: 14px; line-height: 1.5; margin-bottom: 25px; margin-top: 0; white-space: pre-line;}
-        .app-alert-btn { background: var(--accent); color: white; border: none; padding: 12px 0; border-radius: 12px; font-weight: bold; font-size: 13px; width: 100%; cursor: pointer; text-transform: uppercase; letter-spacing: 0.5px; }
+        .app-alert-message { color: var(--text-muted); font-size: 14px; line-height: 1.5; margin-bottom: 25px; margin-top: 5px; white-space: pre-line; }
 
-        #requestModalOverlay .app-alert-box { text-align: left; padding: 30px; }
-        #requestInput { display: block; width: 100%; background: rgba(0,0,0,0.3); border: 1px solid var(--border); color: white; padding: 16px; border-radius: 12px; box-sizing: border-box; margin: 20px 0 25px 0; font-family: inherit; font-size: 14px; outline: none; transition: 0.3s; text-align: left; }
-        #requestInput:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(52, 152, 219, 0.2); }
+        .alarm-box { border: 3px solid var(--danger); box-shadow: 0 0 50px rgba(255, 0, 0, 0.5); animation: pulseRed 1s infinite; }
+        @keyframes pulseRed { 0% { box-shadow: 0 0 20px rgba(255,0,0,0.5); } 50% { box-shadow: 0 0 60px rgba(255,0,0,0.8); } 100% { box-shadow: 0 0 20px rgba(255,0,0,0.5); } }
 
-        .trip-row { padding: 20px 25px; border-bottom: 1px solid rgba(255,255,255,0.03); display: flex; justify-content: space-between; align-items: center; transition: 0.2s; flex-wrap: wrap; gap: 15px;}
-        .trip-row:hover { background: rgba(255,255,255,0.02); }
-        .driver-min-avatar { width: 50px; height: 50px; border-radius: 12px; object-fit: cover; border: 1px solid var(--border); background: var(--primary); cursor: pointer; }
-        .btn-group { display: flex; gap: 12px; flex-wrap: wrap; align-items: center; justify-content: flex-end;}
-        .btn-chat { background: #3b4b61; color: white; }
+        .history-item { background: transparent; padding: 15px 20px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; }
 
-        #supportChatOverlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: #1e293b; border-radius: 0; z-index: 10000; flex-direction: column; border: none; box-shadow: none; overflow: hidden;} 
-        #supportChatMessages { flex: 1; padding: 20px; overflow-y: auto; background: #0f172a; display: flex; flex-direction: column; gap: 12px; scroll-behavior: smooth; } 
+        .system-warning-banner { padding: 20px; text-align: center; border-bottom: 1px solid var(--warning); background: rgba(243, 156, 18, 0.05);}
+        .system-warning-banner p { font-size: 13px; margin: 5px 0 15px 0; color: var(--text-muted); }
+
     </style> 
 </head> 
 <body> 
 
-    <div class="nav"> 
-        <div class="nav-brand">SAFE<span>DRIVE</span> PUBLIC</div> 
-        <div class="nav-actions"> 
-            <div class="profile-area" onclick="openProfileMenu()" title="Manage Profile"> 
-                <div style="text-align: right;">
-                    <div style="font-weight: 700;" id="displayName">Loading...</div>
-                    <div id="liveClock" style="font-size: 11px; opacity: 0.7;">00:00:00</div>
-                </div> 
-                <img id="userImg" class="user-avatar" src=""> 
-            </div> 
-            <button class="btn-logout" onclick="logout()">LOGOUT</button> 
-        </div> 
-    </div> 
+    <div class="header">
+        <button class="hamburger-btn" onclick="openDrawer()" aria-label="Menu">
+            <span></span><span></span><span></span>
+        </button>
+        <div class="header-titles">
+            <h1>SAFE<span>DRIVE</span> PUBLIC</h1>
+            <span class="header-overwatch" id="liveClock">00:00:00</span>
+        </div>
+        <div class="header-right">
+            <div class="profile-area" onclick="openProfileMenu()" title="Manage Profile">
+                <img id="userImg" class="initials-avatar" src="">
+            </div>
+        </div>
+    </div>
 
+    <!-- ===== DRAWER NAVIGATION ===== -->
+    <div id="drawerOverlay" class="drawer-overlay" onclick="closeDrawer()"></div>
+    <div id="sideDrawer" class="drawer">
+        <div class="drawer-head">
+            <div class="brand">PARENT PORTAL</div>
+            <div class="sub" id="displayName">Loading...</div>
+        </div>
+        <div class="drawer-nav">
+            <button class="drawer-item active" data-view="view-monitored" onclick="switchView('view-monitored', this)">
+                <span class="ico">🛡️</span> Monitored Children
+            </button>
+            <button class="drawer-item" data-view="view-find-d2d" onclick="switchView('view-find-d2d', this)">
+                <span class="ico">🚐</span> Find D2D Driver
+            </button>
+            <button class="drawer-item" data-view="view-find-event" onclick="switchView('view-find-event', this)">
+                <span class="ico">🎉</span> Find Event Driver
+            </button>
+            <button class="drawer-item" data-view="view-active-d2d" onclick="switchView('view-active-d2d', this)">
+                <span class="ico">🛣️</span> Active D2D Trips
+            </button>
+            <button class="drawer-item" data-view="view-active-event" onclick="switchView('view-active-event', this)">
+                <span class="ico">⭐</span> Active Event Trips
+            </button>
+            <button class="drawer-item" data-view="view-attendance" onclick="switchView('view-attendance', this)">
+                <span class="ico">🏫</span> Class Attendance
+            </button>
+            <button class="drawer-item" data-view="view-ledger" onclick="switchView('view-ledger', this)">
+                <span class="ico">🧾</span> Safety Ledger
+            </button>
+            
+            <div style="height: 1px; background: var(--border); margin: 10px 20px;"></div>
+
+            <button class="drawer-item" onclick="toggleTheme()">
+                <span class="ico" id="themeIcon">🌓</span> Light/Dark Mode
+            </button>
+        </div>
+        <div class="drawer-bottom-actions">
+            <button class="drawer-item" onclick="logout()" style="color: var(--text-muted); font-weight: 500;">
+                <span class="ico">🚪</span> Log Out
+            </button>
+        </div>
+    </div>
+
+    <!-- Profile Management Modal -->
     <div id="profileMenuOverlay" class="app-alert-overlay">
-        <div class="app-alert-box">
-            <h3 style="margin-top: 0; color: var(--text-main); font-size: 16px; margin-bottom: 20px;">Profile Options</h3>
-            <button onclick="viewFullProfile()" class="btn-book" style="width:100%; margin-bottom:10px; padding: 14px; background: #3b82f6;">VIEW FULL PICTURE</button>
-            <button onclick="document.getElementById('profileUpload').click()" class="btn-book" style="width:100%; margin-bottom:10px; padding: 14px;">UPLOAD / CHANGE PHOTO</button>
-            <button onclick="deleteProfilePic()" class="btn-book" style="width:100%; margin-bottom:10px; padding: 14px; background: var(--danger);">DELETE PICTURE</button>
-            <button onclick="closeProfileMenu()" class="btn-toggle" style="width:100%; padding: 12px; background: transparent; border: 1px solid var(--border);">CANCEL</button>
+        <div class="app-alert-box" style="padding: 25px 20px; max-height: 90vh; overflow-y: auto;">
+            <h3 style="margin-top: 0; color: var(--text-main); font-size: 18px; margin-bottom: 20px;">Profile Settings</h3>
+            
+            <button onclick="viewFullProfile()" class="btn btn-chat" style="margin-bottom:10px;">VIEW PICTURE</button>
+            <button onclick="document.getElementById('profileUpload').click()" class="btn btn-primary" style="margin-bottom:10px;">CHANGE PHOTO</button>
+            <button onclick="deleteProfilePic()" class="btn btn-remove" style="margin-bottom:15px; border-color: transparent;">DELETE PICTURE</button>
+            
+            <button onclick="closeProfileMenu()" class="btn btn-chat" style="border: none;">CLOSE</button>
             <input type="file" id="profileUpload" accept="image/*" style="display:none;" onchange="handleProfileUpload(event)">
         </div>
     </div>
 
+    <!-- Full Image Viewer -->
+    <div id="fullViewOverlay" class="app-alert-overlay" style="background: rgba(0,0,0,0.95); padding: 0;">
+        <div style="position:relative; width: 100%; height: 100%; display:flex; justify-content:center; align-items:center;">
+            <button onclick="closeFullView()" style="position:absolute; top:20px; left:20px; background:rgba(255,255,255,0.2); border:none; color:white; font-size:24px; width:45px; height:45px; border-radius:50%; cursor:pointer;">&times;</button>
+            <img id="fullViewImg" src="" style="width: 100%; height: 100%; object-fit: contain;">
+        </div>
+    </div>
+
+    <!-- Request Modal -->
     <div id="requestModalOverlay" class="app-alert-overlay">
         <div class="app-alert-box">
-            <h3 style="margin-top: 0; color: var(--accent); font-size: 18px; margin-bottom: 5px; font-weight: 900; text-transform: uppercase;">Request Transport Connection</h3>
-            <p id="requestModalDriverName" style="color: var(--text-muted); font-size: 13px; margin: 0; text-align: left;"></p>
-            <input type="text" id="requestInput" placeholder="Specify pick-up address or event destination details...">
-            <div style="display: flex; gap: 15px; justify-content: flex-end;">
-                <button onclick="closeRequestModal()" class="btn-toggle" style="padding: 12px 25px; border-radius: 10px; font-size: 11px; font-weight: 700; cursor: pointer; color: white; margin-top:0;">CANCEL</button>
-                <button onclick="submitRideRequest()" class="btn-book" style="padding: 12px 25px; font-size: 11px; margin-top: 0; border-radius: 10px;">SEND RIDE REQUEST</button>
+            <h3 style="margin-top: 0; color: var(--text-main); font-size: 18px; margin-bottom: 5px;">Request Connection</h3>
+            <p id="requestModalDriverName" style="color: var(--accent); font-size: 13px; margin-bottom: 20px; font-weight: 600;"></p>
+            
+            <input type="text" id="requestInput" placeholder="Enter instructions or requirements..." style="border-radius: 12px; border: 1px solid var(--border);">
+            
+            <div class="btn-group-grid" style="margin-top: 15px;">
+                <button onclick="closeRequestModal()" class="btn btn-chat" style="border:none;">CANCEL</button>
+                <button onclick="submitRideRequest()" class="btn btn-primary">SEND REQUEST</button>
             </div>
         </div>
     </div>
 
-    <div id="fullViewOverlay" class="app-alert-overlay" style="background: rgba(0,0,0,0.95);">
-        <div style="position:relative; width: 100%; height: 100%; display:flex; justify-content:center; align-items:center; flex-direction: column;">
-            <button onclick="closeFullView()" style="position:absolute; top:30px; left:30px; background:rgba(255,255,255,0.2); border:none; color:white; font-size:24px; width:45px; height:45px; border-radius:50%; cursor:pointer;">&times;</button>
-            <img id="fullViewImg" src="" style="max-width: 90%; max-height: 80%; border-radius: 20px; box-shadow: 0 20px 60px rgba(0,0,0,0.7); object-fit: contain;">
-        </div>
-    </div>
-
+    <!-- Alert Modal General -->
     <div id="appAlertOverlay" class="app-alert-overlay">
         <div class="app-alert-box">
-            <h3 style="margin-top: 0; color: var(--accent); font-size: 18px; margin-bottom: 10px;" id="appAlertTitle">Notice</h3>
+            <h3 style="margin-top: 0; color: var(--text-main); font-size: 18px; margin-bottom: 5px;" id="appAlertTitle">Notice</h3>
             <p id="appAlertMessage" class="app-alert-message"></p>
             <div id="alertActionGroupContainer" style="display: flex; gap: 10px; width: 100%;">
-                <button id="alertDefaultCloseBtn" onclick="closeAppAlert()" class="app-alert-btn">OK</button>
+                <button id="alertDefaultCloseBtn" onclick="closeAppAlert()" class="btn btn-primary" style="margin-bottom:0; width: 100%;">OK</button>
             </div>
         </div>
     </div>
 
-    <div id="alarmOverlay" class="app-alert-overlay" style="z-index: 10000; background: rgba(255,0,0,0.25); backdrop-filter: blur(10px);">
-        <div class="app-alert-box alarm-box">
-            <h1 style="margin-top: 0; color: var(--danger); font-size: 32px; margin-bottom: 10px; font-weight: 900; letter-spacing: 2px;">🚨 ALARM 🚨</h1>
-            <p id="alarmMessage" style="color: white; font-size: 16px; font-weight: bold; margin-bottom: 30px; line-height: 1.5;">Students have been officially released. Please proceed to pickup points immediately!</p>
-            <button onclick="acknowledgeAlarm()" class="btn btn-danger" style="background:var(--danger); color:white; width: 100%; padding: 18px; font-size: 16px; border-radius: 12px; font-weight: 900; border:none; cursor:pointer;">ACKNOWLEDGE</button>
+    <!-- Alarm Overlay -->
+    <div id="alarmOverlay" class="app-alert-overlay" style="z-index: 10000; background: rgba(225,29,72,0.9);">
+        <div class="app-alert-box alarm-box" style="background: var(--card-bg); border: none;">
+            <h1 style="margin-top: 0; color: var(--danger); font-size: 28px; margin-bottom: 5px;">🚨 ALARM</h1>
+            <p id="alarmMessage" style="color: var(--text-main); font-size: 15px; margin-bottom: 25px;">Students have been officially released.</p>
+            <button onclick="acknowledgeAlarm()" class="btn btn-danger" style="padding: 16px;">MUTE ALARM</button>
         </div>
     </div>
 
-    <div id="supportChatOverlay" class="app-alert-overlay" style="padding:0; background:#1e293b;"> 
-        <div style="width:100%; height:100%; display:flex; flex-direction:column;">
-            <div style="background:#020218; color:white; padding:15px 25px; display:flex; justify-content:space-between; align-items:center; border-bottom: 1px solid var(--border);">
-                <div style="display:flex; align-items:center; gap:15px;">
-                    <img id="chatTargetAvatar" src="" style="width:45px; height:45px; border-radius:50%; object-fit:cover; border:2px solid var(--accent); cursor:pointer; box-shadow: 0 0 10px rgba(52, 152, 219, 0.4);" onclick="viewFullProfile(this.src)" title="View Full Profile">
-                    <span id="supportChatTitle" style="font-weight:800; font-size: 15px; text-transform: uppercase;">Support Chat</span>
+    <!-- Chat Interface -->
+    <div id="supportChatOverlay" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: var(--primary); z-index: 10000; flex-direction: column; overflow: hidden;"> 
+        <div class="header" style="box-shadow: none;"> 
+            <div style="display: flex; align-items: center; gap: 12px; flex: 1;">
+                <button onclick="closeSupportChat()" style="background:none; border:none; color:white; font-size:24px; cursor:pointer; padding: 0;">←</button>
+                <img id="chatTargetAvatar" src="" style="width: 40px; height: 40px; border-radius: 50%; object-fit: cover;" onclick="viewFullProfile(this.src)">
+                <div style="display:flex; flex-direction:column; overflow:hidden;">
+                    <div id="supportChatTitle" style="font-weight:600; font-size: 15px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">Chat</div> 
                 </div>
-                <button onclick="closeSupportChat()" style="background:none; border:none; color:white; font-size:32px; cursor:pointer; transition:0.2s;" onmouseover="this.style.transform='scale(1.2)'" onmouseout="this.style.transform='scale(1)'">&times;</button>
-            </div> 
-            <div id="supportChatMessages" style="flex:1;"></div> 
-            <div style="padding:20px; background:#1e293b; display:flex; gap:10px; border-top: 1px solid var(--border);">
-                <input type="text" id="supportChatInput" placeholder="Secure message..." style="flex:1; background:rgba(0,0,0,0.3); color:white; border:1px solid #334155; padding:15px; border-radius:12px; outline:none; font-size:14px;">
-                <button onclick="sendSupportMessage()" class="btn-book" style="width:auto; padding: 0 25px; font-size:13px; border-radius:12px; margin-top:0;">SEND</button>
-            </div> 
-        </div>
+            </div>
+        </div> 
+        <div id="supportChatMessages" style="flex: 1; padding: 15px; overflow-y: auto; background: var(--bg-grad-1); display: flex; flex-direction: column; gap: 8px; scroll-behavior: smooth;"></div> 
+        <div style="padding:10px 15px; background:var(--card-bg); display:flex; gap:10px; align-items:center;"> 
+            <input type="text" id="supportChatInput" placeholder="Message" style="flex:1; background:var(--input-bg); border:none; color:var(--text-main); padding:12px 15px; border-radius:24px; margin:0; font-size:15px;"> 
+            <button onclick="sendSupportMessage()" style="background:var(--accent); color:white; border:none; width:44px; height:44px; border-radius:50%; display:flex; align-items:center; justify-content:center; cursor:pointer; flex-shrink:0;">
+                ➤
+            </button> 
+        </div> 
     </div> 
 
+    <!-- ===== MAIN EDGE-TO-EDGE CONTAINER ===== -->
     <div class="container"> 
         
-        <div id="profileWarningBanner" class="system-warning-banner" style="display:none; background: rgba(243, 156, 18, 0.1); border-color: var(--warning); color: white;">
-            <h2 style="color: var(--warning);">⚠️ PROFILE PICTURE REQUIRED</h2>
-            <p>Your account is over 3 days old. You must upload a clear profile picture so drivers and admins can identify you securely.</p>
-            <button class="btn-book" style="background: var(--warning); color: #020218; padding: 10px 20px;" onclick="document.getElementById('profileUpload').click()">UPLOAD PROFILE PICTURE</button>
+        <div id="profileWarningBanner" class="system-warning-banner" style="display:none;">
+            <h3 style="color: var(--warning); margin: 0 0 5px 0; font-size: 15px;">Profile Picture Required</h3>
+            <p>Please upload a clear photo for identification.</p>
+            <button class="btn btn-warning" style="padding: 12px;" onclick="document.getElementById('profileUpload').click()">UPLOAD PHOTO</button>
         </div>
 
-        <div id="negotiationCard" class="card" style="display:none; border-left: 6px solid var(--warning);" id="pendingNegotiationCard">
-            <div class="card-header" style="background: rgba(243, 156, 18, 0.1);">
-                <h3 style="color: var(--warning);" id="negotiationTitle">⏳ Pending Negotiating Pursuits</h3>
-            </div>
-            <div id="negotiationList" style="padding: 10px 0;"></div>
-        </div>
-
-        <div class="card"> 
-            <div class="card-header" style="background: linear-gradient(to right, #020218, #0f172a); color: white;"><h3>Parental Guardian Monitor</h3><button class="btn-toggle" onclick="toggleSection('parentalBody', this)">HIDE</button></div> 
-            <div id="parentalBody" class="body-content" style="display:block;"> 
-                
-                <div id="parentalGate" style="background: rgba(0,0,0,0.2); padding: 25px; border-radius: 15px; margin-bottom: 20px; border: 1px solid var(--border); display:none; text-align: center;"> 
-                    <div id="step1_Link"> 
-                        <h4 style="margin-top:0; margin-bottom: 25px;">Link Child Profile Channels</h4> 
-                        <input type="text" id="parentSchoolCode" class="search-bar" placeholder="School Code"> 
-                        <input type="text" id="childUsername" class="search-bar" placeholder="Child Username"> 
-                        <button id="sendCodeBtn" class="btn-book" style="width:200px; padding: 14px;" onclick="requestParentalOTP()">SEND SECURITY CODE</button> 
-                        <button class="btn-toggle" style="margin-top:20px; display:block; margin: 20px auto 0;" onclick="cancelAddChild()">CANCEL</button>
-                    </div> 
-                    <div id="step2_Verify" style="display: none;"> 
-                        <h4 style="margin-top:0; margin-bottom: 25px;">Enter Verification Code</h4> 
-                        <p style="font-size: 11px; color: var(--text-muted); margin-top:-15px; margin-bottom: 15px;">Check the email associated with the student profile.</p>
-                        <input type="number" id="parentOTP" class="search-bar" placeholder="Enter 4-Digit Code"> 
-                        <button class="btn-book" style="width:200px; padding: 14px;" onclick="verifyParentalLink()">VERIFY & SAVE</button> 
-                    </div> 
-                </div> 
-
-                <div id="liveChildMonitor" style="display:block;">
-                    <div id="childListArea" class="monitor-stack"></div>
-                    <button id="addMonitorTriggerBtn" class="btn-book" onclick="showGate()" style="margin-top:20px; background:var(--accent); width:100%; padding: 15px; font-size:12px;">+ ADD NEW CHILD TO MONITOR</button>
-                </div> 
-            </div> 
-        </div> 
-
-        <div class="card"> 
-            <div class="card-header"><h3>Global Driver Discovery</h3><button class="btn-toggle" onclick="toggleSection('driverSection', this)">HIDE</button></div> 
-            <div id="driverSection" class="body-content" style="display:block;">
-                
-                <div style="display:flex; gap:15px; margin-bottom:25px;">
-                    <button id="btnD2D" class="btn-mode active" onclick="setDriverSearchMode('Door to Door')">Door to Door Search</button>
-                    <button id="btnEvent" class="btn-mode" onclick="setDriverSearchMode('Events and School')">Events Search</button>
-                </div>
-
-                <input type="text" id="eventSearchField" class="search-bar" style="display:none;" placeholder="Search Event Driver Name or Plate..." oninput="filterGlobalDrivers()">
-                
-                <div id="d2dSearchFields" style="background: rgba(0,0,0,0.1); padding: 20px; border-radius: 15px; border: 1px solid var(--border); margin-bottom: 20px;">
-                    <p style="font-size: 11px; color: var(--text-muted); text-transform: uppercase; font-weight: 800; margin-top: 0; margin-bottom: 15px;">Door-to-Door Network Filter</p>
-                    <div style="grid-template-columns: 1fr 1fr; gap: 10px; display: grid;">
-                        <input type="text" id="d2dCurrentProv" class="d2d-search-bar" placeholder="Which Province are you in now? (Required)">
-                        <input type="text" id="d2dDestTown" class="d2d-search-bar" placeholder="Town where you want to go (Required)">
+        <!-- ===== VIEW: MONITORED CHILDREN ===== -->
+        <div id="view-monitored" class="view-section active">
+            
+            <div id="parentalGate" style="background: var(--card-bg); padding: 25px 20px; margin-bottom: 20px; display:none;"> 
+                <div id="step1_Link"> 
+                    <h3 style="margin-top:0; margin-bottom: 15px; font-size: 16px;">Link Child Profile</h3> 
+                    <input type="text" id="parentSchoolCode" placeholder="School Code"> 
+                    <input type="text" id="childUsername" placeholder="Child Username"> 
+                    <div class="btn-group-grid" style="margin-top: 20px;">
+                        <button class="btn btn-chat" onclick="cancelAddChild()">CANCEL</button>
+                        <button id="sendCodeBtn" class="btn btn-primary" onclick="requestParentalOTP()">SEND CODE</button> 
                     </div>
-                    <input type="text" id="d2dDestProv" class="d2d-search-bar" placeholder="Destination Province (Optional - Leave blank to skip)">
-                    <input type="date" id="d2dDate" class="d2d-search-bar" style="color: gray;">
-                    <button class="btn-book" style="width:100%; margin-top: 10px; padding: 14px; font-size: 12px;" onclick="filterGlobalDrivers()">SEARCH TRIPS</button>
-                </div>
-
-                <div id="combinedDriverList" class="driver-grid"></div>
+                </div> 
+                <div id="step2_Verify" style="display: none;"> 
+                    <h3 style="margin-top:0; margin-bottom: 10px; font-size: 16px;">Enter Verification Code</h3> 
+                    <p style="font-size: 12px; color: var(--text-muted); margin-bottom: 15px;">Sent to registered student email.</p>
+                    <input type="number" id="parentOTP" placeholder="4-Digit Code"> 
+                    <button class="btn btn-primary" style="margin-top: 10px;" onclick="verifyParentalLink()">VERIFY & SAVE</button> 
+                </div> 
             </div> 
-        </div> 
 
-        <div class="card">
-            <div class="card-header">
-                <h3>Classroom Attendance Overwatch Segments</h3>
-                <button class="btn-toggle" onclick="toggleSection('attendanceOverwatchSection', this)">VIEW</button>
+            <div id="liveChildMonitor" style="display:block;">
+                <div class="card-header" style="border:none; padding-bottom: 5px; background: transparent;">
+                    <h3 style="font-size: 14px; color: var(--text-main);">My Monitored Children</h3>
+                </div>
+                <div id="childListArea"></div>
+                <div style="padding: 20px;">
+                    <button id="addMonitorTriggerBtn" class="btn btn-primary" style="padding: 16px;" onclick="showGate()">+ ADD CHILD TO MONITOR</button>
+                </div>
+            </div> 
+        </div>
+
+        <!-- ===== VIEW: FIND D2D DRIVERS ===== -->
+        <div id="view-find-d2d" class="view-section">
+            <div class="card-header" style="flex-direction: column; align-items: flex-start; background: var(--card-bg); border-bottom: none;"> 
+                <h3 style="margin-bottom: 10px; color: var(--accent);">Find Door-to-Door Driver</h3> 
+                <div style="width: 100%; display: flex; flex-direction: column; gap: 10px;">
+                    <input type="text" id="d2dCurrentProv" placeholder="Current Province (Required)" style="margin-bottom: 0;">
+                    <input type="text" id="d2dDestTown" placeholder="Destination Town (Required)" style="margin-bottom: 0;">
+                    <input type="text" id="d2dDestProv" placeholder="Destination Province (Optional)" style="margin-bottom: 0;">
+                    <input type="date" id="d2dDate" style="color: var(--text-muted); margin-bottom: 10px;">
+                    <button class="btn btn-primary" onclick="filterGlobalDrivers()">SEARCH DRIVERS</button>
+                </div>
+            </div> 
+            <div id="d2dDriverList" style="display:block; padding-bottom: 30px;"></div> 
+        </div>
+
+        <!-- ===== VIEW: FIND EVENT DRIVERS ===== -->
+        <div id="view-find-event" class="view-section">
+            <div class="card-header" style="flex-direction: column; align-items: flex-start; background: var(--card-bg); border-bottom: none;"> 
+                <h3 style="margin-bottom: 10px; color: #3498db;">Find Event Driver</h3> 
+                <div class="search-container">
+                    <input type="text" id="eventSearchField" class="search-box" placeholder="Search Name or Plate..." oninput="filterGlobalDrivers()">
+                </div>
+            </div> 
+            <div id="eventDriverList" style="display:block; padding-bottom: 30px;"></div> 
+        </div>
+
+        <!-- ===== VIEW: ACTIVE D2D TRIPS ===== -->
+        <div id="view-active-d2d" class="view-section">
+            <div class="card-header" style="border:none; padding-bottom: 5px;">
+                <h3 style="font-size: 14px; color: var(--accent);">Active Door-to-Door Trips</h3>
             </div>
-            <div id="attendanceOverwatchSection" class="body-content" style="display:none;">
-                <input type="text" id="attendanceSearch" class="search-bar" placeholder="Search tracked student register codes..." oninput="renderAttendanceOverwatch()">
-                <table class="ledger-table" id="attendanceOverwatchTable">
-                    <thead>
-                        <tr>
-                            <th>Student Target</th>
-                            <th>Current Institutional State</th>
-                            <th>Supervising Faculty</th>
-                            <th>Precise Timestamp</th>
-                        </tr>
-                    </thead>
-                    <tbody id="attendanceOverwatchBody">
-                        <tr><td colspan="4" style="text-align:center; color:gray; padding:20px;">No linked rosters detected.</td></tr>
-                    </tbody>
-                </table>
+            <div id="d2dActiveList" style="display:block; padding-bottom: 30px;"></div> 
+        </div>
+
+        <!-- ===== VIEW: ACTIVE EVENT TRIPS ===== -->
+        <div id="view-active-event" class="view-section">
+            <div class="card-header" style="border:none; padding-bottom: 5px; background: transparent;">
+                <h3 style="font-size: 14px; color: #3498db;">Active Event Trips</h3>
+            </div>
+            <div id="eventActiveList" style="display:block; padding-bottom: 30px;"></div> 
+        </div>
+
+        <!-- ===== VIEW: ATTENDANCE OVERWATCH ===== -->
+        <div id="view-attendance" class="view-section">
+            <div class="card-header" style="border:none;">
+                <h3 style="font-size: 14px; color: var(--text-main);">Classroom Attendance</h3>
+            </div>
+            <div style="padding: 15px 20px;">
+                <input type="text" id="attendanceSearch" placeholder="Search tracked student..." style="margin-bottom: 0; background: var(--input-bg); border-radius: 20px; padding: 12px 20px; border:none;" oninput="renderAttendanceOverwatch()">
+            </div>
+            <div id="attendanceOverwatchBody" style="display: flex; flex-direction: column; padding-bottom: 30px;">
+                <div style="padding: 20px; text-align: center; color: var(--text-muted); font-size: 13px;">No linked rosters detected.</div>
             </div>
         </div>
 
-        <div class="card"> 
-            <div class="card-header">
-                <h3>Safety History Ledger (Transit Trips)</h3>
-                <div style="display:flex; gap:12px; align-items:center;">
-                    <input type="text" id="ledgerSearch" class="ledger-search" placeholder="Search student name..." oninput="syncSafetyAndStatus()">
-                    <button class="btn-toggle" onclick="downloadPDF()">PRINT PDF</button>
-                    <button class="btn-toggle" style="background:var(--danger); color:white;" onclick="handleLedgerDelete()">DELETE ALL</button>
-                    <button class="btn-toggle" onclick="toggleSection('historySection', this)">HIDE</button>
-                </div>
-            </div> 
-            <div id="historySection" class="body-content" style="display:block;">
-                <table class="ledger-table" id="safetyTable">
-                    <thead><tr><th>Child</th><th>Status</th><th>Driver</th><th>Timestamp</th></tr></thead>
-                    <tbody id="historyTableBody"></tbody>
-                </table>
-            </div> 
-        </div> 
+        <!-- ===== VIEW: SAFETY LEDGER ===== -->
+        <div id="view-ledger" class="view-section">
+            <div class="card-header" style="border:none;">
+                <h3 style="font-size: 14px; color: var(--text-main);">Safety History Ledger</h3>
+                <button class="btn btn-pdf" onclick="downloadPDF()">PDF</button>
+            </div>
+            <div style="padding: 15px 20px;">
+                <input type="text" id="ledgerSearch" placeholder="Search student name..." style="margin-bottom: 0; background: var(--input-bg); border-radius: 20px; padding: 12px 20px; border:none;" oninput="syncSafetyAndStatus()">
+            </div>
+            <div id="historyTableBody" style="display: flex; flex-direction: column; padding-bottom: 30px;">
+                 <div style="padding: 20px; text-align: center; color: var(--text-muted); font-size: 13px;">No logs found.</div>
+            </div>
+        </div>
+
     </div> 
 
+    <!-- Hidden table specifically formatted for jsPDF autoTable parsing -->
+    <table id="safetyTable" style="display: none;">
+        <thead><tr><th>Child</th><th>Status</th><th>Driver</th><th>Timestamp</th></tr></thead>
+        <tbody id="hiddenPdfTableBody"></tbody>
+    </table>
+
     <script> 
-    
+        // --- Core AuthFetch (Required for database pipelines) ---
+        async function authFetch(url, options = {}) {
+            const token = sessionStorage.getItem('authToken');
+            const headers = new Headers(options.headers || {});
+            if (token) {
+                headers.set('Authorization', 'Bearer ' + token);
+            }
+            return fetch(url, { ...options, headers });
+        }
+
+        // --- Theme Management ---
+        function toggleTheme() {
+            const isLight = document.body.classList.toggle('light-mode');
+            localStorage.setItem('theme', isLight ? 'light' : 'dark');
+            const ico = document.getElementById('themeIcon');
+            if (ico) ico.innerText = isLight ? '🌙' : '🌓';
+            setChatBackground(); 
+        }
+        if (localStorage.getItem('theme') === 'light') {
+            document.body.classList.add('light-mode');
+            const ico = document.getElementById('themeIcon');
+            if (ico) ico.innerText = '🌙';
+        }
+
+        // --- Drawer Management ---
+        function openDrawer() {
+            document.getElementById('sideDrawer').classList.add('open');
+            document.getElementById('drawerOverlay').classList.add('open');
+        }
+        function closeDrawer() {
+            document.getElementById('sideDrawer').classList.remove('open');
+            document.getElementById('drawerOverlay').classList.remove('open');
+        }
+        function switchView(viewId, btn) {
+            if (viewId) {
+                document.querySelectorAll('.view-section').forEach(v => v.classList.remove('active'));
+                document.getElementById(viewId).classList.add('active');
+                document.querySelectorAll('.drawer-item[data-view]').forEach(b => b.classList.remove('active'));
+                if (btn) btn.classList.add('active');
+                
+                // When switching, auto-fire the filters just in case
+                if (viewId === 'view-find-d2d' || viewId === 'view-find-event') {
+                    filterGlobalDrivers();
+                }
+            }
+            closeDrawer();
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+
         function showAppAlert(message, title="Notice", callback=null, customButtonsHtml=null) {
             document.getElementById("appAlertTitle").innerText = title;
             document.getElementById("appAlertMessage").innerText = message;
@@ -283,7 +495,7 @@
             if (customButtonsHtml) {
                 groupContainer.innerHTML = customButtonsHtml;
             } else {
-                groupContainer.innerHTML = `<button id="alertDefaultCloseBtn" class="app-alert-btn">OK</button>`;
+                groupContainer.innerHTML = `<button id="alertDefaultCloseBtn" class="btn btn-primary" style="margin-bottom:0; width: 100%;">OK</button>`;
                 document.getElementById("alertDefaultCloseBtn").onclick = function() {
                     closeAppAlert();
                     if(callback) callback();
@@ -292,64 +504,36 @@
             document.getElementById("appAlertOverlay").classList.add("show");
         }
         function closeAppAlert() { document.getElementById("appAlertOverlay").classList.remove("show"); }
+
         const alarmAudio = new Audio('https://actions.google.com/sounds/v1/alarms/digital_watch_alarm_long.ogg');
         alarmAudio.loop = true;
-        let lastAlarmCheck = new Date().toISOString(); 
-        let audioPlayTimeout, audioMuteTimeout;
+        let alarmTimeout; 
+        let audioMuteTimeout;
 
-        let alarmTimeout; // Rename for clarity
+        function triggerSchoolOutAlarm(schoolName, message) {
+            document.getElementById('alarmMessage').innerText = message || `Students at ${schoolName} have been officially released.`;
+            document.getElementById("alarmOverlay").classList.add("show");
 
-        function triggerSchoolOutAlarm(schoolCode, schoolName, message) {
-
-    document.getElementById('alarmMessage').innerText =
-`Your child at ${schoolName} has been officially released.`;
-    document.getElementById("alarmOverlay").classList.add("show");
-
-    alarmTimeout = setTimeout(() => {
-
-        alarmAudio.volume = 1;
-
-        alarmAudio.play().catch(e => console.log(e));
-
-        audioMuteTimeout = setTimeout(() => {
-
-            alarmAudio.pause();
-
-            alarmAudio.currentTime = 0;
-
-        },30000);
-
-    },60000);
-}
+            alarmTimeout = setTimeout(() => {
+                alarmAudio.volume = 1;
+                alarmAudio.play().catch(e => console.log(e));
+                audioMuteTimeout = setTimeout(() => {
+                    alarmAudio.pause();
+                    alarmAudio.currentTime = 0;
+                }, 30000);
+            }, 60000);
+        }
 
         function acknowledgeAlarm() {
-            // 1. Hide the UI
             document.getElementById('alarmOverlay').classList.remove('show');
-            
-            // 2. IMPORTANT: Stop the countdown so the audio never plays
             clearTimeout(alarmTimeout); 
-            
-            // 3. Stop audio if it was already playing
             clearTimeout(audioMuteTimeout);
             alarmAudio.pause(); 
             alarmAudio.currentTime = 0;
-            console.log("Alarm acknowledged - countdown cancelled.");
         }
 
-        const supabaseUrl = 'https://mlzpmiccmggfwenfzvsy.supabase.co';
-        const supabaseKey = 'sb_publishable_ehnY1o3Vm1YCHVhaL5NL-Q_UZN-xRIp';
-        const _supabase = supabase.createClient(supabaseUrl, supabaseKey);
-        async function authFetch(url, options = {}) {
-    const token = sessionStorage.getItem('authToken');
-    const headers = new Headers(options.headers || {});
-    if (token) {
-        headers.set('Authorization', 'Bearer ' + token);
-    }
-    return fetch(url, { ...options, headers });
-}
-
         const myU = sessionStorage.getItem('username');
-        const myN = sessionStorage.getItem('userName'); 
+        const myN = sessionStorage.getItem('userName') || "Parent"; 
         const myRole = sessionStorage.getItem('userRole'); 
         const cachedPhoto = sessionStorage.getItem('userPhoto');
 
@@ -360,15 +544,10 @@
         
         function escapeHtml(str) {
             if (str === null || str === undefined) return '';
-            return String(str)
-                .replace(/&/g, '&amp;')
-                .replace(/</g, '&lt;')
-                .replace(/>/g, '&gt;')
-                .replace(/"/g, '&quot;')
-                .replace(/'/g, '&#039;');
+            return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#039;');
         }
 
-        let childStatuses = {}, allSystemDrivers = [], currentSearchMode = "Door to Door"; 
+        let childStatuses = {}, allSystemDrivers = []; 
         let currentChildName = null, currentSupportTarget = null, currentRoomType = ""; 
         let allPublishedTrips = []; 
         let isAddingChildState = false; 
@@ -377,61 +556,48 @@
         let targetDriverName = null;
         let targetTripType = "Door to Door";
 
-        // 🔥 FIX: Restore profile photo after logout/login from Supabase if sessionStorage is empty
-
-(async function restoreProfilePhoto() {
-    try {
-        if (!cachedPhoto && myU) {
-            const profRes = await authFetch('/api/profile/get_self', { method: 'POST' });
-    const profJson = await profRes.json();
-    const data = profJson.status === 'success' ? profJson.profile : null;
-    const error = profJson.status !== 'success';
-
-            if (!error && data && data.photo) {
-                sessionStorage.setItem('userPhoto', data.photo);
-
-                if (avatarEl) {
-                    avatarEl.src = data.photo;
-                }
-            }
-        }
-    } catch (err) {
-        console.log("Photo restore failed:", err);
-    }
-})();
-
         let vaultChildrenCache = [];
         let fetchedAttendanceLogsGlobal = [];
         let lastSeenParentCounts = JSON.parse(localStorage.getItem('lastSeenParentCounts') || '{}');
-
-        async function getMsgCount(childUsername, roomType) {
-            try {
-                const res = await authFetch('/api/support/get_history', {
-                    method: 'POST', headers: {'Content-Type':'application/json'},
-                    body: JSON.stringify({ child_username: childUsername, room_type: roomType })
-                });
-                const data = await res.json();
-                return (data.messages || []).length;
-            } catch(e) { return 0; }
-        }
-
+        
         const dbName = "SafeDriveData", storeName = "ChildrenVault"; 
         function getDB() { return new Promise((resolve) => { const request = indexedDB.open(dbName, 2); request.onupgradeneeded = (e) => e.target.result.createObjectStore(storeName, { keyPath: "username" }); request.onsuccess = (e) => resolve(e.target.result); }); } 
         async function getFromVault() { const db = await getDB(); return new Promise((resolve) => { const request = db.transaction(storeName, "readonly").objectStore(storeName).getAll(); request.onsuccess = () => resolve(request.result); }); } 
+
+        (async function restoreProfilePhoto() {
+            try {
+                if (!cachedPhoto && myU) {
+                    const profRes = await authFetch('/api/profile/get_self', { method: 'POST' });
+                    const profJson = await profRes.json();
+                    const data = profJson.status === 'success' ? profJson.profile : null;
+                    if (data && data.photo) {
+                        sessionStorage.setItem('userPhoto', data.photo);
+                        const avatarEl = document.getElementById('userImg');
+                        if (avatarEl) avatarEl.src = data.photo;
+                    }
+                }
+            } catch (err) { }
+        })();
 
         document.getElementById('displayName').innerText = myN.toUpperCase();
         const avatarEl = document.getElementById('userImg');
         if (cachedPhoto && cachedPhoto !== "null" && cachedPhoto !== "") {
             avatarEl.src = cachedPhoto;
         } else {
-            avatarEl.src = `https://ui-avatars.com/api/?name=${myN}&background=3498db&color=fff&size=256`;
+            avatarEl.src = `https://ui-avatars.com/api/?name=${encodeURIComponent(myN)}&background=3498db&color=fff&size=256`;
         }
+
+        setInterval(() => { 
+            const now = new Date();
+            const timeStr = now.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+            document.getElementById('liveClock').innerText = timeStr; 
+        }, 1000);
 
         async function initDashboard() {
             try {
                 const profRes2 = await authFetch('/api/profile/get_self', { method: 'POST' });
-    const profJson2 = await profRes2.json();
-    const data = profJson2.status === 'success' ? profJson2.profile : null;
+                const profJson2 = await profRes2.json();
+                const data = profJson2.status === 'success' ? profJson2.profile : null;
                 if(data) {
                     const regDate = new Date(data.created_at || Date.now());
                     const daysActive = (Date.now() - regDate) / (1000 * 60 * 60 * 24);
@@ -451,13 +617,13 @@
         function viewFullProfile(imgSrc) {
             closeProfileMenu();
             let src = imgSrc || sessionStorage.getItem('userPhoto');
-            if(!src || src === "null" || src === "") src = `https://ui-avatars.com/api/?name=${myN}&background=3498db&color=fff&size=512`;
+            if(!src || src === "null" || src === "") src = `https://ui-avatars.com/api/?name=${encodeURIComponent(myN)}&background=3498db&color=fff&size=512`;
             document.getElementById('fullViewImg').src = src;
             document.getElementById('fullViewOverlay').classList.add('show');
         }
         function closeFullView() { document.getElementById('fullViewOverlay').classList.remove('show'); }
 
-                async function handleProfileUpload(e) {
+        async function handleProfileUpload(e) {
             const file = e.target.files[0];
             if(!file) return;
 
@@ -469,23 +635,20 @@
                 formData.append('photo', file);
 
                 const res = await authFetch('/api/profile/upload_photo', {
-                    method: 'POST',
-                    body: formData
+                    method: 'POST', body: formData
                 });
                 const data = await res.json();
 
                 if (data.status === 'success') {
                     sessionStorage.setItem('userPhoto', data.photo_url);
                     if(avatarEl) avatarEl.src = data.photo_url;
-                    const warningBanner = document.getElementById('profileWarningBanner');
-                    if(warningBanner) warningBanner.style.display = 'none';
+                    document.getElementById('profileWarningBanner').style.display = 'none';
                     showAppAlert("AI check passed. Profile picture securely updated.", "SUCCESS");
                 } else {
                     showAppAlert("Could not sync photo link to database.");
                 }
             } catch (err) {
-                console.error(err);
-                showAppAlert("Storage upload failed. Please verify your connection or bucket permissions.");
+                showAppAlert("Storage upload failed. Please verify your connection.");
             }
         }
 
@@ -497,28 +660,10 @@
 
                 if (data.status === 'success') {
                     sessionStorage.removeItem('userPhoto');
-                    if(avatarEl) avatarEl.src = `https://ui-avatars.com/api/?name=${myN}&background=27ae60&color=fff&size=256`;
-                    showAppAlert("Profile picture successfully completely deleted from storage and database.");
-                } else {
-                    showAppAlert("Error deleting profile picture.");
-                }
-            } catch(err) {
-                console.error(err);
-                showAppAlert("Error deleting profile picture.");
-            }
-        }
-        function setDriverSearchMode(mode) {
-            currentSearchMode = mode;
-            document.getElementById('btnD2D').classList.toggle('active', mode === 'Door to Door');
-            document.getElementById('btnEvent').classList.toggle('active', mode === 'Events and School');
-            if(mode === 'Door to Door') {
-                document.getElementById('d2dSearchFields').style.display = 'block';
-                document.getElementById('eventSearchField').style.display = 'none';
-            } else {
-                document.getElementById('d2dSearchFields').style.display = 'none';
-                document.getElementById('eventSearchField').style.display = 'block';
-            }
-            filterGlobalDrivers();
+                    if(avatarEl) avatarEl.src = `https://ui-avatars.com/api/?name=${encodeURIComponent(myN)}&background=3498db&color=fff&size=256`;
+                    showAppAlert("Profile picture successfully deleted.");
+                } else { showAppAlert("Error deleting profile picture."); }
+            } catch(err) { showAppAlert("Error deleting profile picture."); }
         }
 
         async function loadPublishedTrips() {
@@ -532,60 +677,70 @@
         async function loadAllDrivers() {
             try {
                 const driverRes = await authFetch('/api/users/lookup', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ role: 'driver' }) });
-    const driverJson = await driverRes.json();
-    if (driverJson.users) { allSystemDrivers = driverJson.users; filterGlobalDrivers(); }
-
+                const driverJson = await driverRes.json();
+                if (driverJson.users) { allSystemDrivers = driverJson.users; filterGlobalDrivers(); }
             } catch(e) {}
         }
 
         function filterGlobalDrivers() {
-    const mode = currentSearchMode; let filtered = [];
-    if (mode === 'Events and School') {
-        const term = document.getElementById('eventSearchField').value.toLowerCase();
-        filtered = allSystemDrivers.filter(d => {
-            const isEvent = d.transport_type === 'school_events';
-            return isEvent && (d.name.toLowerCase().includes(term) || (d.vehicle_plate && d.vehicle_plate.toLowerCase().includes(term)));
-        });
-    } else {
-        const curProv = document.getElementById('d2dCurrentProv').value.toLowerCase().trim();
-        const destTown = document.getElementById('d2dDestTown').value.toLowerCase().trim();
-        const destProv = document.getElementById('d2dDestProv').value.toLowerCase().trim();
-        const tripDate = document.getElementById('d2dDate').value;
+            // Door-to-Door Filter Logic
+            const d2dProv = document.getElementById('d2dCurrentProv').value.toLowerCase().trim();
+            const d2dTown = document.getElementById('d2dDestTown').value.toLowerCase().trim();
+            const d2dDestProv = document.getElementById('d2dDestProv').value.toLowerCase().trim();
+            const tripDate = document.getElementById('d2dDate').value;
 
-        filtered = allSystemDrivers.filter(d => {
-            const isD2D = d.transport_type === 'door_to_door';
-            if (!isD2D) return false;
-            if(!curProv && !destTown) return true;
-            const trip = allPublishedTrips.find(t => t.username === d.username);
-            if (!trip) return false;
-            const tripContent = trip.content.toLowerCase(); let matches = true;
-            const parts = tripContent.split('➡️'); const startPart = parts[0] || ""; const restPart = parts[1] || "";
-            if (curProv && !startPart.includes(curProv)) matches = false;
-            if (destTown && !restPart.includes(destTown)) matches = false;
-            if (destProv && !restPart.includes(destProv)) matches = false;
-            if (tripDate && !tripContent.includes(tripDate)) matches = false;
-            return matches;
-        });
-    }
-            
-            document.getElementById('combinedDriverList').innerHTML = filtered.map(d => {
-                const driverPhoto = d.photo ? d.photo : `https://ui-avatars.com/api/?name=${d.name || 'D'}&background=3498db&color=fff&size=256`;
-                const dMode = (d.transport_type || d.driver_mode || "General").toUpperCase().replace(/_/g, ' ');
+            const d2dDrivers = allSystemDrivers.filter(d => {
+                if (d.transport_type !== 'door_to_door') return false;
+                if(!d2dProv && !d2dTown) return true;
                 const trip = allPublishedTrips.find(t => t.username === d.username);
-                let tripBtnHtml = '';
-                if (trip) {
-                    const safeTrip = trip.content.replace(/'/g, "\\'").replace(/"/g, '&quot;');
-                    tripBtnHtml = `<button class="btn-book" style="width:100%; margin-top:10px; background:#f39c12; color:#020218;" onclick="showAppAlert('${safeTrip}', 'TRIP DETAILS')">VIEW DETAILS ABOUT TRIP</button>`;
-                }
-                return `
-                <div class="driver-card-mini">
-                    <img class="mini-avatar" src="${driverPhoto}" onclick="viewFullProfile('${driverPhoto}')" title="View Full Profile">
-                    <div style="font-size:13px; font-weight:800;">${d.name}</div>
-                    <div style="font-size:10px; color:var(--accent); margin-top:5px; font-weight:700;">${dMode}</div>
+                if (!trip) return false;
+                const tripContent = trip.content.toLowerCase(); let matches = true;
+                const parts = tripContent.split('➡️'); const startPart = parts[0] || ""; const restPart = parts[1] || "";
+                if (d2dProv && !startPart.includes(d2dProv)) matches = false;
+                if (d2dTown && !restPart.includes(d2dTown)) matches = false;
+                if (d2dDestProv && !restPart.includes(d2dDestProv)) matches = false;
+                if (tripDate && !tripContent.includes(tripDate)) matches = false;
+                return matches;
+            });
+
+            document.getElementById('d2dDriverList').innerHTML = d2dDrivers.map(d => generateDriverRow(d, 'Door to Door')).join('') || '<p style="padding:25px 20px; color:var(--text-muted); text-align:center; font-size:14px;">No matching Door-to-Door drivers found.</p>';
+
+            // Event Filter Logic
+            const eventTerm = document.getElementById('eventSearchField').value.toLowerCase().trim();
+            const eventDrivers = allSystemDrivers.filter(d => {
+                if (d.transport_type !== 'school_events') return false;
+                return d.name.toLowerCase().includes(eventTerm) || (d.vehicle_plate && d.vehicle_plate.toLowerCase().includes(eventTerm));
+            });
+
+            document.getElementById('eventDriverList').innerHTML = eventDrivers.map(d => generateDriverRow(d, 'Event')).join('') || '<p style="padding:25px 20px; color:var(--text-muted); text-align:center; font-size:14px;">No matching Event drivers found.</p>';
+        }
+
+        function generateDriverRow(d, type) {
+            const driverPhoto = d.photo ? d.photo : `https://ui-avatars.com/api/?name=${encodeURIComponent(d.name || 'D')}&background=3498db&color=fff&size=256`;
+            const dMode = (d.transport_type || d.driver_mode || type).toUpperCase().replace(/_/g, ' ');
+            
+            let tripBtnHtml = '';
+            const trip = allPublishedTrips.find(t => t.username === d.username);
+            if (trip) {
+                const safeTrip = trip.content.replace(/'/g, "\\'").replace(/"/g, '&quot;');
+                tripBtnHtml = `<button class="btn btn-warning" style="grid-column: span 2;" onclick="showAppAlert('${safeTrip}', 'TRIP DETAILS')">VIEW ROUTE DETAILS</button>`;
+            }
+
+            return `
+            <div class="list-row">
+                <div style="display:flex; align-items:center; gap:15px; width: 100%;">
+                    <img class="driver-avatar" src="${driverPhoto}" onclick="viewFullProfile('${driverPhoto}')" title="View Full Profile">
+                    <div style="display:flex; flex-direction:column; flex: 1; min-width: 0;">
+                        <b style="font-size:16px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--text-main);">${escapeHtml(d.name || 'Unknown Driver')}</b>
+                        <span class="status-tag" style="background:rgba(52, 152, 219, 0.1); color:#3498db; border-color:transparent;">${escapeHtml(dMode)}</span>
+                        ${d.vehicle_plate ? `<span style="font-size:10px; color:var(--text-muted); font-family:monospace; margin-top:4px;">PLATE: ${escapeHtml(d.vehicle_plate).toUpperCase()}</span>` : ''}
+                    </div>
+                </div>
+                <div class="btn-group-grid">
                     ${tripBtnHtml}
-                    <button class="btn-book" style="width:100%; margin-top:10px; background:var(--accent);" onclick="openRequestModal('${d.username}', '${d.name}', '${currentSearchMode}')">CHAT / HIRE NOW</button>
-                </div>`
-            }).join('') || '<p style="grid-column:1/-1; text-align:center; color:gray;">No matching drivers.</p>';
+                    <button class="btn btn-primary" style="grid-column: span 2;" onclick="openRequestModal('${escapeHtml(d.username)}', '${escapeHtml(d.name)}', '${type}')">HIRE DRIVER</button>
+                </div>
+            </div>`;
         }
 
         function openRequestModal(du, dn, type) {
@@ -606,33 +761,34 @@
                 const res = await authFetch('/api/student/book', {
                     method: 'POST', headers: {'Content-Type': 'application/json'},
                     body: JSON.stringify({
-    student_username: myU,
-    student_name: myN,
-    driver_username: targetDriverUser,
-    driver_name: targetDriverName,
-    message: fullMessage,
-    school_code: "D2D_GLOBAL",
-    transport_type: targetTripType
-})
+                        student_username: myU,
+                        student_name: myN,
+                        driver_username: targetDriverUser,
+                        driver_name: targetDriverName,
+                        message: fullMessage,
+                        school_code: "D2D_GLOBAL",
+                        transport_type: targetTripType
+                    })
                 });
                 const data = await res.json();
-
-const bookingId = data.booking_id;
-
-const driverPhoto =
-    allSystemDrivers.find(d => d.username === targetDriverUser)?.photo || '';
-
-openSupportChat(
-    bookingId,
-    targetDriverName,
-    "general_driver_room",
-    driverPhoto
-);
-
+                const bookingId = data.booking_id;
+                const driverPhoto = allSystemDrivers.find(d => d.username === targetDriverUser)?.photo || '';
+                openSupportChat(bookingId, targetDriverName, "general_driver_room", driverPhoto);
                 loadNegotiationList();
             } catch(e) {
                 showAppAlert("Ride tracking channel configuration error.");
             }
+        }
+
+        async function getMsgCount(childUsername, roomType) {
+            try {
+                const res = await authFetch('/api/support/get_history', {
+                    method: 'POST', headers: {'Content-Type':'application/json'},
+                    body: JSON.stringify({ child_username: childUsername, room_type: roomType })
+                });
+                const data = await res.json();
+                return (data.messages || []).length;
+            } catch(e) { return 0; }
         }
 
         async function loadNegotiationList() {
@@ -642,76 +798,47 @@ openSupportChat(
                     body: JSON.stringify({ username: myU, role: 'student' })
                 });
                 const data = await res.json();
-                const activeBookings = (data.bookings || []).filter(
-    b => b.status === 'Pending' || b.status === 'Accepted'
-);
+                const activeBookings = (data.bookings || []).filter(b => b.status === 'Pending' || b.status === 'Accepted');
 
-const hasPending = activeBookings.some(b => b.status === "Pending");
-const hasAccepted = activeBookings.some(b => b.status === "Accepted");
+                let d2dHtml = "";
+                let eventHtml = "";
 
-const title = document.getElementById("negotiationTitle");
+                for (const b of activeBookings) {
+                    const isD2D = b.transport_type === 'Door to Door' || b.message?.includes('[DOOR TO DOOR]');
+                    const dObj = allSystemDrivers.find(d => d.username === b.driver_username);
+                    const dPhoto = (dObj && dObj.photo) ? dObj.photo : `https://ui-avatars.com/api/?name=${encodeURIComponent(b.driver_name || 'D')}&background=3498db&color=fff`;
+                    
+                    let roomType = "general_driver_room";
+                    let roomId = b.booking_id;
 
-if (hasPending) {
-    title.innerHTML = "⏳ PENDING NEGOTIATING PURSUITS";
-    title.style.color = "orange";
-} else if (hasAccepted) {
-    title.innerHTML = "✅ APPROVED DRIVER CONNECTIONS";
-    title.style.color = "#00e676";
-}
-                
-                if (activeBookings.length > 0) {
-                    document.getElementById('negotiationCard').style.display = 'block';
+                    const statusText = b.status === "Accepted" ? "APPROVED" : "PENDING";
+                    const statusColor = b.status === "Accepted" ? "var(--success)" : "var(--warning)";
 
-                    let negotiationHtml = "";
-                    for (const b of activeBookings) {
-                        const dObj = allSystemDrivers.find(d => d.username === b.driver_username);
-                        const dPhoto = (dObj && dObj.photo) ? dObj.photo : `https://ui-avatars.com/api/?name=${b.driver_name || 'D'}&background=3498db&color=fff`;
-                        let roomType;
-                        let roomId;
+                    const msgCount = await getMsgCount(roomId, roomType);
+                    const seenKey = `${roomType}_${roomId}`;
+                    const unread = Math.max(0, msgCount - (lastSeenParentCounts[seenKey] || 0));
+                    const badgeHtml = unread > 0 ? `<span class="chat-badge">+${unread}</span>` : "";
 
-                        if (b.school_code === "D2D_GLOBAL") {
-                            roomType = "general_driver_room";
-                            roomId = b.booking_id;
-                        } else {
-                            roomType = "parent_driver_matrix";
-                            roomId = b.student_username;
-                        }
-
-                        const statusText =
-                            b.status === "Accepted"
-                                ? "APPROVED • DRIVER ACCEPTED"
-                                : "AWAITING ACCEPTANCE & NEGOTIATING";
-
-                        const statusColor =
-                            b.status === "Accepted"
-                                ? "var(--success)"
-                                : "var(--warning)";
-
-                        const msgCount = await getMsgCount(roomId, roomType);
-                        const seenKey = `${roomType}_${roomId}`;
-                        const unread = Math.max(0, msgCount - (lastSeenParentCounts[seenKey] || 0));
-                        const badgeHtml = unread > 0 ? `<span class="chat-badge">${unread}</span>` : "";
-
-                        negotiationHtml += `
-                        <div class="trip-row" id="negotiate-row-${b.booking_id}">
-                            <div style="display:flex; align-items:center; gap:15px;">
-                                <img src="${dPhoto}" class="driver-min-avatar" onclick="viewFullProfile('${dPhoto}')">
-                                <div style="display:flex; flex-direction:column; gap:3px;">
-                                    <b style="font-size:14px; letter-spacing: 0.5px;">${b.driver_name}</b>
-                                    <span style="font-size:11px; color:${statusColor}; font-weight:800;">
-    ${statusText}
-</span>
-                                </div>
+                    const rowHtml = `
+                    <div class="list-row">
+                        <div style="display:flex; align-items:center; gap:15px; width: 100%;">
+                            <img src="${dPhoto}" class="driver-avatar" onclick="viewFullProfile('${dPhoto}')">
+                            <div style="display:flex; flex-direction:column; flex: 1; min-width: 0;">
+                                <b style="font-size:16px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--text-main);">${escapeHtml(b.driver_name)}</b>
+                                <span class="status-tag" style="background:rgba(255,255,255,0.05); color:${statusColor}; border-color:transparent;">${statusText}</span>
                             </div>
-                            <div class="btn-group">
-                                <button class="btn-book btn-chat" style="margin-top:0;" onclick="openSupportChat('${roomId}', 'Driver: ${b.driver_name}', '${roomType}', '${dPhoto}')">CHAT / NEGOTIATE ${badgeHtml}</button>
-                            </div>
-                        </div>`;
-                    }
-                    document.getElementById('negotiationList').innerHTML = negotiationHtml;
-                } else {
-                    document.getElementById('negotiationCard').style.display = 'none';
+                        </div>
+                        <div class="btn-group-grid">
+                            <button class="btn btn-primary" style="grid-column: span 2;" onclick="openSupportChat('${escapeHtml(roomId)}', 'Driver: ${escapeHtml(b.driver_name)}', '${escapeHtml(roomType)}', '${dPhoto}')">MESSAGE DRIVER ${badgeHtml}</button>
+                        </div>
+                    </div>`;
+
+                    if (isD2D) { d2dHtml += rowHtml; } else { eventHtml += rowHtml; }
                 }
+
+                document.getElementById('d2dActiveList').innerHTML = d2dHtml || '<p style="padding:25px 20px; color:var(--text-muted); text-align:center; font-size:14px;">No active Door-to-Door bookings.</p>';
+                document.getElementById('eventActiveList').innerHTML = eventHtml || '<p style="padding:25px 20px; color:var(--text-muted); text-align:center; font-size:14px;">No active Event bookings.</p>';
+                
             } catch(e) {}
         }
 
@@ -733,50 +860,45 @@ if (hasPending) {
             syncSafetyAndStatus(); 
         }
 
-
-
         async function requestParentalOTP() {
-    const schoolCode = document.getElementById('parentSchoolCode').value.trim();
-    const username = document.getElementById('childUsername').value.trim();
-    
-    if (!schoolCode || !username) {
-        showAppAlert("Please enter both the School Code and Child Username.");
-        return;
-    }
+            const schoolCode = document.getElementById('parentSchoolCode').value.trim();
+            const username = document.getElementById('childUsername').value.trim();
+            
+            if (!schoolCode || !username) {
+                showAppAlert("Please enter both the School Code and Child Username.");
+                return;
+            }
 
-    // Show loading state
-    const btn = document.getElementById('sendCodeBtn');
-    btn.innerText = "SENDING...";
-    btn.disabled = true;
+            const btn = document.getElementById('sendCodeBtn');
+            btn.innerText = "SENDING...";
+            btn.disabled = true;
 
-    try {
-        sessionStorage.setItem('temp_sc', schoolCode);
-        sessionStorage.setItem('temp_c', username);
+            try {
+                sessionStorage.setItem('temp_sc', schoolCode);
+                sessionStorage.setItem('temp_c', username);
 
-        const res = await authFetch('/api/parent/request_link', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ school_code: schoolCode, child_username: username })
-        });
+                const res = await authFetch('/api/parent/request_link', {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ school_code: schoolCode, child_username: username })
+                });
 
-        const data = await res.json();
-        if (data.status === 'success') {
-            document.getElementById('step1_Link').style.display = 'none';
-            document.getElementById('step2_Verify').style.display = 'block';
-            showAppAlert("Verification code sent to the registered email address.");
-        } else {
-            showAppAlert(data.message || "Failed to send code.");
+                const data = await res.json();
+                if (data.status === 'success') {
+                    document.getElementById('step1_Link').style.display = 'none';
+                    document.getElementById('step2_Verify').style.display = 'block';
+                    showAppAlert("Verification code sent to the registered email address.");
+                } else {
+                    showAppAlert(data.message || "Failed to send code.");
+                }
+            } catch (e) {
+                showAppAlert("Network error: Could not reach the server.");
+            } finally {
+                btn.innerText = "SEND CODE";
+                btn.disabled = false;
+            }
         }
-    } catch (e) {
-        console.error("OTP Request Error:", e);
-        showAppAlert("Network error: Could not reach the server.");
-    } finally {
-        btn.innerText = "SEND SECURITY CODE";
-        btn.disabled = false;
-    }
-}
 
-            async function verifyParentalLink() { 
+        async function verifyParentalLink() { 
             const code = document.getElementById('parentOTP').value;
             if(!code) return;
 
@@ -784,8 +906,7 @@ if (hasPending) {
             const sc = sessionStorage.getItem('temp_sc');
 
             const res = await authFetch('/api/parent/verify_link', {
-                method: 'POST',
-                headers: {'Content-Type':'application/json'},
+                method: 'POST', headers: {'Content-Type':'application/json'},
                 body: JSON.stringify({ child_username: cu, school_code: sc, code: code })
             });
 
@@ -803,7 +924,7 @@ if (hasPending) {
                 showAppAlert("Invalid verification code.");
             }
         }
-        // --- RENDER SEPARATED ATTENDANCE OVERWATCH CHANNELS ---
+
         function renderAttendanceOverwatch() {
             const searchVal = document.getElementById('attendanceSearch').value.toLowerCase().trim();
             const targetBody = document.getElementById('attendanceOverwatchBody');
@@ -815,148 +936,166 @@ if (hasPending) {
             );
 
             targetBody.innerHTML = filtered.map(l => {
-                let statusColor = "var(--success)";
-                if (l.status === "ABSENT") statusColor = "var(--danger)";
+                let statusColor = l.status === "ABSENT" ? "var(--danger)" : "var(--success)";
                 return `
-                <tr>
-                    <td><b>${l.student_username.toUpperCase()}</b></td>
-                    <td style="color:${statusColor}; font-weight:800;">${l.status}</td>
-                    <td>Faculty Ref: ${l.moderator_username} (Grade ${l.grade})</td>
-                    <td><small>${new Date(l.timestamp).toLocaleString()}</small></td>
-                </tr>`;
-            }).join('') || '<tr><td colspan="4" style="text-align:center; color:gray; padding:20px;">No matching roster records discovered.</td></tr>';
+                <div class="list-row">
+                    <div style="display:flex; justify-content:space-between; width: 100%;">
+                        <div style="display:flex; flex-direction:column; flex: 1; min-width: 0;">
+                            <b style="font-size:15px; color: var(--text-main);">${escapeHtml(l.student_username).toUpperCase()}</b>
+                            <span style="font-size:11px; color:var(--text-muted); margin-top:2px;">Ref: ${escapeHtml(l.moderator_username)} (Grade ${escapeHtml(l.grade)})</span>
+                        </div>
+                        <div style="text-align: right;">
+                            <span class="status-tag" style="background:transparent; border:none; padding:0; color:${statusColor}; font-weight:800; display:block;">${escapeHtml(l.status)}</span>
+                            <span style="font-size:10px; color:var(--text-muted); display:block; margin-top:4px;">${new Date(l.timestamp).toLocaleTimeString()}</span>
+                        </div>
+                    </div>
+                </div>`;
+            }).join('') || '<div style="padding: 20px; text-align: center; color: var(--text-muted); font-size: 13px;">No matching roster records discovered.</div>';
         }
 
-      async function syncSafetyAndStatus() { 
-    if (isAddingChildState) return;
+        async function syncSafetyAndStatus() { 
+            if (isAddingChildState) return;
 
-    const saved = await getFromVault(); 
-    vaultChildrenCache = saved; 
-    const searchVal = document.getElementById('ledgerSearch').value.toLowerCase().trim();
-    
-    if(saved.length === 0) { 
-        document.getElementById('childListArea').innerHTML = '<p style="text-align:center; padding: 20px; color: gray;">No children linked yet.</p>';
-        return;
-    }
-    
-    let allTransitLogs = [];
-    let localAttendanceAccumulator = [];
-
-    for(let child of saved) { 
-        try { 
-            const res = await authFetch('/api/get_my_bookings', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ username: child.username, role: 'student' }) }); 
-            const data = await res.json(); 
+            const saved = await getFromVault(); 
+            vaultChildrenCache = saved; 
+            const searchVal = document.getElementById('ledgerSearch').value.toLowerCase().trim();
             
-            const logRes = await authFetch('/api/parent/get_logs', { 
-                method:'POST', 
-                headers:{'Content-Type':'application/json'}, 
-                body:JSON.stringify({ student_name: child.username }) 
-            });
-            const logData = await logRes.json();
+            if(saved.length === 0) { 
+                document.getElementById('childListArea').innerHTML = '<p style="text-align:center; padding: 25px 20px; color: var(--text-muted); font-size: 14px;">No children linked yet.</p>';
+                return;
+            }
             
-            if(logData.status === 'success' && logData.logs) {
-                allTransitLogs = allTransitLogs.concat(logData.logs);
-            }
+            let allTransitLogs = [];
+            let localAttendanceAccumulator = [];
 
-                        const attRes = await authFetch('/api/attendance/get_for_student', {
-                method: 'POST', headers: {'Content-Type':'application/json'},
-                body: JSON.stringify({ student_username: child.username })
-            });
-            const attJson = await attRes.json();
-            if (attJson.logs) {
-                localAttendanceAccumulator = localAttendanceAccumulator.concat(attJson.logs);
-            }
+            for(let child of saved) { 
+                try { 
+                    const res = await authFetch('/api/get_my_bookings', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ username: child.username, role: 'student' }) }); 
+                    const data = await res.json(); 
+                    
+                    const logRes = await authFetch('/api/parent/get_logs', { 
+                        method:'POST', headers:{'Content-Type':'application/json'}, 
+                        body:JSON.stringify({ student_name: child.username }) 
+                    });
+                    const logData = await logRes.json();
+                    
+                    if(logData.status === 'success' && logData.logs) {
+                        allTransitLogs = allTransitLogs.concat(logData.logs);
+                    }
 
-            // Booking logic...
-            if(!data.bookings || data.bookings.length === 0) { 
-                childStatuses[child.username] = { label: "NO TRANSPORT", hasD: false }; 
-            } else { 
-                const b = data.bookings[data.bookings.length - 1]; 
-                if (b.status === 'Finished') {
-                    childStatuses[child.username] = { label: "TRIP COMPLETED", hasD: false };
-                } else {
-                    childStatuses[child.username] = { 
-                        label: (b.tracking_status || "Accepted").toUpperCase(), 
-                        hasD: true, 
-                        d_u: b.driver_username, 
-                        d_n: b.driver_name, 
-                        sc: child.school_code 
-                    }; 
-                }
+                    const attRes = await authFetch('/api/attendance/get_for_student', {
+                        method: 'POST', headers: {'Content-Type':'application/json'},
+                        body: JSON.stringify({ student_username: child.username })
+                    });
+                    const attJson = await attRes.json();
+                    if (attJson.logs) {
+                        localAttendanceAccumulator = localAttendanceAccumulator.concat(attJson.logs);
+                    }
+
+                    if(!data.bookings || data.bookings.length === 0) { 
+                        childStatuses[child.username] = { label: "NO TRANSPORT", hasD: false }; 
+                    } else { 
+                        const b = data.bookings[data.bookings.length - 1]; 
+                        if (b.status === 'Finished') {
+                            childStatuses[child.username] = { label: "TRIP COMPLETED", hasD: false };
+                        } else {
+                            childStatuses[child.username] = { 
+                                label: (b.tracking_status || "Accepted").toUpperCase(), 
+                                hasD: true, d_u: b.driver_username, d_n: b.driver_name, sc: child.school_code 
+                            }; 
+                        }
+                    } 
+                } catch(e) { console.error("Sync error:", e); } 
             } 
-        } catch(e) { console.error("Sync error:", e); } 
-    } 
 
-    // RENDER ATTENDANCE
-    fetchedAttendanceLogsGlobal = localAttendanceAccumulator.sort((a,b) => new Date(b.timestamp) - new Date(a.timestamp));
-    renderAttendanceOverwatch();
+            fetchedAttendanceLogsGlobal = localAttendanceAccumulator.sort((a,b) => new Date(b.timestamp) - new Date(a.timestamp));
+            renderAttendanceOverwatch();
 
-    // RENDER TRANSIT LEDGER (Combined and Sorted)
-    const filteredTransit = allTransitLogs.sort((a,b) => new Date(b.timestamp) - new Date(a.timestamp)).filter(l => 
-        l.student_name.toLowerCase().includes(searchVal) || 
-        (l.status && l.status.toLowerCase().includes(searchVal)) ||
-        (l.driver_name && l.driver_name.toLowerCase().includes(searchVal))
-    );
+            const filteredTransit = allTransitLogs.sort((a,b) => new Date(b.timestamp) - new Date(a.timestamp)).filter(l => 
+                l.student_name.toLowerCase().includes(searchVal) || 
+                (l.status && l.status.toLowerCase().includes(searchVal)) ||
+                (l.driver_name && l.driver_name.toLowerCase().includes(searchVal))
+            );
 
-    const tbody = document.getElementById('historyTableBody');
-    tbody.innerHTML = filteredTransit.map(l => {
-        let statusColor = l.status.includes('URGENT') ? 'var(--danger)' : 'var(--success)';
-        return `<tr>
-            <td><b>${l.student_name}</b></td>
-            <td style="color:${statusColor}; font-weight:800;">${l.status || "LOGGED"}</td>
-            <td>${l.driver_name || "System"}</td>
-            <td><small>${new Date(l.timestamp).toLocaleString()}</small></td>
-        </tr>`;
-    }).join('') || '<tr><td colspan="4" style="text-align:center; color:gray;">No logs.</td></tr>';
-    
-    renderChildMonitor(); 
-}
-       async function renderChildMonitor() { 
-    if (isAddingChildState) return;
+            const tbody = document.getElementById('historyTableBody');
+            tbody.innerHTML = filteredTransit.map(l => {
+                let statusColor = l.status.includes('URGENT') ? 'var(--danger)' : 'var(--success)';
+                return `
+                <div class="list-row">
+                    <div style="display:flex; justify-content:space-between; width: 100%;">
+                        <div style="display:flex; flex-direction:column; flex: 1; min-width: 0;">
+                            <b style="font-size:15px; color: var(--text-main);">${escapeHtml(l.student_name)}</b>
+                            <span style="font-size:11px; color:var(--text-muted); margin-top:2px;">Handler: ${escapeHtml(l.driver_name || "System")}</span>
+                        </div>
+                        <div style="text-align: right;">
+                            <span class="status-tag" style="background:transparent; border:none; padding:0; color:${statusColor}; font-weight:800; display:block;">${escapeHtml(l.status || "LOGGED")}</span>
+                            <span style="font-size:10px; color:var(--text-muted); display:block; margin-top:4px;">${new Date(l.timestamp).toLocaleString()}</span>
+                        </div>
+                    </div>
+                </div>`;
+            }).join('') || '<div style="padding: 20px; text-align: center; color: var(--text-muted); font-size: 13px;">No logs found.</div>';
+            
+            // Re-render hidden table for PDF export specifically
+            document.getElementById('hiddenPdfTableBody').innerHTML = filteredTransit.map(l => `<tr><td>${escapeHtml(l.student_name)}</td><td>${escapeHtml(l.status || "LOGGED")}</td><td>${escapeHtml(l.driver_name || "System")}</td><td>${new Date(l.timestamp).toLocaleString()}</td></tr>`).join('');
 
-    let gridHtml = "";
-    for (const c of vaultChildrenCache) {
-        const s = childStatuses[c.username] || { label: "SYNCING...", hasD: false }; 
-        const childPhoto = c.photo ? c.photo : `https://ui-avatars.com/api/?name=${c.name}&background=3498db&color=fff`;
-        const prinImg = `https://ui-avatars.com/api/?name=Principal&background=8e44ad&color=fff`;
-        
-        const unifiedRoomKey = c.username; 
-
-        const principalMsgCount = await getMsgCount(unifiedRoomKey, "triple_party_matrix");
-        const principalSeenKey = `triple_party_matrix_${unifiedRoomKey}`;
-        const principalUnread = Math.max(0, principalMsgCount - (lastSeenParentCounts[principalSeenKey] || 0));
-        const principalBadge = principalUnread > 0 ? `<span class="chat-badge">${principalUnread}</span>` : "";
-
-        // --- MOTHER LOGIC: DYNAMICALLY LOCK / UNLOCK DRIVER CHAT BTN ---
-        let driverChatBtn;
-        if (s.hasD) {
-            const driverMsgCount = await getMsgCount(unifiedRoomKey, "parent_driver_matrix");
-            const driverSeenKey = `parent_driver_matrix_${unifiedRoomKey}`;
-            const driverUnread = Math.max(0, driverMsgCount - (lastSeenParentCounts[driverSeenKey] || 0));
-            const driverBadge = driverUnread > 0 ? `<span class="chat-badge">${driverUnread}</span>` : "";
-
-            driverChatBtn = `<button class="btn-book" style="background:var(--accent); color:white; flex:1; font-size:9px; margin-top:0; font-weight:800;" onclick="openMotherToDriverChat('${c.username}', '${c.name}')">DRIVER CHAT 💬 ${driverBadge}</button>`;
-        } else {
-            driverChatBtn = `<button class="btn-book" style="background:rgba(255,255,255,0.05); color:gray; flex:1; font-size:9px; margin-top:0; cursor:not-allowed;" disabled>DRIVER CHAT 🔒</button>`;
+            renderChildMonitor(); 
         }
-        
-        gridHtml += `
-        <div class="child-monitor-card"> 
-            <img src="${childPhoto}"> <h4>${c.name}</h4> <div class="status-badge">${s.label}</div> 
-            <div style="display:flex; justify-content:space-between; gap:10px;"> 
-                <button class="btn-book" style="background:#1e293b; flex:1; font-size:9px; margin-top:0;" onclick="openTripleIdentityChat('${unifiedRoomKey}', 'Principal command track', '${prinImg}')">PRINCIPAL CHAT ${principalBadge}</button> 
-                ${driverChatBtn}
-            </div> 
-            <button style="background:var(--danger); color:white; border:none; padding:10px; border-radius:10px; width:100%; margin-top:15px; cursor:pointer; font-weight:800; font-size:10px;" onclick="lockAndRemoveMonitor('${c.username}')">DELETE MONITOR & LOCK ROOMS</button>
-        </div>`; 
-    }
-    document.getElementById('childListArea').innerHTML = gridHtml;
-}
+
+        async function renderChildMonitor() { 
+            if (isAddingChildState) return;
+
+            let gridHtml = "";
+            for (const c of vaultChildrenCache) {
+                const s = childStatuses[c.username] || { label: "SYNCING...", hasD: false }; 
+                const childPhoto = c.photo ? c.photo : `https://ui-avatars.com/api/?name=${encodeURIComponent(c.name)}&background=3498db&color=fff`;
+                const prinImg = `https://ui-avatars.com/api/?name=Principal&background=8e44ad&color=fff`;
+                
+                const unifiedRoomKey = c.username; 
+
+                const principalMsgCount = await getMsgCount(unifiedRoomKey, "triple_party_matrix");
+                const principalSeenKey = `triple_party_matrix_${unifiedRoomKey}`;
+                const principalUnread = Math.max(0, principalMsgCount - (lastSeenParentCounts[principalSeenKey] || 0));
+                const principalBadge = principalUnread > 0 ? `<span class="chat-badge">+${principalUnread}</span>` : "";
+
+                let driverChatBtn;
+                if (s.hasD) {
+                    const driverMsgCount = await getMsgCount(unifiedRoomKey, "parent_driver_matrix");
+                    const driverSeenKey = `parent_driver_matrix_${unifiedRoomKey}`;
+                    const driverUnread = Math.max(0, driverMsgCount - (lastSeenParentCounts[driverSeenKey] || 0));
+                    const driverBadge = driverUnread > 0 ? `<span class="chat-badge">+${driverUnread}</span>` : "";
+
+                    driverChatBtn = `<button class="btn btn-primary" onclick="openMotherToDriverChat('${escapeHtml(c.username)}', '${escapeHtml(c.name)}')">CHAT DRIVER ${driverBadge}</button>`;
+                } else {
+                    driverChatBtn = `<button class="btn btn-chat" disabled>DRIVER CHAT 🔒</button>`;
+                }
+                
+                let sLabelColor = "var(--text-muted)";
+                if (s.label === 'PICKED UP') sLabelColor = "#3b82f6";
+                else if (s.label === 'ACCEPTED' || s.label === 'APPROVED') sLabelColor = "var(--success)";
+                
+                gridHtml += `
+                <div class="list-row" style="padding-bottom: 20px;"> 
+                    <div style="display:flex; align-items:center; gap:15px; width: 100%;">
+                        <img src="${childPhoto}" class="driver-avatar" style="border-color: var(--accent);">
+                        <div style="display:flex; flex-direction:column; flex: 1; min-width: 0;">
+                            <b style="font-size:16px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--text-main);">${escapeHtml(c.name)}</b>
+                            <span class="status-tag" style="background:rgba(255,255,255,0.05); color:${sLabelColor}; border-color:transparent;">${escapeHtml(s.label)}</span>
+                        </div>
+                    </div>
+                    <div class="btn-group-grid" style="margin-top: 5px;"> 
+                        ${driverChatBtn}
+                        <button class="btn btn-secondary" onclick="openTripleIdentityChat('${escapeHtml(unifiedRoomKey)}', 'Principal command track', '${prinImg}')">CHAT PRINCIPAL ${principalBadge}</button> 
+                        <button class="btn btn-remove" style="grid-column: span 2;" onclick="lockAndRemoveMonitor('${escapeHtml(c.username)}')">DELETE MONITOR & LOCK ROOMS</button>
+                    </div> 
+                </div>`; 
+            }
+            document.getElementById('childListArea').innerHTML = gridHtml;
+        }
 
         function lockAndRemoveMonitor(u) {
             const btnHtml = `
-                <button id="confirmLockRemoveBtn" class="btn-book" style="flex:1; margin-top:0; background:var(--danger);">DELETE MONITOR</button>
-                <button id="cancelLockRemoveBtn" class="btn-toggle" style="flex:1; margin-top:0;">CANCEL</button>
+                <button id="confirmLockRemoveBtn" class="btn btn-danger" style="flex:1;">DELETE</button>
+                <button id="cancelLockRemoveBtn" class="btn btn-chat" style="flex:1;">CANCEL</button>
             `;
             showAppAlert("DELETE CHILD FROM MONITOR? This clears support history permanently.", "CONFIRM DELETION", null, btnHtml);
 
@@ -966,310 +1105,231 @@ if (hasPending) {
                 const db = await getDB(); 
                 await db.transaction(storeName, "readwrite").objectStore(storeName).delete(u); 
 
-                                await authFetch('/api/parent/remove_monitor', {
+                await authFetch('/api/parent/remove_monitor', {
                     method: 'POST', headers: {'Content-Type':'application/json'},
                     body: JSON.stringify({ child_username: u })
                 });
                 syncSafetyAndStatus();
             };
         }
-       async function openTripleIdentityChat(roomId, title, trgPhoto) {
-    currentSupportTarget = roomId;
-    currentRoomType = "triple_party_matrix";
 
-    try {
-        const roomRes = await authFetch('/api/parent/get_child_room', {
-            method: 'POST', headers: {'Content-Type':'application/json'},
-            body: JSON.stringify({ child_username: roomId, room_type: 'principal' })
-        });
-        const roomJson = await roomRes.json();
+        async function openTripleIdentityChat(roomId, title, trgPhoto) {
+            currentSupportTarget = roomId;
+            currentRoomType = "triple_party_matrix";
 
-        if (!roomJson.room) {
-            showAppAlert("No principal room found for this child.");
-            return;
+            try {
+                const roomRes = await authFetch('/api/parent/get_child_room', {
+                    method: 'POST', headers: {'Content-Type':'application/json'},
+                    body: JSON.stringify({ child_username: roomId, room_type: 'principal' })
+                });
+                const roomJson = await roomRes.json();
+
+                if (!roomJson.room) {
+                    showAppAlert("No principal room found for this child.");
+                    return;
+                }
+
+                const principalRes2 = await authFetch('/api/users/lookup', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ usernames: [roomJson.room.partner_username] }) });
+                const principalJson2 = await principalRes2.json();
+                const principal = (principalJson2.users || [])[0] || null;
+
+                const principalName = principal?.name || "Principal";
+                const principalPhoto = principal?.photo || `https://ui-avatars.com/api/?name=${encodeURIComponent(principalName)}`;
+
+                openSupportChat(roomId, `Principal: ${principalName}`, "triple_party_matrix", principalPhoto);
+            } catch (err) {
+                console.error(err);
+                showAppAlert("Failed to load principal chat.");
+            }
         }
 
-        const principalRes2 = await authFetch('/api/users/lookup', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ usernames: [roomJson.room.partner_username] }) });
-        const principalJson2 = await principalRes2.json();
-        const principal = (principalJson2.users || [])[0] || null;
+        async function openMotherToDriverChat(childUsername, childRealName) {
+            currentSupportTarget = childUsername;
+            currentRoomType = "parent_driver_matrix";
 
-        const principalName = principal?.name || "Principal";
-        const principalPhoto = principal?.photo || `https://ui-avatars.com/api/?name=${principalName}`;
+            try {
+                const roomRes = await authFetch('/api/parent/get_child_room', {
+                    method: 'POST', headers: {'Content-Type':'application/json'},
+                    body: JSON.stringify({ child_username: childUsername, room_type: 'driver' })
+                });
+                const roomJson = await roomRes.json();
 
-        openSupportChat(roomId, `Principal: ${principalName}`, "triple_party_matrix", principalPhoto);
-    } catch (err) {
-        console.error(err);
-        showAppAlert("Failed to load principal chat.");
-    }
-}
+                if (!roomJson.room || !roomJson.room.partner_username) {
+                    showAppAlert(`Chat Locked: Your child (${childRealName}) has no accepted driver allocation active at the moment. Transport communication lines will unlock once a driver accepts their ride request.`, "CHAT LOCKED 🔒");
+                    return;
+                }
 
-async function openMotherToDriverChat(childUsername, childRealName) {
-    currentSupportTarget = childUsername;
-    currentRoomType = "parent_driver_matrix";
+                const driverU = roomJson.room.partner_username;
+                const driverRes2 = await authFetch('/api/users/lookup', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ usernames: [driverU] }) });
+                const driverJson2 = await driverRes2.json();
+                const driver = (driverJson2.users || [])[0] || null;
 
-    try {
-        const roomRes = await authFetch('/api/parent/get_child_room', {
-            method: 'POST', headers: {'Content-Type':'application/json'},
-            body: JSON.stringify({ child_username: childUsername, room_type: 'driver' })
-        });
-        const roomJson = await roomRes.json();
+                const driverName = driver?.name || "Driver";
+                const driverPhoto = driver?.photo || `https://ui-avatars.com/api/?name=${encodeURIComponent(driverName)}&background=27ae60&color=fff`;
 
-        if (!roomJson.room || !roomJson.room.partner_username) {
-            showAppAlert(`Chat Locked: Your child (${childRealName}) has no accepted driver allocation active at the moment. Transport communication lines will unlock once a driver accepts their ride request.`, "CHAT LOCKED 🔒");
-            return;
+                openSupportChat(childUsername, `Driver: ${driverName}`, "parent_driver_matrix", driverPhoto);
+            } catch (err) {
+                console.error("Mother-Driver chat session link crash:", err);
+                showAppAlert("Security configuration mapping failed to build communication line.");
+            }
         }
-
-        const driverU = roomJson.room.partner_username;
-        const driverRes2 = await authFetch('/api/users/lookup', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ usernames: [driverU] }) });
-        const driverJson2 = await driverRes2.json();
-        const driver = (driverJson2.users || [])[0] || null;
-
-        const driverName = driver?.name || "Driver";
-        const driverPhoto = driver?.photo || `https://ui-avatars.com/api/?name=${encodeURIComponent(driverName)}&background=27ae60&color=fff`;
-
-        openSupportChat(childUsername, `Driver: ${driverName}`, "parent_driver_matrix", driverPhoto);
-    } catch (err) {
-        console.error("Mother-Driver chat session link crash:", err);
-        showAppAlert("Security configuration mapping failed to build communication line.");
-    }
-}
-
         
         function setChatBackground() {
+            const isLight = document.body.classList.contains('light-mode');
             const myPic = sessionStorage.getItem('userPhoto'); const chatDiv = document.getElementById('supportChatMessages');
             if (myPic && myPic !== "null" && myPic !== "") {
-                chatDiv.style.backgroundImage = `linear-gradient(rgba(15, 23, 42, 0.92), rgba(2, 2, 24, 0.98)), url('${myPic}')`;
+                const overlay = isLight ? 'rgba(240, 242, 245, 0.95), rgba(240, 242, 245, 0.95)' : 'rgba(11, 20, 26, 0.95), rgba(11, 20, 26, 0.95)';
+                chatDiv.style.backgroundImage = `linear-gradient(${overlay}), url('${myPic}')`;
                 chatDiv.style.backgroundSize = "cover"; chatDiv.style.backgroundPosition = "center";
-            } else { chatDiv.style.backgroundImage = "none"; chatDiv.style.backgroundColor = "#0f172a"; }
+            } else { chatDiv.style.backgroundImage = "none"; chatDiv.style.backgroundColor = isLight ? "var(--bg-grad-1)" : "var(--primary)"; }
         }
 
         function openSupportChat(tid, title, baseChildName, targetPhotoUrl) { 
-    currentSupportTarget = tid; 
-    currentRoomType = baseChildName; 
-    
-    document.getElementById('chatTargetAvatar').src = 
-        (targetPhotoUrl && targetPhotoUrl !== "null" && targetPhotoUrl !== "")
-        ? targetPhotoUrl 
-        : `https://ui-avatars.com/api/?name=${encodeURIComponent(title)}&background=3498db&color=fff`;
+            currentSupportTarget = tid; 
+            currentRoomType = baseChildName; 
+            
+            document.getElementById('chatTargetAvatar').src = 
+                (targetPhotoUrl && targetPhotoUrl !== "null" && targetPhotoUrl !== "")
+                ? targetPhotoUrl 
+                : `https://ui-avatars.com/api/?name=${encodeURIComponent(title)}&background=3498db&color=fff`;
 
-    document.getElementById('supportChatTitle').innerText = title; 
-    setChatBackground(); 
-    document.getElementById('supportChatOverlay').classList.add('show'); 
+            document.getElementById('supportChatTitle').innerText = title; 
+            setChatBackground(); 
+            document.getElementById('supportChatOverlay').style.display = 'flex'; 
 
-    const cacheKey = `cache_support_${baseChildName}_${tid}`;
-    const cachedMessages = localStorage.getItem(cacheKey);
+            const cacheKey = `cache_support_${baseChildName}_${tid}`;
+            const cachedMessages = localStorage.getItem(cacheKey);
 
-    if (cachedMessages) {
-        document.getElementById('supportChatMessages').innerHTML = cachedMessages;
-        document.getElementById('supportChatMessages').scrollTop = 
-            document.getElementById('supportChatMessages').scrollHeight;
-    } else {
-        document.getElementById('supportChatMessages').innerHTML =
-            '<p style="text-align:center; color:gray; font-size:11px; padding:20px;">Establishing connection pipeline...</p>';
-    }
+            if (cachedMessages) {
+                document.getElementById('supportChatMessages').innerHTML = cachedMessages;
+                document.getElementById('supportChatMessages').scrollTop = 
+                    document.getElementById('supportChatMessages').scrollHeight;
+            } else {
+                document.getElementById('supportChatMessages').innerHTML = '';
+            }
 
-    syncChat(); 
-}
-
-        function closeSupportChat() { document.getElementById('supportChatOverlay').classList.remove('show'); currentSupportTarget = null; currentRoomType = ""; syncSafetyAndStatus(); }
-
-
-function formatTime(timestamp) {
-    if (!timestamp) return "";
-
-    const d = new Date(timestamp);
-    const now = new Date();
-
-    const sameDay =
-        d.getDate() === now.getDate() &&
-        d.getMonth() === now.getMonth() &&
-        d.getFullYear() === now.getFullYear();
-
-    if (sameDay) {
-        return d.toLocaleTimeString([], {
-            hour: '2-digit',
-            minute: '2-digit'
-        });
-    }
-
-    return d.toLocaleDateString([], {
-        day: '2-digit',
-        month: 'short'
-    }) + " " +
-    d.toLocaleTimeString([], {
-        hour: '2-digit',
-        minute: '2-digit'
-    });
-}
-
-     async function syncChat() { 
-    if(!currentSupportTarget || !currentRoomType) return; 
-    
-    const res = await authFetch('/api/support/get_history', { 
-        method: 'POST', 
-        headers: {'Content-Type': 'application/json'}, 
-        body: JSON.stringify({ 
-            child_username: currentSupportTarget,
-            room_type: currentRoomType 
-        }) 
-    }); 
-    const data = await res.json(); 
-
-    const seenKey = `${currentRoomType}_${currentSupportTarget}`;
-    lastSeenParentCounts[seenKey] = (data.messages || []).length;
-    localStorage.setItem('lastSeenParentCounts', JSON.stringify(lastSeenParentCounts));
-
-    const area = document.getElementById('supportChatMessages');
-    
-    // 1. SCAN FOR ALARMS: Look for the is_alarm flag in the history
-    (data.messages || []).forEach(m => {
-        // Only trigger if it's an alarm AND we haven't already processed it this session
-        if (m.is_alarm === true && !sessionStorage.getItem('triggered_' + m.timestamp)) {
-            sessionStorage.setItem('triggered_' + m.timestamp, 'true');
-            triggerSchoolOutAlarm(m.child_name); // Your existing function
+            syncChat(); 
         }
-    });
-    
-    // 2. RENDER MESSAGES
-    const newHtml = (data.messages || []).map(m => {
-        const isMe = m.sender_username === myU;
-        // Add a visual style if it's an alarm
-        const alarmStyle = m.is_alarm ? 'border: 2px solid var(--danger); background: #450a0a;' : '';
-        
-        return `<div style="padding:10px 14px; border-radius:15px; ${alarmStyle} background:${isMe ? '#3498db':'#334155'}; align-self:${isMe ? 'flex-end':'flex-start'}; color:white; font-size:12px; margin-bottom:5px; max-width:80%; box-shadow:0 4px 10px rgba(0,0,0,0.2);">
 
-    <small style="display:block; opacity:0.5; font-size:8px; margin-bottom:2px;">
-        ${escapeHtml(isMe ? 'YOU' : m.sender_username.toUpperCase())}
-    </small>
+        function closeSupportChat() { document.getElementById('supportChatOverlay').style.display = 'none'; currentSupportTarget = null; currentRoomType = ""; syncSafetyAndStatus(); }
 
-    <div>${escapeHtml(m.message)}</div>
+        function formatTime(timestamp) {
+            if (!timestamp) return "";
+            const d = new Date(timestamp);
+            const now = new Date();
+            const sameDay = d.getDate() === now.getDate() && d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
 
-    <small style="display:block; text-align:right; opacity:0.7; font-size:10px; margin-top:4px;">
-        ${formatTime(m.time || m.timestamp)}
-    </small>
+            if (sameDay) return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+            return d.toLocaleDateString([], { day: '2-digit', month: 'short' }) + " " + d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        }
 
-</div>`;
-    }).join(''); 
+        async function syncChat() { 
+            if(!currentSupportTarget || !currentRoomType) return; 
+            
+            const res = await authFetch('/api/support/get_history', { 
+                method: 'POST', headers: {'Content-Type': 'application/json'}, 
+                body: JSON.stringify({ child_username: currentSupportTarget, room_type: currentRoomType }) 
+            }); 
+            const data = await res.json(); 
 
-    if (area.innerHTML !== newHtml) {
-        area.innerHTML = newHtml;
-        area.scrollTop = area.scrollHeight;
-        
-        const cacheKey = `cache_support_${currentRoomType}_${currentSupportTarget}`;
-        localStorage.setItem(cacheKey, newHtml);
-    }
-}
+            const seenKey = `${currentRoomType}_${currentSupportTarget}`;
+            lastSeenParentCounts[seenKey] = (data.messages || []).length;
+            localStorage.setItem('lastSeenParentCounts', JSON.stringify(lastSeenParentCounts));
 
-// This runs independently of the chat window
-async function pollForAlarms() {
-    try {
-        const res = await authFetch('/api/support/get_all_alarms', { 
-            method: 'POST', 
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({ parent_username: myU }) 
-        });
-        const data = await res.json();
+            const area = document.getElementById('supportChatMessages');
+            
+            (data.messages || []).forEach(m => {
+                if (m.is_alarm === true && !sessionStorage.getItem('triggered_' + m.timestamp)) {
+                    sessionStorage.setItem('triggered_' + m.timestamp, 'true');
+                    triggerSchoolOutAlarm(m.child_name); 
+                }
+            });
+            
+            const newHtml = (data.messages || []).map(m => {
+                const isMe = m.sender_username === myU;
+                const alarmStyle = m.is_alarm ? 'border: 2px solid var(--danger); background: rgba(225,29,72,0.1); color: var(--danger);' : '';
+                
+                return `
+                <div class="msg ${isMe ? 'me' : 'them'}" style="${alarmStyle}">
+                    <div style="font-size:10px; font-weight:700; opacity:0.6; margin-bottom:4px; text-transform:uppercase;">${escapeHtml(isMe ? 'YOU' : m.sender_username)}</div>
+                    <div>${escapeHtml(m.message)}</div>
+                    <div class="msg-time">${formatTime(m.time || m.timestamp)}</div>
+                </div>`;
+            }).join(''); 
 
-        (data.alarms || []).forEach(m => {
-            // 1. Calculate how long ago the message was sent (in seconds)
-            const msgTime = new Date(m.timestamp).getTime();
-            const now = new Date().getTime();
-            const diffInSeconds = (now - msgTime) / 1000;
+            if (area.innerHTML !== newHtml) {
+                area.innerHTML = newHtml;
+                area.scrollTop = area.scrollHeight;
+                
+                const cacheKey = `cache_support_${currentRoomType}_${currentSupportTarget}`;
+                localStorage.setItem(cacheKey, newHtml);
+            }
+        }
 
-            // 2. Check: 
-            // - Is it an alarm?
-            // - Is it less than 5 minutes (300 seconds) old?
-            // - Is it linked to this parent?
-            // - Have we already processed it?
+        async function pollForAlarms() {
+            try {
+                const res = await authFetch('/api/support/get_all_alarms', { 
+                    method: 'POST', headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ parent_username: myU }) 
+                });
+                const data = await res.json();
 
-            console.log("Alarm from server:", m);
+                (data.alarms || []).forEach(m => {
+                    const msgTime = new Date(m.timestamp).getTime();
+                    const now = new Date().getTime();
+                    const diffInSeconds = (now - msgTime) / 1000;
 
-console.log("Children in vault:");
-console.log(vaultChildrenCache);
-            const matchedChildren = vaultChildrenCache.filter(
-    child => child.school_code === m.child_name
-);
-console.log("Matched children:", matchedChildren);
+                    const matchedChildren = vaultChildrenCache.filter(child => child.school_code === m.child_name);
+                    const alreadySeen = sessionStorage.getItem('triggered_' + m.timestamp);
 
-const alreadySeen = sessionStorage.getItem('triggered_' + m.timestamp);
+                    if (m.is_alarm === true && matchedChildren.length > 0 && diffInSeconds < 300 && !alreadySeen) {
+                        sessionStorage.setItem('triggered_' + m.timestamp, 'true');
+                        const childNames = matchedChildren.map(c => c.name).join(", ");
+                        triggerSchoolOutAlarm(m.school_name, `${childNames} have been officially released from school.`);
+                    }
+                });
+            } catch (e) {}
+        }
 
-if (
-    m.is_alarm === true &&
-    matchedChildren.length > 0 &&
-    diffInSeconds < 300 &&
-    !alreadySeen
-) {
-    sessionStorage.setItem('triggered_' + m.timestamp, 'true');
+        async function sendSupportMessage() { 
+            const i = document.getElementById('supportChatInput'); 
+            const msgText = i.value.trim();
+            if(!msgText || !currentRoomType || !currentSupportTarget) return; 
+            
+            const area = document.getElementById('supportChatMessages');
+            area.innerHTML += `<div class="msg me"><div>${escapeHtml(msgText)}</div></div>`;
+            area.scrollTop = area.scrollHeight; 
+            i.value = ""; 
 
-    const childNames = matchedChildren.map(c => c.name).join(", ");
-
-    triggerSchoolOutAlarm(
-        m.child_name,
-        m.school_name,
-        `${childNames} have been officially released from school.`
-    );
-}
-        });
-    } catch (e) {
-        console.log("Polling error:", e);
-    }
-}
-          async function sendSupportMessage() { 
-    const i = document.getElementById('supportChatInput'); 
-    const msgText = i.value.trim();
-    if(!msgText || !currentRoomType || !currentSupportTarget) return; 
-    
-    const area = document.getElementById('supportChatMessages');
-    area.innerHTML += `
-        <div style="padding:10px 14px; border-radius:15px; background:#3498db; align-self:flex-end; color:white; font-size:12px; margin-bottom:5px; max-width: 80%; box-shadow: 0 4px 10px rgba(0,0,0,0.2);">
-            <small style="display:block; opacity:0.5; font-size:8px; margin-bottom:2px;">YOU</small>
-            ${escapeHtml(msgText)}
-        </div>`;
-    area.scrollTop = area.scrollHeight; 
-    i.value = ""; 
-
-    try {
-        await authFetch('/api/support/send_msg', { 
-            method: 'POST', 
-            headers: {'Content-Type': 'application/json'}, 
-            body: JSON.stringify({ 
-                room_id: currentSupportTarget,
-                room_type: currentRoomType,
-                message: msgText 
-            }) 
-        });
-
-        syncChat();
-    } catch (err) {
-        console.error("Message processing stream crashed:", err);
-    }
-}
-        function handleLedgerDelete() {
-            const searchVal = document.getElementById('ledgerSearch').value.trim().toLowerCase();
-            const btnHtml = `
-                <button id="confirmLedgerDelBtn" class="btn-book" style="flex:1; margin-top:0; background:var(--danger);">DELETE</button>
-                <button id="cancelLedgerDelBtn" class="btn-toggle" style="flex:1; margin-top:0;">CANCEL</button>
-            `;
-            showAppAlert(`Delete ${searchVal || 'all'} logs?`, "CONFIRM DELETION", null, btnHtml);
-
-            document.getElementById("cancelLedgerDelBtn").onclick = function() { closeAppAlert(); };
-            document.getElementById("confirmLedgerDelBtn").onclick = function() {
-                closeAppAlert();
-                document.getElementById('historyTableBody').innerHTML = '<tr><td colspan="4" style="text-align:center; color:gray;">All logs deleted.</td></tr>';
-            };
+            try {
+                await authFetch('/api/support/send_msg', { 
+                    method: 'POST', headers: {'Content-Type': 'application/json'}, 
+                    body: JSON.stringify({ room_id: currentSupportTarget, room_type: currentRoomType, message: msgText }) 
+                });
+                syncChat();
+            } catch (err) {}
         }
 
         function downloadPDF() { 
             const { jsPDF } = window.jspdf; const doc = new jsPDF(); 
-            doc.setFillColor(2, 2, 24); doc.rect(0, 0, 210, 35, 'F');
-            doc.setTextColor(255, 255, 255); doc.setFontSize(22); doc.text("SAFE DRIVE TRANSCRIPT LEDGER", 14, 20);
-            doc.autoTable({ html: '#safetyTable', startY: 45 }); doc.save("Safe_Drive_Ledger.pdf"); 
+            doc.setFillColor(11, 20, 26); doc.rect(0, 0, 210, 40, 'F');
+            doc.setTextColor(255, 255, 255); doc.setFontSize(22); doc.text("SAFE DRIVE LOGISTICS", 14, 25);
+            doc.setTextColor(100, 100, 100); doc.setFontSize(10); doc.text("PARENT TRAVEL TRANSCRIPT", 14, 35);
+            doc.autoTable({ html: '#safetyTable', startY: 45, headStyles: { fillColor: [37, 211, 102] } }); doc.save("Safe_Drive_Ledger.pdf"); 
         }
 
-        function logout() { sessionStorage.clear(); const req = indexedDB.deleteDatabase(dbName); req.onsuccess = () => window.location.replace("login.html"); } 
-        function toggleSection(id, btn) { const el = document.getElementById(id); el.style.display = (el.style.display==='none'?'block':'none'); btn.innerText=(el.style.display==='none'?'VIEW':'HIDE'); } 
-        window.onload = () => { initDashboard(); setInterval(syncSafetyAndStatus, 5000); setInterval(syncChat, 3000); setInterval(pollForAlarms, 5000); setInterval(loadNegotiationList, 4000); }; 
-        setInterval(() => { document.getElementById('liveClock').innerText = new Date().toLocaleTimeString(); }, 2000); 
+        function logout() { 
+            sessionStorage.clear(); 
+            window.location.replace("login.html"); 
+        } 
+        
+        window.onload = () => { 
+            initDashboard(); 
+            setInterval(syncSafetyAndStatus, 5000); 
+            setInterval(syncChat, 3000); 
+            setInterval(pollForAlarms, 5000); 
+            setInterval(loadNegotiationList, 4000); 
+        }; 
     </script> 
 </body> 
 </html>
