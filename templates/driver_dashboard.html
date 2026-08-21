@@ -245,10 +245,6 @@
             </button>
             
             <div style="height: 1px; background: var(--border); margin: 10px 20px;"></div>
-            
-            <button class="drawer-item" style="color: var(--danger);" onclick="triggerSchoolOutAction()">
-                <span class="ico">🚨</span> Trigger School Out
-            </button>
 
             <button class="drawer-item" onclick="toggleTheme()">
                 <span class="ico" id="themeIcon">🌓</span> Light/Dark Mode
@@ -585,29 +581,6 @@
                  if (count > 0) { drawerEl.innerText = count; drawerEl.style.display = 'inline-block'; }
                  else { drawerEl.style.display = 'none'; }
             }
-        }
-
-        function triggerSchoolOutAction() {
-            closeDrawer();
-            const btnHtml = `
-                <button id="confirmAlertBtn" class="btn btn-danger" style="flex:1;">BROADCAST</button>
-                <button id="cancelAlertBtn" class="btn btn-chat" style="flex:1;">CANCEL</button>
-            `;
-            showAppAlert("Broadcast dismissal alert to parents?", "TRIGGER SCHOOL OUT", null, btnHtml);
-            
-            document.getElementById("cancelAlertBtn").onclick = function() { closeAppAlert(); };
-            document.getElementById("confirmAlertBtn").onclick = async function() {
-                closeAppAlert();
-                try {
-                    const res = await authFetch('/api/principal/school_out', {
-                        method: 'POST', headers: {'Content-Type':'application/json'},
-                        body: JSON.stringify({ school_code: driverSchoolCodes[0] || "GLOBAL" })
-                    });
-                    showAppAlert("Dismissal alert broadcasted securely.", "SUCCESS");
-                } catch(e) {
-                    showAppAlert("Network error broadcasting dismissal alert.", "ERROR");
-                }
-            };
         }
 
         function triggerSchoolOutAlarm(schoolName) {
