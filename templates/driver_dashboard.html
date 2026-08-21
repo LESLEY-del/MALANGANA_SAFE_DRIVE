@@ -536,9 +536,9 @@
         // --- Mock Fetch for Sandbox (Allows UI to work without real backend) ---
         const originalFetch = window.fetch;
         window.fetch = async function(url, options) {
-            if(url.includes('api/users/lookup')) return new Response(JSON.stringify({users:[]}), {status: 200});
-            if(url.includes('api/profile/get_self')) return new Response(JSON.stringify({status:'success', profile:{ transport_type: sessionStorage.getItem('userRole') === 'driver' ? 'door_to_door' : null, created_at: Date.now() - 86400000, photo: 'https://ui-avatars.com/api/?name=Driver' }}), {status: 200});
-            if(url.includes('api/get_my_bookings')) {
+            if(url.includes('/api/users/lookup')) return new Response(JSON.stringify({users:[]}), {status: 200});
+            if(url.includes('/api/profile/get_self')) return new Response(JSON.stringify({status:'success', profile:{ transport_type: sessionStorage.getItem('userRole') === 'driver' ? 'door_to_door' : null, created_at: Date.now() - 86400000, photo: 'https://ui-avatars.com/api/?name=Driver' }}), {status: 200});
+            if(url.includes('/api/get_my_bookings')) {
                 // Return dummy data for UI visualization
                 return new Response(JSON.stringify({
                     bookings: [
@@ -549,10 +549,10 @@
                     ]
                 }), {status: 200});
             }
-            if(url.includes('api/driver/get_parent_rooms')) return new Response(JSON.stringify({rooms:[]}), {status: 200});
-            if(url.includes('api/support/get_all_counts')) return new Response(JSON.stringify({counts:{}}), {status: 200});
-            if(url.includes('api/posts/get_all')) return new Response(JSON.stringify({status:'success', posts:[]}), {status: 200});
-            if(url.includes('api/support/get_all_alarms')) return new Response(JSON.stringify({alarms:[]}), {status: 200});
+            if(url.includes('/api/driver/get_parent_rooms')) return new Response(JSON.stringify({rooms:[]}), {status: 200});
+            if(url.includes('/api/support/get_all_counts')) return new Response(JSON.stringify({counts:{}}), {status: 200});
+            if(url.includes('/api/posts/get_all')) return new Response(JSON.stringify({status:'success', posts:[]}), {status: 200});
+            if(url.includes('/api/support/get_all_alarms')) return new Response(JSON.stringify({alarms:[]}), {status: 200});
             
             // For all other requests, mock success
             return new Response(JSON.stringify({status: 'success'}), {status: 200});
@@ -1331,7 +1331,6 @@
                     
                     if (!isEventTrip) {
                         const parentProfile = parentProfilesMap[linkedMotherUsername];
-                        
                         if (linkedMotherUsername && parentProfile) {
                             const motherRealName = parentProfile.name || "Mother";
                             const motherPhotoUrl = parentProfile.photo ? parentProfile.photo : `https://ui-avatars.com/api/?name=${encodeURIComponent(motherRealName)}&background=8e44ad&color=fff`;
@@ -1339,7 +1338,7 @@
                             motherBtnHtml = `
                             <div class="mother-btn-wrapper">
                                 <div style="display:flex; align-items:center; gap:10px;">
-                                    <img src="${motherPhotoUrl}" style="width:32px; height:32px; border-radius:50%; object-fit:cover; border:2px solid transparent;" onclick="viewFullProfile('${motherPhotoUrl}')" title="View Mother Profile">
+                                    <img src="${motherPhotoUrl}" style="width:32px; height:32px; border-radius:50%; object-fit:cover; border:2px solid transparent;" onclick="viewFullProfile('${motherPhotoUrl}')">
                                     <div style="display:flex; flex-direction:column; text-align:left;">
                                         <span style="font-size:12px; font-weight:700; color:var(--text-main);">${escapeHtml(motherRealName)}</span>
                                         <span style="font-size:10px; color:var(--text-muted);">Parent Account</span>
@@ -1351,7 +1350,7 @@
                                 </button>
                             </div>`;
                         } else {
-                            motherBtnHtml = `<div class="mother-btn-wrapper" style="opacity:0.6; justify-content: center;"><span style="font-size: 11px; font-weight: bold; color: var(--text-muted);">PARENT UNLINKED 🔒</span></div>`;
+                            motherBtnHtml = `<div class="mother-btn-wrapper" style="justify-content: center;"><span style="font-size: 11px; font-weight: 600; color: var(--text-muted);">PARENT UNLINKED 🔒</span></div>`;
                         }
                     }
 
@@ -1361,9 +1360,9 @@
 
                     const rowActiveHtml = `
                     <div class="list-row" id="row-${escapeHtml(b.booking_id)}">
-                        <div style="display:flex; align-items:center; gap:15px; width: 100%; margin-bottom: 5px;">
+                        <div style="display:flex; align-items:center; gap:15px; width: 100%;">
                             <img src="${sPhoto}" class="student-avatar" onclick="viewFullProfile('${sPhoto}')">
-                            <div style="display:flex; flex-direction:column; gap:4px; flex: 1; min-width: 0;">
+                            <div style="display:flex; flex-direction:column; flex: 1; min-width: 0;">
                                 <b style="font-size:16px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--text-main);">${escapeHtml(b.student_name)}</b>
                                 <span class="status-tag">${escapeHtml(tStatus).toUpperCase()}</span>
                             </div>
@@ -1371,7 +1370,7 @@
                         ${!isEventTrip ? `${motherBtnHtml}` : ""}
                         <div class="btn-group-grid">
                             <button class="btn btn-pickup" ${pickupDisabled} onclick="updateTrack('${escapeHtml(b.booking_id)}', 'pickup', '${escapeHtml(b.student_name)}')">Pickup</button> 
-                            <button class="btn btn-dropoff" ${dropDisabled} onclick="updateTrack('${escapeHtml(b.booking_id)}', 'dropoff', '${escapeHtml(b.student_name)}')">Drop</button> 
+                            <button class="btn btn-dropoff" ${dropDisabled} onclick="updateTrack('${escapeHtml(b.booking_id)}', 'dropoff', '${escapeHtml(b.student_name)}')">Dropoff</button> 
                             <button class="btn btn-chat" onclick="openStudentChat('${escapeHtml(b.booking_id)}', '${escapeHtml(b.driver_username)}', '${escapeHtml(b.student_name)}', '${sPhoto}', ${isDoorToDoor})">${chatLabel}</button>
                             <button class="btn btn-remove" onclick="terminateTrip('${escapeHtml(b.booking_id)}', '${escapeHtml(b.student_name)}')">Finish</button>
                         </div>
@@ -1380,8 +1379,8 @@
                     if (isDoorToDoor) eventActiveHtml += rowActiveHtml; else schoolActiveHtml += rowActiveHtml;
                 }
                 
-                document.getElementById('activeFleet').innerHTML = schoolActiveHtml || '<p style="padding:30px 20px; color:var(--text-muted); text-align:center; font-size:14px;">No active institutional school passengers.</p>';
-                document.getElementById('eventActiveFleet').innerHTML = eventActiveHtml || '<p style="padding:30px 20px; color:var(--text-muted); text-align:center; font-size:14px;">No active event bookings traveling.</p>';
+                document.getElementById('activeFleet').innerHTML = schoolActiveHtml || '<p style="padding:30px 20px; color:var(--text-muted); text-align:center; font-size:14px;">No active school passengers.</p>';
+                document.getElementById('eventActiveFleet').innerHTML = eventActiveHtml || '<p style="padding:30px 20px; color:var(--text-muted); text-align:center; font-size:14px;">No active event bookings.</p>';
 
                 updateBadge('badgeSchoolActive', schoolUnreadTotal);
                 updateBadge('badgeEventActive', eventUnreadTotal);
@@ -1398,7 +1397,7 @@
             const chatDiv = document.getElementById('chatMessages');
             
             if (myPic && myPic !== "null" && myPic !== "") {
-                const overlay = isLight ? 'rgba(248, 250, 252, 0.93), rgba(226, 232, 240, 0.95)' : 'rgba(15, 23, 42, 0.92), rgba(2, 2, 24, 0.98)';
+                const overlay = isLight ? 'rgba(240, 242, 245, 0.95), rgba(240, 242, 245, 0.95)' : 'rgba(11, 20, 26, 0.95), rgba(11, 20, 26, 0.95)';
                 chatDiv.style.backgroundImage = `linear-gradient(${overlay}), url('${myPic}')`;
                 chatDiv.style.backgroundSize = "cover";
                 chatDiv.style.backgroundPosition = "center";
@@ -1547,7 +1546,7 @@
 
         function renderMessages(chat) { 
             const area = document.getElementById('chatMessages');
-            const newHtml = (chat || []).map(m => `<div class="msg ${m.sender === myU ? 'me' : 'them'}">${escapeHtml(m.text || m.message)} <div class="msg-time">${escapeHtml(m.time || '')}</div></div>`).join('');
+            const newHtml = (chat || []).map(m => `<div class="msg ${m.sender === myU ? 'me' : 'them'}">${escapeHtml(m.text || m.message)} <span class="msg-time">${escapeHtml(m.time || '')}</span></div>`).join('');
             
             if (area.innerHTML !== newHtml) {
                 area.innerHTML = newHtml;
