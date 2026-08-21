@@ -79,9 +79,9 @@
         /* Larger Profile Picture Area */
         .profile-area { display: flex; align-items: center; justify-content: center; cursor: pointer; padding: 2px;}
         .initials-avatar {
-            width: 42px; height: 42px; border-radius: 50%; object-fit: cover;
+            width: 48px; height: 48px; border-radius: 50%; object-fit: cover;
             border: 2px solid var(--accent); cursor: pointer; transition: 0.2s;
-            background: var(--accent); color: white; display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 14px;
+            background: var(--accent); color: white; display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 16px;
             box-shadow: 0 0 10px rgba(52, 152, 219, 0.4);
         }
         .initials-avatar:hover { transform: scale(1.08); }
@@ -223,7 +223,7 @@
         .reg-row.unlocked { cursor: pointer; }
         .reg-row.unlocked:hover, .reg-row.unlocked:active { background: var(--hover-bg); }
         .reg-img {
-            width: 50px; height: 50px; border-radius: 50%; object-fit: cover;
+            width: 65px; height: 65px; border-radius: 50%; object-fit: cover;
             border: 2px solid transparent; cursor: pointer; transition: 0.2s;
             flex-shrink: 0;
         }
@@ -293,12 +293,13 @@
             .header { padding: 0.75rem 3.5%; }
             .header h1 { font-size: 0.95rem; }
             .header-overwatch { font-size: 9px; }
-            .initials-avatar { width: 38px; height: 38px; font-size: 12px; }
+            .initials-avatar { width: 44px; height: 44px; font-size: 14px; }
             .card-header { padding: 14px 16px; }
             .card-header h4 { font-size: 0.75rem; }
             .search-box { width: 100%; font-size: 12px; padding: 10px 12px; }
             .btn-action { padding: 12px 14px; font-size: 10px; }
             .reg-row { padding: 14px 16px; gap: 14px; }
+            .reg-img { width: 55px; height: 55px; }
             .reg-name { font-size: 15px; }
             .reg-sub { font-size: 13px; }
             th, td { padding: 12px 12px; font-size: 0.75rem; }
@@ -644,6 +645,12 @@
                 document.getElementById(viewId).classList.add('active');
                 document.querySelectorAll('.drawer-item[data-view]').forEach(b => b.classList.remove('active'));
                 if (btn) btn.classList.add('active');
+                
+                // Hide footer when in "Registered Students" view to maximize screen space
+                const footer = document.querySelector('.site-footer');
+                if (footer) {
+                    footer.style.display = (viewId === 'view-students') ? 'none' : 'flex';
+                }
             }
             closeDrawer();
             window.scrollTo({ top: 0, behavior: 'smooth' });
