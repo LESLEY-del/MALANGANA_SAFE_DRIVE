@@ -373,6 +373,16 @@
     </div> 
 
     <script> 
+        // --- Core AuthFetch (Required for database pipelines) ---
+        async function authFetch(url, options = {}) {
+            const token = sessionStorage.getItem('authToken');
+            const headers = new Headers(options.headers || {});
+            if (token) {
+                headers.set('Authorization', 'Bearer ' + token);
+            }
+            return fetch(url, { ...options, headers });
+        }
+
         // --- Theme Management ---
         function toggleTheme() {
             const isLight = document.body.classList.toggle('light-mode');
@@ -562,13 +572,16 @@
             if(!file) return;
 
             closeProfileMenu();
-            showAppAlert("Uploading the image to secure storage... Please wait.", "VERIFICATION");
+            showAppAlert("AI Engine is scanning and uploading the image to secure storage... Please wait.", "SYSTEM VERIFICATION");
 
             try {
                 const formData = new FormData();
                 formData.append('photo', file);
 
-                const res = await authFetch('/api/profile/upload_photo', { method: 'POST', body: formData });
+                const res = await authFetch('/api/profile/upload_photo', {
+                    method: 'POST',
+                    body: formData
+                });
                 const data = await res.json();
 
                 if (data.status === 'success') {
@@ -848,9 +861,12 @@
                 const driverPhoto = d.photo ? d.photo : `https://ui-avatars.com/api/?name=${encodeURIComponent(d.name || 'D')}&background=3498db&color=fff&size=256`;
                 const isPendingWithDriver = pending.some(b => b.driver_username === d.username && b.message && b.message.includes('[PRIVATE]'));
                 
-                let btnHtml = isPendingWithDriver
-                    ? `<button class="btn btn-warning" disabled style="margin-top:4px;">PENDING APPROVAL</button>`
-                    : `<button id="req-btn-${escapeHtml(d.username)}" class="btn btn-secondary" onclick="openRequestModal('${escapeHtml(d.username)}', '${escapeHtml(d.name)}', 'Private')" style="margin-top:4px;">HIRE NOW</button>`;
+                let btnHtml = "";
+                if (isPendingWithDriver) {
+                    btnHtml = `<button class="btn" style="background:var(--warning); color:#020218; width:100%;" disabled>PENDING</button>`;
+                } else {
+                    btnHtml = `<button id="req-btn-${escapeHtml(d.username)}" class="btn btn-secondary" onclick="openRequestModal('${escapeHtml(d.username)}', '${escapeHtml(d.name)}', 'Private')">HIRE NOW</button>`;
+                }
 
                 const serviceType = (d.transport_type || d.driver_mode || 'PRIVATE').toUpperCase().replace(/_/g, ' ');
 
@@ -902,7 +918,7 @@
             document.getElementById('requestModalOverlay').classList.remove('show');
             
             const btn = document.getElementById(`req-btn-${targetDriverUser}`);
-            if(btn) { btn.innerText = "PENDING"; btn.disabled = true; btn.className = "btn btn-warning"; }
+            if(btn) { btn.innerText = "PENDING"; btn.disabled = true; btn.style.background = "var(--warning)"; btn.style.color = "#020218"; }
 
             try {
                 await authFetch('/api/student/book', { 
