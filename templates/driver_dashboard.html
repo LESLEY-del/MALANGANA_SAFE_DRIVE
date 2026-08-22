@@ -80,7 +80,7 @@
         .hamburger-btn span { display: block; width: 22px; height: 2px; background: white; border-radius: 2px; }
         
         .header-titles { flex: 1; min-width: 0; margin-left: 5px;}
-        .header h1 { margin: 0; font-size: 1.15rem; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .header h1 { margin: 0; font-size: 1.15rem; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; cursor: pointer; }
         .header-overwatch { font-size: 11px; opacity:0.85; display:block; margin-top:2px; white-space: nowrap; font-weight: 400;}
         .header-right { display:flex; align-items:center; gap:12px; flex-shrink: 0; }
         
@@ -211,7 +211,7 @@
             <span></span><span></span><span></span>
         </button>
         <div class="header-titles">
-            <h1>DRIVER COMMAND</h1>
+            <h1 onclick="switchView('view-home', null)">DRIVER COMMAND</h1>
             <span class="header-overwatch" id="liveClock">00:00:00</span>
         </div>
         <div class="header-right">
@@ -576,11 +576,10 @@
         let driverSchoolCodes = [];
         let allSystemStudents = []; 
         let backendFinished = []; 
-        let alarmTimeout; 
-        let audioMuteTimeout;
+        let alarmTimeout = null; 
+        let audioMuteTimeout = null;
         let lastSeenCounts = JSON.parse(localStorage.getItem('lastSeenMsgCounts') || '{}');
 
-        // Centralized UI Badge Updater (Updates both the specific ID and its Drawer counterpart)
         function updateBadge(id, count) {
             const el = document.getElementById(id);
             if (el) {
@@ -597,12 +596,14 @@
         }
 
         function triggerSchoolOutAlarm(schoolName) {
-           document.getElementById('alarmMessage').innerText = `Students at ${schoolName} have been officially released.`;
+            document.getElementById('alarmMessage').innerText = `Students at ${schoolName} have been officially released.`;
             document.getElementById('alarmOverlay').classList.add('show');
 
-            // Set the 60-second "grace period" timer
+            if(alarmTimeout) clearTimeout(alarmTimeout);
+            if(audioMuteTimeout) clearTimeout(audioMuteTimeout);
+
             alarmTimeout = setTimeout(() => {
-                console.log("60 seconds passed, triggering audio...");
+                alarmAudio.volume = 1;
                 alarmAudio.play().catch(e => console.log("Audio play blocked: ", e));
                 
                 audioMuteTimeout = setTimeout(() => { 
@@ -630,18 +631,15 @@
                         }
                     });
                 }
-            } catch (e) {
-                console.log("Polling error:", e);
-            }
+            } catch (e) { }
         }
 
         function acknowledgeAlarm() {
             document.getElementById('alarmOverlay').classList.remove('show');
-            clearTimeout(alarmTimeout); 
-            clearTimeout(audioMuteTimeout);
+            if(alarmTimeout) clearTimeout(alarmTimeout); 
+            if(audioMuteTimeout) clearTimeout(audioMuteTimeout);
             alarmAudio.pause(); 
             alarmAudio.currentTime = 0;
-            console.log("Alarm acknowledged - countdown cancelled.");
         }
 
         async function authFetch(url, options = {}) {
@@ -778,7 +776,6 @@
                         document.getElementById('profileWarningBanner').style.display = 'none';
                     }
 
-                    // Role based Drawer Item Display
                     if(!userRole) {
                         document.getElementById('selectionBoard').style.display = "block";
                     } else {
@@ -788,7 +785,6 @@
                             document.getElementById('d2dDashboard').style.display = "block";
                             document.getElementById('schoolCodeManagement').style.display = "none";
                             
-                            // Adjust drawer items
                             document.getElementById('drawerItemSchoolReq').style.display = "none";
                             document.getElementById('drawerItemSchoolActive').style.display = "none";
                             document.getElementById('drawerItemEventReq').style.display = "flex";
@@ -797,7 +793,6 @@
                             document.getElementById('d2dDashboard').style.display = "none";
                             document.getElementById('schoolCodeManagement').style.display = "block";
                             
-                            // Show all options
                             document.getElementById('drawerItemSchoolReq').style.display = "flex";
                             document.getElementById('drawerItemSchoolActive').style.display = "flex";
                             document.getElementById('drawerItemEventReq').style.display = "flex";
@@ -1335,7 +1330,13 @@
                         msgCount = (b.chat || []).length;
                     }
 
-                    const unread = Math.max(0, msgCount - (lastSeenCounts[b.booking_id] || 0));
+                    // INITIALIZE READ RECEIPT TO PREVENT "20 UNREAD" BUG ON LOGIN
+                    if (typeof lastSeenCounts[b.booking_id] === 'undefined') {
+                        lastSeenCounts[b.booking_id] = msgCount;
+                        localStorage.setItem('lastSeenMsgCounts', JSON.stringify(lastSeenCounts));
+                    }
+
+                    const unread = Math.max(0, msgCount - lastSeenCounts[b.booking_id]);
                     const chatLabel = unread > 0 ? `Chat <span class="chat-badge">${unread}</span>` : 'Message';
 
                     if (isDoorToDoor) eventUnreadTotal += unread; else schoolUnreadTotal += unread;
@@ -1506,7 +1507,7 @@
                 messages = (data.messages || []).map(m => ({ 
                     sender: m.sender_username, 
                     text: m.message,
-                    time: formatTime(m.time || m.timestamp) 
+                    time: m.time || m.timestamp 
                 }));
             }
 
@@ -1524,19 +1525,23 @@
             const now = new Date();
             const sameDay = d.getDate() === now.getDate() && d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
 
+            const timeStr = d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false });
             if (sameDay) {
-                return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                return timeStr;
             }
 
-            return d.toLocaleDateString([], { day: '2-digit', month: 'short' }) + " " + d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+            const day = d.getDate();
+            const month = d.toLocaleDateString([], { month: 'short' });
+            return `${day} ${month} ${timeStr}`;
         }
 
         function sendChatMessage() {
             const i = document.getElementById('chatInput'); const msgText = i.value.trim();
             if(!msgText || !currentRoomID) return;
 
+            const tempTime = new Date().toISOString();
             const area = document.getElementById('chatMessages');
-            area.innerHTML += `<div class="msg me">${escapeHtml(msgText)}</div>`;
+            area.innerHTML += `<div class="msg me">${escapeHtml(msgText)} <span class="msg-time">${escapeHtml(formatTime(tempTime))}</span></div>`;
             area.scrollTop = area.scrollHeight;
             i.value = "";
 
@@ -1555,7 +1560,7 @@
             let url, body;
             if(currentRoomType.startsWith('booking_shared')) {
                 url = '/api/booking/chat';
-                body = { booking_id: currentRoomID, message_obj: { sender: myU, text: msgText, time: new Date().toLocaleString() } };
+                body = { booking_id: currentRoomID, message_obj: { sender: myU, text: msgText, time: tempTime } };
             } else {
                 url = '/api/support/send_msg';
                 body = { sender: myU, receiver: currentSupportTarget, child_name: supportBaseChildName, message: msgText };
@@ -1567,7 +1572,7 @@
 
         function renderMessages(chat) { 
             const area = document.getElementById('chatMessages');
-            const newHtml = (chat || []).map(m => `<div class="msg ${m.sender === myU ? 'me' : 'them'}">${escapeHtml(m.text || m.message)} <span class="msg-time">${escapeHtml(m.time || '')}</span></div>`).join('');
+            const newHtml = (chat || []).map(m => `<div class="msg ${m.sender === myU ? 'me' : 'them'}">${escapeHtml(m.text || m.message)} <span class="msg-time">${escapeHtml(formatTime(m.time || m.timestamp))}</span></div>`).join('');
             
             if (area.innerHTML !== newHtml) {
                 area.innerHTML = newHtml;
