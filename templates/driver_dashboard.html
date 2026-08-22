@@ -93,6 +93,7 @@
         .initials-avatar:active { transform: scale(0.95); opacity: 0.8; }
 
         .chat-badge { background: var(--accent); color: white; padding: 2px 6px; border-radius: 10px; font-weight: 800; font-size: 10px; margin-left: 6px; display: inline-block; }
+        .req-badge { background: var(--accent); color: white; font-size: 10px; font-weight: 900; padding: 4px 9px; border-radius: 20px; min-width: 18px; text-align: center; display: none; margin-left: 8px;}
         
         /* Edge to Edge Container */
         .container { width: 100%; max-width: 100%; margin: 0; padding: 0; box-sizing: border-box; flex: 1; display: flex; flex-direction: column; overflow-x: hidden;} 
@@ -318,7 +319,7 @@
             <h3 style="margin-top: 0; color: var(--text-main); font-size: 18px; margin-bottom: 5px;" id="appAlertTitle">Notice</h3>
             <p id="appAlertMessage" class="app-alert-message"></p>
             <div id="alertActionGroupContainer" style="display: flex; gap: 10px; width: 100%;">
-                <button id="alertDefaultCloseBtn" onclick="closeAppAlert()" class="btn btn-dropoff" style="margin-bottom:0;">OK</button>
+                <button id="alertDefaultCloseBtn" class="btn btn-dropoff" style="margin-bottom:0;">OK</button>
             </div>
         </div>
     </div>
@@ -1275,6 +1276,19 @@
                     const isEventRequest = b.school_code === "D2D_GLOBAL";
                     const displayLabel = isEventRequest ? `<div class="status-tag" style="color:#3498db;">EVENT REQUEST</div>` : `<div class="status-tag" style="color:var(--accent);">SCHOOL REQUEST</div>`;
 
+                    const chatArr = b.chat || [];
+                    const currentLen = chatArr.length;
+                    const studentRoomKey = isEventRequest ? `general_driver_room_${b.booking_id}` : `booking_shared_${b.booking_id}`;
+                    const storedLen = lastSeenCounts[studentRoomKey] || 0;
+                    let unreadCount = 0;
+                    if (currentLen > storedLen) {
+                        for(let i = storedLen; i < currentLen; i++) {
+                            const senderU = chatArr[i].sender || chatArr[i].sender_username;
+                            if(senderU !== myU) unreadCount++;
+                        }
+                    }
+                    const badgeHtml = unreadCount > 0 ? `<span class="chat-badge">+${unreadCount}</span>` : '';
+
                     const rowHtml = `
                     <div class="list-row" id="row-${escapeHtml(b.booking_id)}">
                         <div style="display:flex; align-items:center; gap:15px; width: 100%; margin-bottom: 5px;">
@@ -1287,7 +1301,7 @@
                         <div class="btn-group-grid">
                             <button class="btn btn-pickup" onclick="respond('${escapeHtml(b.booking_id)}', 'Accepted', '${escapeHtml(b.student_name)}')">Accept</button>
                             <button class="btn btn-remove" onclick="respond('${escapeHtml(b.booking_id)}', 'Rejected', '${escapeHtml(b.student_name)}')">Decline</button>
-                            <button class="btn btn-chat" style="grid-column: span 2;" onclick="openStudentChat('${escapeHtml(b.booking_id)}', '${escapeHtml(b.driver_username)}', '${escapeHtml(b.student_name)}', '${sPhoto}', ${isEventRequest})">Message Passenger</button>
+                            <button class="btn btn-chat" style="grid-column: span 2;" onclick="openStudentChat('${escapeHtml(b.booking_id)}', '${escapeHtml(b.driver_username)}', '${escapeHtml(b.student_name)}', '${sPhoto}', ${isEventRequest})">Message Passenger ${badgeHtml}</button>
                         </div>
                     </div>`;
 
@@ -1317,6 +1331,9 @@
                     const isEventTrip = isDoorToDoor;
 
                     let msgCount = 0;
+                    let unread = 0;
+                    const studentRoomKey = isDoorToDoor ? `general_driver_room_${b.booking_id}` : `booking_shared_${b.booking_id}`;
+
                     if (isDoorToDoor) {
                         try {
                             const histRes = await authFetch('/api/support/get_history', {
@@ -1324,20 +1341,28 @@
                                 body: JSON.stringify({ child_username: b.booking_id, room_type: "general_driver_room" })
                             });
                             const histData = await histRes.json();
-                            msgCount = (histData.messages || []).length;
+                            const messages = histData.messages || [];
+                            msgCount = messages.length;
+                            const storedLen = lastSeenCounts[studentRoomKey] || 0;
+                            if (msgCount > storedLen) {
+                                for(let i = storedLen; i < msgCount; i++) {
+                                    if(messages[i].sender_username !== myU) unread++;
+                                }
+                            }
                         } catch(e) { msgCount = 0; }
                     } else {
-                        msgCount = (b.chat || []).length;
+                        const chatArr = b.chat || [];
+                        msgCount = chatArr.length;
+                        const storedLen = lastSeenCounts[studentRoomKey] || 0;
+                        if (msgCount > storedLen) {
+                            for(let i = storedLen; i < msgCount; i++) {
+                                const senderU = chatArr[i].sender || chatArr[i].sender_username;
+                                if(senderU !== myU) unread++;
+                            }
+                        }
                     }
 
-                    // INITIALIZE READ RECEIPT TO PREVENT "20 UNREAD" BUG ON LOGIN
-                    if (typeof lastSeenCounts[b.booking_id] === 'undefined') {
-                        lastSeenCounts[b.booking_id] = msgCount;
-                        localStorage.setItem('lastSeenMsgCounts', JSON.stringify(lastSeenCounts));
-                    }
-
-                    const unread = Math.max(0, msgCount - lastSeenCounts[b.booking_id]);
-                    const chatLabel = unread > 0 ? `Chat <span class="chat-badge">${unread}</span>` : 'Message';
+                    const chatLabel = unread > 0 ? `Chat <span class="chat-badge">+${unread}</span>` : 'Message';
 
                     if (isDoorToDoor) eventUnreadTotal += unread; else schoolUnreadTotal += unread;
 
@@ -1351,6 +1376,16 @@
                             const motherRealName = parentProfile.name || "Mother";
                             const motherPhotoUrl = parentProfile.photo ? parentProfile.photo : `https://ui-avatars.com/api/?name=${encodeURIComponent(motherRealName)}&background=8e44ad&color=fff`;
 
+                            let motherBadgeHtml = "";
+                            const parentRoomKey = `booking_shared_parent_${b.booking_id}`;
+                            const pMsgCount = counts[b.student_username] || 0;
+                            const pStoredLen = lastSeenCounts[parentRoomKey] || 0;
+                            const pUnread = Math.max(0, pMsgCount - pStoredLen);
+                            if (pUnread > 0) {
+                                motherBadgeHtml = `<span class="chat-badge" style="margin-left:6px;">+${pUnread}</span>`;
+                                schoolUnreadTotal += pUnread;
+                            }
+
                             motherBtnHtml = `
                             <div class="mother-btn-wrapper">
                                 <div style="display:flex; align-items:center; gap:8px;">
@@ -1362,7 +1397,7 @@
                                 </div>
                                 <button class="btn btn-parent" style="width:auto; padding: 10px 18px;" 
                                     onclick="openParentChat('${escapeHtml(b.booking_id)}', '${escapeHtml(b.student_name)}', '${escapeHtml(b.student_username)}', '${escapeHtml(linkedMotherUsername)}')">
-                                    CHAT 👩‍👧
+                                    CHAT 👩‍👧 ${motherBadgeHtml}
                                 </button>
                             </div>`;
                         } else {
@@ -1468,7 +1503,7 @@
             setChatBackground();
             document.getElementById('chatOverlay').style.display = 'flex';
             
-            const cacheKey = `cache_support_booking_shared_${bid}`;
+            const cacheKey = `cache_support_booking_shared_parent_${bid}`;
             const cachedMessages = localStorage.getItem(cacheKey);
             if (cachedMessages) {
                 document.getElementById('chatMessages').innerHTML = cachedMessages;
@@ -1512,7 +1547,11 @@
             }
 
             if (currentRoomID) {
-                lastSeenCounts[currentRoomID] = messages.length;
+                const roomCacheKey = currentRoomType === 'booking_shared_parent' 
+                    ? `booking_shared_parent_${currentRoomID}` 
+                    : (currentRoomType === 'general_driver_room' ? `general_driver_room_${currentRoomID}` : `booking_shared_${currentRoomID}`);
+                    
+                lastSeenCounts[roomCacheKey] = messages.length;
                 localStorage.setItem('lastSeenMsgCounts', JSON.stringify(lastSeenCounts));
             }
 
@@ -1531,7 +1570,7 @@
             }
 
             const day = d.getDate();
-            const month = d.toLocaleDateString([], { month: 'short' });
+            const month = d.toLocaleDateString('en-US', { month: 'short' });
             return `${day} ${month} ${timeStr}`;
         }
 
@@ -1578,12 +1617,14 @@
                 area.innerHTML = newHtml;
                 area.scrollTop = area.scrollHeight;
                 
-                const cacheKey = `cache_support_booking_shared_${currentRoomID}`;
-                localStorage.setItem(cacheKey, newHtml);
+                const roomCacheKey = currentRoomType === 'booking_shared_parent' 
+                    ? `cache_support_booking_shared_parent_${currentRoomID}` 
+                    : `cache_support_${currentRoomType}_${currentRoomID}`;
+                localStorage.setItem(roomCacheKey, newHtml);
             }
         }
         
-        function closeChat() { currentRoomID = null; document.getElementById('chatOverlay').style.display = 'none'; }
+        function closeChat() { currentRoomID = null; document.getElementById('chatOverlay').style.display = 'none'; load(); }
         
         async function confirmRole(mode) {
             try {
