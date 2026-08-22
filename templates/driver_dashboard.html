@@ -10,6 +10,13 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.23/jspdf.plugin.autotable.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 
+    <!-- PREVENTS THEME FLASHING ON LOAD -->
+    <script>
+        if (localStorage.getItem('theme') === 'light') {
+            document.documentElement.classList.add('light-mode');
+        }
+    </script>
+
     <style> 
         /* ===== CSS VARIABLES FOR THEMING ===== */
         :root {  
@@ -31,7 +38,7 @@
         } 
         
         /* Light Mode Overrides */
-        body.light-mode {
+        html.light-mode body {
             --primary: #008069; 
             --bg-grad-1: #efeae2;
             --bg-grad-2: #efeae2;
@@ -118,7 +125,7 @@
         .drawer-item .ico { font-size: 20px; width: 24px; text-align: center; flex-shrink: 0; }
         .drawer-item:active { background: var(--hover-bg); }
         .drawer-item.active { background: rgba(37, 211, 102, 0.08); color: var(--accent); }
-        .drawer-item .count-pill { margin-left: auto; background: var(--accent); color: white; font-size: 11px; font-weight: 800; padding: 3px 8px; border-radius: 12px; }
+        .drawer-item .count-pill { margin-left: auto; background: var(--accent); color: white; font-size: 11px; font-weight: 800; padding: 3px 8px; border-radius: 12px; display: none; }
         
         /* View Sections - Edge to Edge */
         .view-section { display: none; flex-direction: column; animation: fadeIn 0.2s ease; width: 100%; }
@@ -132,8 +139,8 @@
         .home-controls { padding: 15px 20px; display: flex; flex-direction: column; gap: 15px; background: var(--bg-grad-1); flex: 1; }
 
         .card { background: var(--card-bg); width: 100%; border-bottom: 8px solid var(--bg-grad-1); } 
-        .card-header { padding: 15px 20px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; background: var(--card-bg-alt); } 
-        .card-header h3 { margin: 0; font-size: 0.95rem; letter-spacing: 0.5px; color: var(--text-muted); font-weight: 700; text-transform: uppercase; } 
+        .card-header { padding: 15px 20px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; background: var(--card-bg-alt); flex-wrap: wrap; gap: 10px;} 
+        .card-header h3 { margin: 0; font-size: 0.95rem; letter-spacing: 0.5px; color: var(--text-muted); font-weight: 700; text-transform: uppercase; display: flex; align-items: center;} 
         
         /* WhatsApp Style List Row */
         .list-row { padding: 15px 20px; border-bottom: 1px solid var(--border); display: flex; flex-direction: column; gap: 12px; transition: background 0.15s; background: var(--card-bg);} 
@@ -155,6 +162,7 @@
         .btn-danger { background: var(--danger); color: white; }
         .btn-warning { background: var(--warning); color: #020218; }
         .btn-pdf { background: #3b82f6; color: white; width: auto; padding: 8px 16px; font-size: 11px;}
+        .btn-hide { background: transparent; border: 1px solid var(--border); color: var(--text-muted); padding: 8px 15px; font-size: 11px; box-shadow: none; border-radius: 8px; width: auto;}
 
         input, select { background: var(--input-bg); border: none; border-bottom: 2px solid var(--border); color: var(--text-main); padding: 14px 15px; border-radius: 8px 8px 0 0; outline: none; width: 100%; box-sizing: border-box; font-family: inherit; margin-bottom: 15px; transition: 0.2s; font-size: 15px;}
         input:focus, select:focus { border-color: var(--accent); background: rgba(0,0,0,0.1); }
@@ -170,8 +178,8 @@
         .msg { padding: 8px 12px; border-radius: 12px; font-size: 14px; max-width: 85%; line-height: 1.4; box-shadow: 0 1px 2px rgba(0,0,0,0.1); position: relative; } 
         .msg.me { background: #005c4b; color: #e9edef; align-self: flex-end; border-top-right-radius: 4px; } 
         .msg.them { background: #202c33; color: #e9edef; align-self: flex-start; border-top-left-radius: 4px; } 
-        body.light-mode .msg.me { background: #d9fdd3; color: #111b21; }
-        body.light-mode .msg.them { background: #ffffff; color: #111b21; }
+        html.light-mode .msg.me { background: #d9fdd3; color: #111b21; }
+        html.light-mode .msg.them { background: #ffffff; color: #111b21; }
 
         .app-alert-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.8); display: none; justify-content: center; align-items: center; z-index: 9999; opacity: 0; pointer-events: auto; backdrop-filter: blur(2px); transition: opacity 0.2s ease; padding: 20px;}
         .app-alert-overlay.show { display: flex !important; opacity: 1; }
@@ -500,17 +508,21 @@
 
     <script>
         // --- Theme Management ---
-        function toggleTheme() {
-            const isLight = document.body.classList.toggle('light-mode');
-            localStorage.setItem('theme', isLight ? 'light' : 'dark');
+        async function toggleTheme() {
+            const isLight = document.documentElement.classList.toggle('light-mode');
+            const newTheme = isLight ? 'light' : 'dark';
+            localStorage.setItem('theme', newTheme);
             const ico = document.getElementById('themeIcon');
             if (ico) ico.innerText = isLight ? '🌙' : '🌓';
-            setChatBackground(); 
-        }
-        if (localStorage.getItem('theme') === 'light') {
-            document.body.classList.add('light-mode');
-            const ico = document.getElementById('themeIcon');
-            if (ico) ico.innerText = '🌙';
+            if (typeof setChatBackground === 'function') setChatBackground(); 
+
+            try {
+                await authFetch('/api/profile/update_self', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ theme: newTheme })
+                });
+            } catch(e) { console.error("Theme cloud sync failed", e); }
         }
 
         // --- Drawer Management ---
@@ -548,7 +560,7 @@
             if (customButtonsHtml) {
                 groupContainer.innerHTML = customButtonsHtml;
             } else {
-                groupContainer.innerHTML = `<button id="alertDefaultCloseBtn" class="btn btn-dropoff" style="margin-bottom:0;">OK</button>`;
+                groupContainer.innerHTML = `<button id="alertDefaultCloseBtn" class="btn btn-dropoff" style="margin-bottom:0; width: 100%; padding:14px;">ACKNOWLEDGE</button>`;
                 document.getElementById("alertDefaultCloseBtn").onclick = function() {
                     closeAppAlert();
                     if(callback) callback();
@@ -568,6 +580,7 @@
         let audioMuteTimeout;
         let lastSeenCounts = JSON.parse(localStorage.getItem('lastSeenMsgCounts') || '{}');
 
+        // Centralized UI Badge Updater (Updates both the specific ID and its Drawer counterpart)
         function updateBadge(id, count) {
             const el = document.getElementById(id);
             if (el) {
@@ -587,8 +600,11 @@
            document.getElementById('alarmMessage').innerText = `Students at ${schoolName} have been officially released.`;
             document.getElementById('alarmOverlay').classList.add('show');
 
+            // Set the 60-second "grace period" timer
             alarmTimeout = setTimeout(() => {
+                console.log("60 seconds passed, triggering audio...");
                 alarmAudio.play().catch(e => console.log("Audio play blocked: ", e));
+                
                 audioMuteTimeout = setTimeout(() => { 
                     alarmAudio.pause(); 
                     alarmAudio.currentTime = 0; 
@@ -614,7 +630,9 @@
                         }
                     });
                 }
-            } catch (e) { }
+            } catch (e) {
+                console.log("Polling error:", e);
+            }
         }
 
         function acknowledgeAlarm() {
@@ -623,6 +641,7 @@
             clearTimeout(audioMuteTimeout);
             alarmAudio.pause(); 
             alarmAudio.currentTime = 0;
+            console.log("Alarm acknowledged - countdown cancelled.");
         }
 
         async function authFetch(url, options = {}) {
@@ -664,23 +683,40 @@
         setInterval(() => { document.getElementById('liveClock').innerText = new Date().toLocaleTimeString(); }, 1000); 
 
         // Wallpaper logic
-        function handleSchoolImgUpload(event) {
+        async function handleSchoolImgUpload(event) {
             const file = event.target.files[0];
             if (!file) return;
-            const reader = new FileReader();
-            reader.onload = function(e) {
-                document.getElementById('schoolHomeImg').src = e.target.result;
-                localStorage.setItem('driverHomeWallpaper', e.target.result);
-            };
-            reader.readAsDataURL(file);
-        }
-        function removeSchoolPicture() {
-            document.getElementById('schoolHomeImg').src = "https://images.unsplash.com/photo-1523050854058-8df90110c9f1?auto=format&fit=crop&w=800&q=80";
-            localStorage.removeItem('driverHomeWallpaper');
-        }
-        const savedHomeImg = localStorage.getItem('driverHomeWallpaper');
-        if(savedHomeImg) document.getElementById('schoolHomeImg').src = savedHomeImg;
 
+            showAppAlert("Uploading wallpaper to secure storage... Please wait.", "VERIFICATION");
+
+            try {
+                const formData = new FormData();
+                formData.append('wallpaper', file);
+
+                const res = await authFetch('/api/profile/upload_wallpaper', { method: 'POST', body: formData });
+                const data = await res.json();
+
+                if (data.status === 'success') {
+                    document.getElementById('schoolHomeImg').src = data.wallpaper_url;
+                    localStorage.setItem('driverHomeWallpaper', data.wallpaper_url);
+                    showAppAlert("Wallpaper successfully updated.", "SUCCESS");
+                } else {
+                    showAppAlert("Could not sync wallpaper to database.");
+                }
+            } catch (err) { showAppAlert("Storage upload failed. Please verify your connection."); }
+        }
+
+        async function removeSchoolPicture() {
+            try {
+                await authFetch('/api/profile/delete_wallpaper', { method: 'POST' });
+                document.getElementById('schoolHomeImg').src = "https://images.unsplash.com/photo-1523050854058-8df90110c9f1?auto=format&fit=crop&w=800&q=80";
+                localStorage.removeItem('driverHomeWallpaper');
+                showAppAlert("Wallpaper reset to default.", "SUCCESS");
+            } catch(e) {
+                showAppAlert("Failed to reset wallpaper.");
+            }
+        }
+        
         async function initDashboard() {
             try {
                 const res = await authFetch('/api/users/lookup', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ role: 'student' }) });
@@ -695,6 +731,24 @@
                 const profJson = await profRes.json();
                 const data = profJson.status === 'success' ? profJson.profile : null;
                 if(data) {
+                    if (data.wallpaper) {
+                        document.getElementById('schoolHomeImg').src = data.wallpaper;
+                        localStorage.setItem('driverHomeWallpaper', data.wallpaper);
+                    }
+                    if (data.theme) {
+                        if (data.theme === 'light') {
+                            document.documentElement.classList.add('light-mode');
+                            localStorage.setItem('theme', 'light');
+                            const ico = document.getElementById('themeIcon');
+                            if (ico) ico.innerText = '🌙';
+                        } else {
+                            document.documentElement.classList.remove('light-mode');
+                            localStorage.setItem('theme', 'dark');
+                            const ico = document.getElementById('themeIcon');
+                            if (ico) ico.innerText = '🌓';
+                        }
+                    }
+
                     userRole = data.transport_type || data.driver_mode; 
                     driverSchoolCodes = data.school_codes || [];
                     document.getElementById('driverTownInput').value = data.town || data.location || data.current_town || "";
@@ -703,7 +757,7 @@
                     const regDate = new Date(data.created_at || Date.now());
                     const daysActive = (Date.now() - regDate) / (1000 * 60 * 60 * 24);
 
-                    if(!data.license_image) {
+                    if(!data.license_image) { 
                         if(daysActive > 7) {
                             document.getElementById('appHardLockOverlay').style.display = 'flex';
                             document.getElementById('mainDashboardContainer').style.display = 'none';
@@ -734,6 +788,7 @@
                             document.getElementById('d2dDashboard').style.display = "block";
                             document.getElementById('schoolCodeManagement').style.display = "none";
                             
+                            // Adjust drawer items
                             document.getElementById('drawerItemSchoolReq').style.display = "none";
                             document.getElementById('drawerItemSchoolActive').style.display = "none";
                             document.getElementById('drawerItemEventReq').style.display = "flex";
@@ -742,6 +797,7 @@
                             document.getElementById('d2dDashboard').style.display = "none";
                             document.getElementById('schoolCodeManagement').style.display = "block";
                             
+                            // Show all options
                             document.getElementById('drawerItemSchoolReq').style.display = "flex";
                             document.getElementById('drawerItemSchoolActive').style.display = "flex";
                             document.getElementById('drawerItemEventReq').style.display = "flex";
@@ -765,7 +821,7 @@
             
             codeInput.disabled = true;
             btn.disabled = true;
-            btn.innerText = "WAIT...";
+            btn.innerText = "VERIFYING...";
 
             try {
                 const verifyRes = await authFetch('/api/principal/get_data', { 
@@ -774,7 +830,10 @@
                 });
                 
                 const verifyData = await verifyRes.json();
-                if(!verifyRes.ok || verifyData.status === 'error') throw new Error("Invalid Code");
+                
+                if(!verifyRes.ok || verifyData.status === 'error') {
+                    throw new Error("Invalid Code");
+                }
 
                 driverSchoolCodes.push(code);
                 await authFetch('/api/profile/update_self', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ school_codes: driverSchoolCodes }) });
@@ -793,22 +852,22 @@
         function renderLinkedSchools() {
             const container = document.getElementById('linkedSchoolsList');
             if(driverSchoolCodes.length === 0) {
-                container.innerHTML = '<span style="font-size:12px; color:var(--text-muted);">No schools linked yet.</span>';
+                container.innerHTML = '<span style="font-size:12px; color:var(--text-muted); padding-top:5px;">No schools linked yet.</span>';
                 return;
             }
             container.innerHTML = driverSchoolCodes.map(c => `
-                <span class="status-tag" style="font-size:12px; padding:10px 15px; background:rgba(39, 174, 96, 0.1); color:var(--accent); border:none; display:inline-flex; align-items:center; gap:8px;">
+                <span class="status-tag" style="font-size:11px; padding:10px 15px; background:rgba(39, 174, 96, 0.1); border-color:var(--accent); color:var(--text-main); border-radius:8px; display:inline-flex; align-items:center; gap:8px;">
                     ${c} 
-                    <button onclick="removeSchoolCode('${c}')" style="background:var(--danger); border:none; border-radius:50%; width:18px; height:18px; display:flex; justify-content:center; align-items:center; color:white; cursor:pointer;">&times;</button>
+                    <button onclick="removeSchoolCode('${c}')" style="background:var(--danger); border:none; border-radius:50%; width:18px; height:18px; display:flex; justify-content:center; align-items:center; color:white; cursor:pointer; font-weight:bold;">&times;</button>
                 </span>`).join('');
         }
 
         async function removeSchoolCode(code) {
             const btnHtml = `
-                <button id="confirmRemoveSchoolBtn" class="btn btn-danger" style="flex:1;">REMOVE</button>
-                <button id="cancelRemoveSchoolBtn" class="btn btn-chat" style="flex:1;">CANCEL</button>
+                <button id="confirmRemoveSchoolBtn" class="btn btn-danger" style="flex:1; margin-bottom:0; padding:14px; border-radius:10px;">CONFIRM REMOVE</button>
+                <button id="cancelRemoveSchoolBtn" class="btn btn-hide" style="flex:1; margin-bottom:0; color:var(--text-main); border-color:var(--border);">CANCEL</button>
             `;
-            showAppAlert(`Remove link to school code ${code}?`, "CONFIRM REMOVE", null, btnHtml);
+            showAppAlert(`Remove link to school code ${code}?`, "CONFIRM REMOVE CONNECTION", null, btnHtml);
             
             document.getElementById("cancelRemoveSchoolBtn").onclick = function() { closeAppAlert(); };
             document.getElementById("confirmRemoveSchoolBtn").onclick = async function() {
@@ -818,7 +877,9 @@
                     await authFetch('/api/profile/update_self', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ school_codes: driverSchoolCodes }) });
                     renderLinkedSchools();
                     load();
-                } catch(e) { showAppAlert("Failed to remove school code."); }
+                } catch(e) {
+                    showAppAlert("Failed to remove school code.");
+                }
             };
         }
 
@@ -839,24 +900,31 @@
             if(!file) return;
 
             closeProfileMenu();
-            showAppAlert("Uploading the image to secure storage... Please wait.", "VERIFICATION");
+            showAppAlert("AI Engine is scanning and uploading the image to secure storage... Please wait.", "SYSTEM VERIFICATION");
 
             try {
                 const formData = new FormData();
                 formData.append('photo', file);
 
-                const res = await authFetch('/api/profile/upload_photo', { method: 'POST', body: formData });
+                const res = await authFetch('/api/profile/upload_photo', {
+                    method: 'POST',
+                    body: formData
+                });
                 const data = await res.json();
 
                 if (data.status === 'success') {
                     sessionStorage.setItem('userPhoto', data.photo_url);
                     if(avatarEl) avatarEl.src = data.photo_url;
-                    document.getElementById('profileWarningBanner').style.display = 'none';
-                    showAppAlert("Profile picture securely updated.", "SUCCESS");
+                    const warningBanner = document.getElementById('profileWarningBanner');
+                    if(warningBanner) warningBanner.style.display = 'none';
+                    showAppAlert("AI check passed. Profile picture securely updated.", "SUCCESS");
                 } else {
                     showAppAlert("Could not sync photo link to database.");
                 }
-            } catch (err) { showAppAlert("Storage upload failed."); }
+            } catch (err) {
+                console.error(err);
+                showAppAlert("Storage upload failed. Please verify your connection or bucket permissions.");
+            }
         }
 
         async function deleteProfilePic() {
@@ -864,17 +932,23 @@
             try {
                 const res = await authFetch('/api/profile/delete_photo', { method: 'POST' });
                 const data = await res.json();
+
                 if (data.status === 'success') {
                     sessionStorage.removeItem('userPhoto');
                     if(avatarEl) avatarEl.src = `https://ui-avatars.com/api/?name=${encodeURIComponent(myN)}&background=27ae60&color=fff&size=256`;
-                    showAppAlert("Profile picture deleted.");
+                    showAppAlert("Profile picture successfully completely deleted from storage and database.");
+                } else {
+                    showAppAlert("Error deleting profile picture.");
                 }
-            } catch(err) {}
+            } catch(err) {
+                console.error(err);
+                showAppAlert("Error deleting profile picture.");
+            }
         }
 
         async function updateDriverLocation() {
             const townValue = document.getElementById('driverTownInput').value.trim();
-            if(!townValue) return showAppAlert("Enter a valid town.");
+            if(!townValue) return showAppAlert("Please enter a valid town or city name to update your location profile matrix.");
             
             const btn = event.target;
             const originalText = btn.innerText;
@@ -883,9 +957,15 @@
 
             try {
                 const res = await authFetch('/api/profile/update_self', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ town: townValue, location: townValue, current_town: townValue }) });
-                showAppAlert(`Location pinned to: ${townValue.toUpperCase()}`, "UPDATED");
+                const result = await res.json();
+                if(result.status !== 'success') throw new Error('update failed');
+                
+                showAppAlert(`Location successfully pinned to: ${townValue.toUpperCase()}! You will now appear to students searching for this area on their dashboards.`, "LOCATION UPDATED");
                 closeProfileMenu();
-            } catch(e) {} finally {
+            } catch(e) {
+                console.error(e);
+                showAppAlert("Failed to synchronize tracking location with cloud storage pipelines. Please verify your connection.");
+            } finally {
                 btn.disabled = false;
                 btn.innerText = originalText;
             }
@@ -905,7 +985,7 @@
             spinner.style.display = 'block';
             resultBox.style.display = 'none';
             statusText.innerText = "Analyzing security features & text...";
-            statusText.style.color = "var(--text-muted)";
+            statusText.style.color = "var(--text-main)";
 
             const reader = new FileReader();
             reader.onload = async function(event) {
@@ -920,29 +1000,31 @@
                     document.getElementById('ocrRegisteredName').innerText = myN.toUpperCase();
                     
                     if(extractedName === myN.toUpperCase()) {
-                        statusText.innerText = "✔️ VERIFIED";
-                        statusText.style.color = "var(--accent)";
-                        document.getElementById('ocrExtractedName').style.color = "var(--accent)";
+                        statusText.innerText = "✔️ VERIFIED: PERFECT MATCH";
+                        statusText.style.color = "var(--success)";
+                        document.getElementById('ocrExtractedName').style.color = "var(--success)";
                         
                         setTimeout(async () => {
                             modal.classList.remove('show');
                             try {
                                 await authFetch('/api/verify_license', {
-                                    method: 'POST', headers: {'Content-Type': 'application/json'},
+                                    method: 'POST',
+                                    headers: {'Content-Type': 'application/json'},
                                     body: JSON.stringify({ username: myU, license_image: base64Str })
                                 });
                                 document.getElementById('licenseWarningBanner').style.display = 'none';
                                 document.getElementById('appHardLockOverlay').style.display = 'none';
                                 document.getElementById('mainDashboardContainer').style.display = 'flex'; 
-                            } catch(err) {}
-                        }, 1500);
+                                showAppAlert("License securely vaulted. Dashboard unlocked.", "VERIFIED");
+                            } catch(err) { showAppAlert("Error securely vaulting license data."); }
+                        }, 2500);
                     } else {
-                        statusText.innerText = "FAILED MATCH";
+                        statusText.innerText = "FAILED TO UPLOAD WRONG DOCUMENT";
                         statusText.style.color = "var(--danger)";
                         document.getElementById('ocrExtractedName').style.color = "var(--danger)";
-                        setTimeout(() => modal.classList.remove('show'), 3000);
+                        setTimeout(() => modal.classList.remove('show'), 3500);
                     }
-                }, 2000); 
+                }, 3000); 
             };
             reader.readAsDataURL(file);
         }
@@ -956,7 +1038,7 @@
             const num = parseInt(document.getElementById('numTowns').value) || 0;
             const container = document.getElementById('townInputs');
             container.innerHTML = '';
-            for(let i=0; i<num; i++) { container.innerHTML += `<input type="text" class="town-val" placeholder="Town ${i+1}">`; }
+            for(let i=0; i<num; i++) { container.innerHTML += `<input type="text" class="town-val" placeholder="Drop-off Town ${i+1}" style="flex: 1; min-width: 120px;">`; }
         }
 
         async function publishTrip() {
@@ -964,7 +1046,7 @@
             const end = document.getElementById('tripEnd').value.trim();
             const date = document.getElementById('tripDate').value;
             const expiry = document.getElementById('tripExpiry').value;
-            if(!start || !end || !date || !expiry) return showAppAlert("Fill all details.");
+            if(!start || !end || !date || !expiry) return showAppAlert("Please fill all necessary trip details including the termination date.");
             
             let passingStr = "";
             if(document.getElementById('passTownsCheck').value === 'yes') {
@@ -979,8 +1061,9 @@
                 formData.append('username', myU); formData.append('name', myN); formData.append('content', content); formData.append('expiry', new Date(expiry).toISOString());
                 const res = await authFetch('/api/posts/create', { method: 'POST', body: formData });
                 const data = await res.json();
-                if(data.status === 'success') { showAppAlert("Published!"); loadPublishedTrip(); } 
-            } catch(e) {}
+                if(data.status === 'success') { showAppAlert("Trip successfully published to the Global Network!"); loadPublishedTrip(); } 
+                else { showAppAlert("Failed to publish trip."); }
+            } catch(e) { showAppAlert("Connection Error. Is the AI server running?"); }
         }
 
         async function loadPublishedTrip() {
@@ -1006,10 +1089,10 @@
         async function endPublishedTrip() {
             if(!activePostId) return;
             const btnHtml = `
-                <button id="confirmEndTripBtn" class="btn btn-danger" style="flex:1;">END</button>
-                <button id="cancelEndTripBtn" class="btn btn-chat" style="flex:1;">CANCEL</button>
+                <button id="confirmEndTripBtn" class="btn btn-danger" style="flex:1; margin-bottom:0; padding:14px; border-radius:10px;">CONFIRM END</button>
+                <button id="cancelEndTripBtn" class="btn btn-hide" style="flex:1; margin-bottom:0; color:var(--text-main); border-color:var(--border);">CANCEL</button>
             `;
-            showAppAlert("Remove this trip from the network?", "CONFIRM END", null, btnHtml);
+            showAppAlert("End and remove this trip from the public network?", "CONFIRM TERMINATION", null, btnHtml);
             
             document.getElementById("cancelEndTripBtn").onclick = function() { closeAppAlert(); };
             document.getElementById("confirmEndTripBtn").onclick = async function() {
@@ -1050,22 +1133,27 @@
         async function respond(id, s, sName) { 
             const row = document.getElementById(`row-${id}`);
             if(row) row.style.display = 'none'; 
+            
             if(s === 'Accepted' && sName) appendLocalLog(sName, 'ACCEPTED', new Date().toLocaleString());
+
             try {
                 await authFetch('/api/driver/respond_booking', { 
-                    method:'POST', headers:{'Content-Type':'application/json'}, 
+                    method:'POST', 
+                    headers:{'Content-Type':'application/json'}, 
                     body:JSON.stringify({booking_id: id, status: s}) 
                 });
-            } catch(err) {}
+            } catch(err) {
+                console.error("Respond pipeline crashed:", err);
+            }
             load(); 
         }
 
         async function terminateTrip(bid, sName) { 
             const btnHtml = `
-                <button id="confirmFinishTripBtn" class="btn btn-dropoff" style="flex:1;">FINISH</button>
-                <button id="cancelFinishTripBtn" class="btn btn-chat" style="flex:1;">CANCEL</button>
+                <button id="confirmFinishTripBtn" class="btn btn-dropoff" style="flex:1; margin-bottom:0; padding:14px; border-radius:10px;">FINISH TRIP</button>
+                <button id="cancelFinishTripBtn" class="btn btn-hide" style="flex:1; margin-bottom:0; color:var(--text-main); border-color:var(--border);">CANCEL</button>
             `;
-            showAppAlert("End Trip and move to Transcript?", "FINISH TRIP", null, btnHtml);
+            showAppAlert("End Trip? This will move it to your Travel Transcript.", "CONFIRM TRIP COMPLETION", null, btnHtml);
             
             document.getElementById("cancelFinishTripBtn").onclick = function() { closeAppAlert(); };
             document.getElementById("confirmFinishTripBtn").onclick = async function() {
@@ -1078,7 +1166,8 @@
                 renderHistory(); 
 
                 authFetch('/api/driver/respond_booking', { 
-                    method:'POST', headers:{'Content-Type':'application/json'}, 
+                    method:'POST', 
+                    headers:{'Content-Type':'application/json'}, 
                     body:JSON.stringify({booking_id: bid, status: 'Finished'}) 
                 }).then(() => load());
             };
@@ -1094,10 +1183,10 @@
                     combinedHtml += `
                     <div class="history-item">
                         <div>
-                            <b style="font-size: 15px; color: var(--text-main);">${escapeHtml(h.student_name)}</b>
-                            <div style="font-size: 11px; color: var(--text-muted); margin-top:4px;">ID: ${escapeHtml(h.booking_id)}</div>
+                            <b style="font-size: 14px; letter-spacing: 0.5px; color: var(--text-main);">${escapeHtml(h.student_name)}</b>
+                            <div style="font-size: 11px; color: var(--text-muted); margin-top:6px; font-family: monospace;">ID: ${escapeHtml(h.booking_id)} | TRIP FINISHED</div>
                         </div>
-                        <span style="color:var(--accent); font-weight:800; font-size:12px;">FINISHED</span>
+                        <span style="color:var(--accent); font-weight:900; font-size:11px; letter-spacing: 1px;">SUCCESS</span>
                     </div>`;
                 }
             });
@@ -1108,10 +1197,10 @@
                     combinedHtml += `
                     <div class="history-item">
                         <div>
-                            <b style="font-size: 15px; color: var(--text-main);">${escapeHtml(l.name)}</b>
-                            <div style="font-size: 11px; color: var(--text-muted); margin-top:4px;">${escapeHtml(l.time)}</div>
+                            <b style="font-size: 14px; letter-spacing: 0.5px; color: var(--text-main);">${escapeHtml(l.name)}</b>
+                            <div style="font-size: 11px; color: var(--text-muted); margin-top:6px; font-family: monospace;">TIMESTAMP: ${escapeHtml(l.time)} | ACTION LOG</div>
                         </div>
-                        <span style="color:${color}; font-weight:800; font-size:12px;">${escapeHtml(l.action)}</span>
+                        <span style="color:${color}; font-weight:900; font-size:11px; letter-spacing: 1px;">${escapeHtml(l.action)}</span>
                     </div>`;
                 }
             });
@@ -1122,7 +1211,8 @@
         async function load() { 
             try { 
                 const res = await authFetch('/api/get_my_bookings', { 
-                    method:'POST', headers:{'Content-Type':'application/json'}, 
+                    method:'POST', 
+                    headers:{'Content-Type':'application/json'}, 
                     body:JSON.stringify({username: myU, role:'driver'}) 
                 }); 
                 const data = await res.json();
@@ -1159,12 +1249,16 @@
                     });
                     const profJson = await profRes.json();
                     (profJson.users || []).forEach(p => {
-                        parentProfilesMap[p.username] = { name: p.name, photo: p.photo };
+                        parentProfilesMap[p.username] = {
+                            name: p.name,
+                            photo: p.photo
+                        };
                     });
                 }
 
                 const countRes = await authFetch('/api/support/get_all_counts', { 
-                    method: 'POST', headers:{'Content-Type':'application/json'}, 
+                    method: 'POST', 
+                    headers:{'Content-Type':'application/json'}, 
                     body: JSON.stringify({ receiver: myU }) 
                 }); 
                 const counts = (await countRes.json()).counts || {}; 
@@ -1188,10 +1282,10 @@
 
                     const rowHtml = `
                     <div class="list-row" id="row-${escapeHtml(b.booking_id)}">
-                        <div style="display:flex; align-items:center; gap:15px; width: 100%;">
+                        <div style="display:flex; align-items:center; gap:15px; width: 100%; margin-bottom: 5px;">
                             <img src="${sPhoto}" class="student-avatar" onclick="viewFullProfile('${sPhoto}')">
-                            <div style="display:flex; flex-direction:column; flex: 1; min-width: 0;">
-                                <b style="font-size:16px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--text-main);">${escapeHtml(b.student_name)}</b>
+                            <div style="display:flex; flex-direction:column; gap:4px; flex: 1; min-width: 0;">
+                                <b style="font-size:15px; letter-spacing: 0.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--text-main);">${escapeHtml(b.student_name)}</b>
                                 ${displayLabel}
                             </div>
                         </div>
@@ -1206,8 +1300,8 @@
                     else { schoolPendingHtml += rowHtml; schoolPendingCount++; }
                 }
                 
-                document.getElementById('requestList').innerHTML = schoolPendingHtml || '<p style="padding:30px 20px; color:var(--text-muted); text-align:center; font-size:14px;">No new school requests.</p>';
-                document.getElementById('eventRequestList').innerHTML = eventPendingHtml || '<p style="padding:30px 20px; color:var(--text-muted); text-align:center; font-size:14px;">No new event requests.</p>';
+                document.getElementById('requestList').innerHTML = schoolPendingHtml || '<p style="padding:25px 20px; color:var(--text-muted); text-align:center; font-size:13px;">No new school requests.</p>';
+                document.getElementById('eventRequestList').innerHTML = eventPendingHtml || '<p style="padding:25px 20px; color:var(--text-muted); text-align:center; font-size:13px;">No new event requests.</p>';
 
                 updateBadge('badgeSchoolRequests', schoolPendingCount);
                 updateBadge('badgeEventRequests', eventPendingCount);
@@ -1242,7 +1336,7 @@
                     }
 
                     const unread = Math.max(0, msgCount - (lastSeenCounts[b.booking_id] || 0));
-                    const chatLabel = unread > 0 ? `Message <span class="chat-badge">${unread}</span>` : 'Message';
+                    const chatLabel = unread > 0 ? `Chat <span class="chat-badge">${unread}</span>` : 'Message';
 
                     if (isDoorToDoor) eventUnreadTotal += unread; else schoolUnreadTotal += unread;
 
@@ -1251,26 +1345,27 @@
                     
                     if (!isEventTrip) {
                         const parentProfile = parentProfilesMap[linkedMotherUsername];
+                        
                         if (linkedMotherUsername && parentProfile) {
                             const motherRealName = parentProfile.name || "Mother";
                             const motherPhotoUrl = parentProfile.photo ? parentProfile.photo : `https://ui-avatars.com/api/?name=${encodeURIComponent(motherRealName)}&background=8e44ad&color=fff`;
 
                             motherBtnHtml = `
                             <div class="mother-btn-wrapper">
-                                <div style="display:flex; align-items:center; gap:10px;">
-                                    <img src="${motherPhotoUrl}" style="width:32px; height:32px; border-radius:50%; object-fit:cover; border:2px solid transparent;" onclick="viewFullProfile('${motherPhotoUrl}')">
+                                <div style="display:flex; align-items:center; gap:8px;">
+                                    <img src="${motherPhotoUrl}" style="width:32px; height:32px; border-radius:50%; object-fit:cover; border:2px solid transparent;" onclick="viewFullProfile('${motherPhotoUrl}')" title="View Mother Profile">
                                     <div style="display:flex; flex-direction:column; text-align:left;">
-                                        <span style="font-size:12px; font-weight:700; color:var(--text-main);">${escapeHtml(motherRealName)}</span>
-                                        <span style="font-size:10px; color:var(--text-muted);">Parent Account</span>
+                                        <span style="font-size:11px; font-weight:800; color:var(--text-main);">${escapeHtml(motherRealName)}</span>
+                                        <span style="font-size:9px; color:var(--text-muted); font-family:monospace;">@${escapeHtml(linkedMotherUsername)}</span>
                                     </div>
                                 </div>
                                 <button class="btn btn-parent" style="width:auto; padding: 10px 18px;" 
                                     onclick="openParentChat('${escapeHtml(b.booking_id)}', '${escapeHtml(b.student_name)}', '${escapeHtml(b.student_username)}', '${escapeHtml(linkedMotherUsername)}')">
-                                    CHAT
+                                    CHAT 👩‍👧
                                 </button>
                             </div>`;
                         } else {
-                            motherBtnHtml = `<div class="mother-btn-wrapper" style="justify-content: center;"><span style="font-size: 11px; font-weight: 600; color: var(--text-muted);">PARENT UNLINKED 🔒</span></div>`;
+                            motherBtnHtml = `<div class="mother-btn-wrapper" style="opacity:0.6; justify-content: center;"><span style="font-size: 11px; font-weight: bold; color: var(--text-muted);">MOTHER UNLINKED 🔒</span></div>`;
                         }
                     }
 
@@ -1280,17 +1375,17 @@
 
                     const rowActiveHtml = `
                     <div class="list-row" id="row-${escapeHtml(b.booking_id)}">
-                        <div style="display:flex; align-items:center; gap:15px; width: 100%;">
+                        <div style="display:flex; align-items:center; gap:15px; width: 100%; margin-bottom: 5px;">
                             <img src="${sPhoto}" class="student-avatar" onclick="viewFullProfile('${sPhoto}')">
-                            <div style="display:flex; flex-direction:column; flex: 1; min-width: 0;">
-                                <b style="font-size:16px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--text-main);">${escapeHtml(b.student_name)}</b>
+                            <div style="display:flex; flex-direction:column; gap:4px; flex: 1; min-width: 0;">
+                                <b style="font-size:15px; letter-spacing: 0.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--text-main);">${escapeHtml(b.student_name)}</b>
                                 <span class="status-tag">${escapeHtml(tStatus).toUpperCase()}</span>
                             </div>
                         </div>
                         ${!isEventTrip ? `${motherBtnHtml}` : ""}
                         <div class="btn-group-grid">
                             <button class="btn btn-pickup" ${pickupDisabled} onclick="updateTrack('${escapeHtml(b.booking_id)}', 'pickup', '${escapeHtml(b.student_name)}')">Pickup</button> 
-                            <button class="btn btn-dropoff" ${dropDisabled} onclick="updateTrack('${escapeHtml(b.booking_id)}', 'dropoff', '${escapeHtml(b.student_name)}')">Dropoff</button> 
+                            <button class="btn btn-dropoff" ${dropDisabled} onclick="updateTrack('${escapeHtml(b.booking_id)}', 'dropoff', '${escapeHtml(b.student_name)}')">Drop</button> 
                             <button class="btn btn-chat" onclick="openStudentChat('${escapeHtml(b.booking_id)}', '${escapeHtml(b.driver_username)}', '${escapeHtml(b.student_name)}', '${sPhoto}', ${isDoorToDoor})">${chatLabel}</button>
                             <button class="btn btn-remove" onclick="terminateTrip('${escapeHtml(b.booking_id)}', '${escapeHtml(b.student_name)}')">Finish</button>
                         </div>
@@ -1299,8 +1394,8 @@
                     if (isDoorToDoor) eventActiveHtml += rowActiveHtml; else schoolActiveHtml += rowActiveHtml;
                 }
                 
-                document.getElementById('activeFleet').innerHTML = schoolActiveHtml || '<p style="padding:30px 20px; color:var(--text-muted); text-align:center; font-size:14px;">No active school passengers.</p>';
-                document.getElementById('eventActiveFleet').innerHTML = eventActiveHtml || '<p style="padding:30px 20px; color:var(--text-muted); text-align:center; font-size:14px;">No active event bookings.</p>';
+                document.getElementById('activeFleet').innerHTML = schoolActiveHtml || '<p style="padding:25px 20px; color:var(--text-muted); text-align:center; font-size:13px;">No active institutional school passengers.</p>';
+                document.getElementById('eventActiveFleet').innerHTML = eventActiveHtml || '<p style="padding:25px 20px; color:var(--text-muted); text-align:center; font-size:13px;">No active event bookings traveling.</p>';
 
                 updateBadge('badgeSchoolActive', schoolUnreadTotal);
                 updateBadge('badgeEventActive', eventUnreadTotal);
@@ -1312,7 +1407,7 @@
         }
 
         function setChatBackground() {
-            const isLight = document.body.classList.contains('light-mode');
+            const isLight = document.documentElement.classList.contains('light-mode');
             const myPic = sessionStorage.getItem('userPhoto');
             const chatDiv = document.getElementById('chatMessages');
             
@@ -1353,14 +1448,20 @@
             supportBaseChildName = childUserKey;
             
             const parentProfile = parentProfilesMap ? parentProfilesMap[parentUser] : null;
-            const motherRealName = parentProfile && parentProfile.name ? parentProfile.name : "Mother";
+            const motherRealName = parentProfile && parentProfile.name ? parentProfile.name : "Mother of " + studentName;
             const motherPhoto = parentProfile && parentProfile.photo ? parentProfile.photo : `https://ui-avatars.com/api/?name=${encodeURIComponent(motherRealName)}&background=8e44ad&color=fff`;
             
-            document.getElementById('chatTarget').innerText = motherRealName;
+            document.getElementById('chatTarget').innerHTML = `
+                <div style="display:flex; flex-direction:column; text-align:left; gap:2px;">
+                    <span style="font-weight:800; font-size:14px; letter-spacing:0.5px;">${escapeHtml(motherRealName)}</span>
+                    <span style="font-size:10px; opacity:0.6; font-family:monospace; text-transform:none;">@${escapeHtml(parentUser)}</span>
+                </div>
+            `;
             
             const headerAvatarImg = document.getElementById('chatTargetImg');
             if (headerAvatarImg) {
                 headerAvatarImg.src = motherPhoto;
+                headerAvatarImg.title = `View ${escapeHtml(motherRealName)}'s Profile`;
             }
             
             setChatBackground();
@@ -1520,8 +1621,8 @@
             const btnHtml = `
                 <input type="text" id="delReasonInput" placeholder="Reason for deleting account..." style="width:100%; box-sizing:border-box; padding:15px; border-radius:12px; border:1px solid var(--border); background:var(--input-bg); color:var(--text-main); margin-bottom:15px; outline:none;">
                 <div style="display:flex; gap:10px; width:100%;">
-                    <button id="confirmPurgeBtn" class="btn btn-danger" style="flex:1;">DELETE</button>
-                    <button id="cancelPurgeBtn" class="btn btn-chat" style="flex:1;">CANCEL</button>
+                    <button id="confirmPurgeBtn" class="btn btn-danger" style="flex:1; padding:14px; border-radius:10px; margin-bottom:0;">DELETE</button>
+                    <button id="cancelPurgeBtn" class="btn btn-chat" style="flex:1; padding:14px; border-radius:10px; margin-bottom:0;">CANCEL</button>
                 </div>
             `;
             showAppAlert("PERMANENTLY DELETE ACCOUNT? This action cannot be undone.", "CONFIRM ACCOUNT DELETION", null, btnHtml);
