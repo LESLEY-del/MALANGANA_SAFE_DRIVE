@@ -10,6 +10,13 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.23/jspdf.plugin.autotable.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 
+    <!-- PREVENTS THEME FLASHING ON LOAD -->
+    <script>
+        if (localStorage.getItem('theme') === 'light') {
+            document.documentElement.classList.add('light-mode');
+        }
+    </script>
+
     <style> 
         /* ===== CSS VARIABLES FOR THEMING ===== */
         :root {  
@@ -31,7 +38,7 @@
         } 
         
         /* Light Mode Overrides */
-        body.light-mode {
+        html.light-mode body {
             --primary: #008069; 
             --bg-grad-1: #efeae2;
             --bg-grad-2: #efeae2;
@@ -73,7 +80,7 @@
         .hamburger-btn span { display: block; width: 22px; height: 2px; background: white; border-radius: 2px; }
         
         .header-titles { flex: 1; min-width: 0; margin-left: 5px;}
-        .header h1 { margin: 0; font-size: 1.15rem; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .header h1 { margin: 0; font-size: 1.15rem; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; cursor: pointer; }
         .header-overwatch { font-size: 11px; opacity:0.85; display:block; margin-top:2px; white-space: nowrap; font-weight: 400;}
         .header-right { display:flex; align-items:center; gap:12px; flex-shrink: 0; }
         
@@ -118,7 +125,7 @@
         }
         .drawer-item .ico { font-size: 20px; width: 24px; text-align: center; flex-shrink: 0; }
         .drawer-item:active { background: var(--hover-bg); }
-        .drawer-item.active { background: rgba(37, 211, 102, 0.08); color: var(--accent); }
+        .drawer-item.active { background: rgba(37, 211, 102, 0.08); color: var(--accent); border-left: 4px solid var(--accent); padding-left: 16px; }
         .drawer-item .count-pill { margin-left: auto; background: var(--accent); color: white; font-size: 11px; font-weight: 800; padding: 3px 8px; border-radius: 12px; }
         
         /* View Sections - Edge to Edge */
@@ -155,7 +162,7 @@
         .btn-danger { background: var(--danger); color: white; }
         .btn-warning { background: var(--warning); color: #020218; }
         .btn-pdf { background: #3b82f6; color: white; width: auto; padding: 8px 16px; font-size: 11px;}
-        .btn-hide { background: transparent; border: 1px solid var(--border); color: var(--text-muted); padding: 8px 15px; font-size: 11px; box-shadow: none; border-radius: 8px; width: auto;}
+        .btn-remove { background: transparent; color: var(--danger); border: 1px solid var(--danger); }
 
         input, select { background: var(--input-bg); border: none; border-bottom: 2px solid var(--border); color: var(--text-main); padding: 14px 15px; border-radius: 8px 8px 0 0; outline: none; width: 100%; box-sizing: border-box; font-family: inherit; margin-bottom: 15px; transition: 0.2s; font-size: 15px;}
         input:focus, select:focus { border-color: var(--accent); background: rgba(0,0,0,0.1); }
@@ -172,16 +179,20 @@
         .msg { padding: 8px 12px; border-radius: 12px; font-size: 14px; max-width: 85%; line-height: 1.4; box-shadow: 0 1px 2px rgba(0,0,0,0.1); position: relative; } 
         .msg.me { background: #005c4b; color: #e9edef; align-self: flex-end; border-top-right-radius: 4px; } 
         .msg.them { background: #202c33; color: #e9edef; align-self: flex-start; border-top-left-radius: 4px; } 
-        body.light-mode .msg.me { background: #d9fdd3; color: #111b21; }
-        body.light-mode .msg.them { background: #ffffff; color: #111b21; }
+        html.light-mode .msg.me { background: #d9fdd3; color: #111b21; }
+        html.light-mode .msg.them { background: #ffffff; color: #111b21; }
 
         .app-alert-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.8); display: none; justify-content: center; align-items: center; z-index: 9999; opacity: 0; pointer-events: auto; backdrop-filter: blur(2px); transition: opacity 0.2s ease; padding: 20px;}
         .app-alert-overlay.show { display: flex !important; opacity: 1; }
-        .app-alert-box { background: var(--card-bg); border-radius: 16px; padding: 25px 20px; width: 100%; max-width: 380px; text-align: center; box-shadow: 0 15px 30px rgba(0, 0, 0, 0.4); transform: scale(0.95); transition: transform 0.2s ease; }
+        .app-alert-box { background: var(--card-bg); border-radius: 16px; padding: 25px 20px; width: 100%; max-width: 380px; text-align: center; box-shadow: 0 15px 30px rgba(0, 0, 0, 0.4); transform: scale(0.95); transition: transform 0.2s ease; max-height: 90vh; overflow-y: auto; }
         .app-alert-overlay.show .app-alert-box { transform: scale(1); }
         .app-alert-message { color: var(--text-muted); font-size: 14px; line-height: 1.5; margin-bottom: 25px; margin-top: 5px; white-space: pre-line; }
 
         .history-item { background: transparent; padding: 15px 20px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; }
+
+        .system-warning-banner { padding: 20px; text-align: center; border-bottom: 1px solid var(--warning); background: rgba(243, 156, 18, 0.05);}
+        .system-warning-banner p { font-size: 13px; margin: 5px 0 15px 0; color: var(--text-muted); }
+
     </style> 
 </head> 
 <body> 
@@ -191,7 +202,7 @@
             <span></span><span></span><span></span>
         </button>
         <div class="header-titles">
-            <h1>STUDENT COMMAND</h1>
+            <h1 onclick="switchView('view-home', null)">SAFE<span>DRIVE</span></h1>
             <span class="header-overwatch" id="liveClock">00:00:00</span>
         </div>
         <div class="header-right">
@@ -214,10 +225,10 @@
                 <span class="ico">🏠</span> Home Dashboard
             </button>
             <button class="drawer-item" data-view="view-school-request" onclick="switchView('view-school-request', this)">
-                <span class="ico">🏫</span> School Transport Request
+                <span class="ico">🏫</span> School Transport
             </button>
             <button class="drawer-item" data-view="view-event-request" onclick="switchView('view-event-request', this)">
-                <span class="ico">🎉</span> Event Request
+                <span class="ico">🎉</span> Event Hire
             </button>
             <button class="drawer-item" data-view="view-school-active" onclick="switchView('view-school-active', this)">
                 <span class="ico">🚐</span> Active School
@@ -257,7 +268,7 @@
 
             <button onclick="viewFullProfile()" class="btn btn-chat" style="margin-bottom:10px;">VIEW PICTURE</button>
             <button onclick="document.getElementById('profileUpload').click()" class="btn btn-primary" style="margin-bottom:10px;">CHANGE PHOTO</button>
-            <button onclick="deleteProfilePic()" class="btn btn-remove" style="margin-bottom:15px; border-color: transparent;">DELETE PICTURE</button>
+            <button onclick="deleteProfilePic()" class="btn btn-remove" style="margin-bottom:15px;">DELETE PICTURE</button>
             
             <div style="height: 1px; background: var(--border); margin: 15px 0;"></div>
             <button onclick="delAcc()" class="btn btn-remove" style="margin-bottom:15px; color: var(--danger); border-color: var(--danger);">DELETE ACCOUNT PERMANENTLY</button>
@@ -324,6 +335,12 @@
     <!-- ===== MAIN EDGE-TO-EDGE CONTAINER ===== -->
     <div class="container"> 
         
+        <div id="profileWarningBanner" class="system-warning-banner" style="display:none;">
+            <h3 style="color: var(--warning); margin: 0 0 5px 0; font-size: 15px;">Profile Picture Required</h3>
+            <p>Please upload a clear photo for identification.</p>
+            <button class="btn btn-warning" style="padding: 12px;" onclick="document.getElementById('profileUpload').click()">UPLOAD PHOTO</button>
+        </div>
+
         <!-- ===== VIEW: HOME (Welcome screen) ===== -->
         <div id="view-home" class="view-section active">
             <div class="home-image-container">
@@ -450,17 +467,21 @@
         }
 
         // --- Theme Management ---
-        function toggleTheme() {
-            const isLight = document.body.classList.toggle('light-mode');
-            localStorage.setItem('theme', isLight ? 'light' : 'dark');
+        async function toggleTheme() {
+            const isLight = document.documentElement.classList.toggle('light-mode');
+            const newTheme = isLight ? 'light' : 'dark';
+            localStorage.setItem('theme', newTheme);
             const ico = document.getElementById('themeIcon');
             if (ico) ico.innerText = isLight ? '🌙' : '🌓';
-            setChatBackground(); 
-        }
-        if (localStorage.getItem('theme') === 'light') {
-            document.body.classList.add('light-mode');
-            const ico = document.getElementById('themeIcon');
-            if (ico) ico.innerText = '🌙';
+            if (typeof setChatBackground === 'function') setChatBackground(); 
+
+            try {
+                await authFetch('/api/profile/update_self', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ theme: newTheme })
+                });
+            } catch(e) { console.error("Theme cloud sync failed", e); }
         }
 
         // --- Drawer Management ---
@@ -478,6 +499,13 @@
                 document.getElementById(viewId).classList.add('active');
                 document.querySelectorAll('.drawer-item[data-view]').forEach(b => b.classList.remove('active'));
                 if (btn) btn.classList.add('active');
+                
+                // When switching to search tabs, ensure default states render
+                if (viewId === 'view-find-d2d') currentSearchMode = 'Door to Door';
+                if (viewId === 'view-find-event') currentSearchMode = 'Events and School';
+                if (viewId === 'view-find-d2d' || viewId === 'view-find-event') {
+                    filterGlobalDrivers();
+                }
             }
             closeDrawer();
             window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -526,21 +554,43 @@
         let targetDriverName = null;
         let targetTripType = null;
 
-        // Restore Profile
+        // Restore Profile and Settings
         (async function restoreProfilePhoto() {
             try {
-                if (!cachedPhoto && myU) {
+                if (myU) {
                     const profRes = await authFetch('/api/profile/get_self', { method: 'POST' });
                     const profJson = await profRes.json();
                     const data = profJson.status === 'success' ? profJson.profile : null;
                     const error = profJson.status !== 'success';
 
-                    if (!error && data && data.photo) {
-                        sessionStorage.setItem('userPhoto', data.photo);
-                        if (avatarEl) avatarEl.src = data.photo;
+                    if (!error && data) {
+                        if (data.photo) {
+                            sessionStorage.setItem('userPhoto', data.photo);
+                            if (avatarEl) avatarEl.src = data.photo;
+                        }
+                        
+                        if (data.wallpaper) {
+                            const homeImg = document.getElementById('studentHomeImg');
+                            if(homeImg) homeImg.src = data.wallpaper;
+                            localStorage.setItem('studentHomeWallpaper', data.wallpaper);
+                        }
+
+                        if (data.theme) {
+                            if (data.theme === 'light') {
+                                document.documentElement.classList.add('light-mode');
+                                localStorage.setItem('theme', 'light');
+                                const ico = document.getElementById('themeIcon');
+                                if (ico) ico.innerText = '🌙';
+                            } else {
+                                document.documentElement.classList.remove('light-mode');
+                                localStorage.setItem('theme', 'dark');
+                                const ico = document.getElementById('themeIcon');
+                                if (ico) ico.innerText = '🌓';
+                            }
+                        }
                     }
                 }
-            } catch (err) { }
+            } catch (err) { console.log("Profile sync failed:", err); }
         })();
 
         // ⚡ INSTANT UI UPDATE ⚡
@@ -554,6 +604,13 @@
             avatarEl.src = `https://ui-avatars.com/api/?name=${encodeURIComponent(myN)}&background=27ae60&color=fff&size=256`;
         }
         
+        // Fast load local wallpaper
+        const savedHomeImg = localStorage.getItem('studentHomeWallpaper');
+        if(savedHomeImg) {
+            const el = document.getElementById('studentHomeImg');
+            if(el) el.src = savedHomeImg;
+        }
+
         setInterval(() => { 
             const now = new Date();
             const dateStr = now.toLocaleDateString(undefined, { weekday: 'short', year: 'numeric', month: 'short', day: 'numeric' });
@@ -577,22 +634,39 @@
         }
 
         // Wallpaper logic
-        function handleStudentImgUpload(event) {
+        async function handleStudentImgUpload(event) {
             const file = event.target.files[0];
             if (!file) return;
-            const reader = new FileReader();
-            reader.onload = function(e) {
-                document.getElementById('studentHomeImg').src = e.target.result;
-                localStorage.setItem('studentHomeWallpaper', e.target.result);
-            };
-            reader.readAsDataURL(file);
+
+            showAppAlert("Uploading wallpaper to secure storage... Please wait.", "VERIFICATION");
+
+            try {
+                const formData = new FormData();
+                formData.append('wallpaper', file);
+
+                const res = await authFetch('/api/profile/upload_wallpaper', { method: 'POST', body: formData });
+                const data = await res.json();
+
+                if (data.status === 'success') {
+                    document.getElementById('studentHomeImg').src = data.wallpaper_url;
+                    localStorage.setItem('studentHomeWallpaper', data.wallpaper_url);
+                    showAppAlert("Wallpaper successfully updated.", "SUCCESS");
+                } else {
+                    showAppAlert("Could not sync wallpaper to database.");
+                }
+            } catch (err) { showAppAlert("Storage upload failed. Please verify your connection."); }
         }
-        function removeStudentPicture() {
-            document.getElementById('studentHomeImg').src = "https://images.unsplash.com/photo-1523050854058-8df90110c9f1?auto=format&fit=crop&w=800&q=80";
-            localStorage.removeItem('studentHomeWallpaper');
+
+        async function removeStudentPicture() {
+            try {
+                await authFetch('/api/profile/delete_wallpaper', { method: 'POST' });
+                document.getElementById('studentHomeImg').src = "https://images.unsplash.com/photo-1523050854058-8df90110c9f1?auto=format&fit=crop&w=800&q=80";
+                localStorage.removeItem('studentHomeWallpaper');
+                showAppAlert("Wallpaper reset to default.", "SUCCESS");
+            } catch(e) {
+                showAppAlert("Failed to reset wallpaper.");
+            }
         }
-        const savedHomeImg = localStorage.getItem('studentHomeWallpaper');
-        if(savedHomeImg) document.getElementById('studentHomeImg').src = savedHomeImg;
 
         async function initDashboard() {
             try {
@@ -602,6 +676,15 @@
                 if(data && data.grade) {
                     document.getElementById('sGrade').innerText = "Grade: " + data.grade;
                     document.getElementById('gradeInput').value = data.grade;
+                }
+                if(data) {
+                    const regDate = new Date(data.created_at || Date.now());
+                    const daysActive = (Date.now() - regDate) / (1000 * 60 * 60 * 24);
+                    if((!data.photo || data.photo === "") && daysActive >= 3) {
+                        document.getElementById('profileWarningBanner').style.display = 'block';
+                    } else {
+                        document.getElementById('profileWarningBanner').style.display = 'none';
+                    }
                 }
             } catch(e) {}
             loadAllDrivers();
@@ -625,7 +708,7 @@
             if(!file) return;
 
             closeProfileMenu();
-            showAppAlert("Uploading the image to secure storage... Please wait.", "VERIFICATION");
+            showAppAlert("AI Engine is scanning and uploading the image to secure storage... Please wait.", "SYSTEM VERIFICATION");
 
             try {
                 const formData = new FormData();
@@ -640,7 +723,8 @@
                 if (data.status === 'success') {
                     sessionStorage.setItem('userPhoto', data.photo_url);
                     if (avatarEl) avatarEl.src = data.photo_url;
-                    showAppAlert("Profile picture securely updated.", "SUCCESS");
+                    document.getElementById('profileWarningBanner').style.display = 'none';
+                    showAppAlert("AI check passed. Profile picture securely updated.", "SUCCESS");
                 } else {
                     showAppAlert("Could not sync photo link to database.");
                 }
@@ -1092,7 +1176,7 @@
         }
 
         function setChatBackground() {
-            const isLight = document.body.classList.contains('light-mode');
+            const isLight = document.documentElement.classList.contains('light-mode');
             const myPic = sessionStorage.getItem('userPhoto');
             const chatDiv = document.getElementById('chatMessages');
             
@@ -1157,6 +1241,18 @@
                 .then(() => syncChatMessages());
         }
 
+        function formatTime(timestamp) {
+            if (!timestamp) return "";
+            const d = new Date(timestamp);
+            const now = new Date();
+            const sameDay = d.getDate() === now.getDate() && d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
+
+            if (sameDay) {
+                return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+            }
+            return d.toLocaleDateString([], { day: '2-digit', month: 'short' }) + " " + d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        }
+
         function renderMessages(chat) {
             const area = document.getElementById('chatMessages');
             const newHtml = (chat || []).map(m => `
@@ -1205,6 +1301,7 @@
                 }
             };
         }
+        
         function logout() { sessionStorage.clear(); window.location.replace("login.html"); } 
         
         window.onload = () => { 
