@@ -18,7 +18,7 @@ from email.message import EmailMessage
 from zoneinfo import ZoneInfo
 from datetime import datetime
 from flask import render_template
-from auth import issue_token, require_auth, require_role  # NEW: JWT auth module
+from auth import issue_token, require_auth, require_role  # JWT auth module
 import resend
 
 print("BACKEND STARTED")
@@ -39,7 +39,6 @@ def current_sa_time():
         .replace(microsecond=0)
         .isoformat(timespec="seconds")
     )
-
 
 @app.route('/')
 def home():
@@ -129,12 +128,10 @@ def generate_email_wrapper(content, subtitle="Security Notification"):
     """
 
 def send_mail(to_email, subject, body_content, subtitle="Security Notification"):
-    # Wrap your custom body content inside your HTML template
     full_html_body = generate_email_wrapper(body_content, subtitle=subtitle)
-
     try:
         params = {
-            "from": "Safe Drive <onboarding@resend.dev>",  # Uses Resend's default test sender (works instantly)
+            "from": "Safe Drive <onboarding@resend.dev>",
             "to": [to_email],
             "subject": subject,
             "html": full_html_body,
@@ -147,11 +144,8 @@ def send_mail(to_email, subject, body_content, subtitle="Security Notification")
         return False
 
 # =====================================================================
-# OPEN ROUTES — no identity exists yet, so these stay unauthenticated.
-# (login, signup, otp verification, password reset)
+# OPEN ROUTES
 # =====================================================================
-
-
 
 @app.route('/moderator_signup')
 @app.route('/moderatore_signup.html')
@@ -162,7 +156,6 @@ def moderator_signup_page():
 @app.route('/general_signup.html')
 def general_signup_page():
     return render_template('general_signup.html')
-
 
 @app.route('/signup')
 @app.route('/signup.html')
@@ -179,15 +172,10 @@ def student_signup_page():
 def driver_signup_page():
     return render_template('driver_signup.html')
 
-
-
 @app.route('/principal_signup')
 @app.route('/principal_signup.html')
 def principal_signup_page():
     return render_template('principal_signup.html')
-
-
-
 
 @app.route('/student_dashboard.html')
 def student_dashboard():
@@ -213,7 +201,6 @@ def moderator_dashboard():
 def general_dashboard():
     return render_template('general_dashboard.html')
 
-
 @app.route('/login')
 @app.route('/login.html')
 def login_page():
@@ -224,8 +211,6 @@ def login_page():
 def choice_page():
     return render_template('choice.html')
 
-
-
 @app.route('/api/admin/users', methods=['GET', 'OPTIONS'])
 @require_auth
 @require_role('admin')
@@ -234,7 +219,7 @@ def admin_get_users():
         all_users = get_db().table("users").select(
             "username, name, email, phone, role, school_code, driver_mode, transport_type, "
             "vehicle_type, number_plate, verification_image, license_image, grade, "
-            "moderator_type, moderated_grade, created_at"
+            "moderator_type, moderated_grade, created_at, wallpaper"
         ).execute().data or []
 
         drivers = [u for u in all_users if u.get('role') == 'driver' and u.get('transport_type') != 'school_events']
@@ -278,8 +263,6 @@ def admin_get_users():
 @require_auth
 @require_role('admin')
 def admin_reject_license():
-    """Clears a driver's license image so they're forced to re-upload,
-    without deleting their whole account."""
     try:
         username = request.json.get('username')
         if not username:
@@ -634,10 +617,7 @@ def verify_parent_otp():
 
 
 # =====================================================================
-# PROTECTED ROUTES — every one of these now requires a valid
-# "Authorization: Bearer <token>" header (issued at /api/login).
-# Identity is read from g.current_user / g.current_role — NEVER from
-# the request body anymore, so it can't be spoofed by editing JSON.
+# PROTECTED ROUTES 
 # =====================================================================
 
 @app.route('/api/get_my_bookings', methods=['POST', 'OPTIONS'])
@@ -734,8 +714,6 @@ def respond_booking():
             student_u = booking.get('student_username')
             student_name = booking.get('student_name')
 
-            # Only school-linked bookings get a parent-driver room —
-            # D2D_GLOBAL bookings already have their own general_driver_rooms row.
             if school_code != "D2D_GLOBAL" and student_u:
                 monitor_check = get_db().table("parent_principal_rooms") \
                     .select("parent_username") \
@@ -1483,7 +1461,7 @@ def get_self_profile():
 # so this endpoint can never be used to escalate privileges or hijack
 # another account's identity, even by a malicious request).
 ALLOWED_SELF_UPDATE_FIELDS = {
-    'photo', 'town', 'location', 'current_town', 'grade',
+    'photo', 'wallpaper', 'town', 'location', 'current_town', 'grade',
     'transport_type', 'driver_mode', 'moderated_grade', 'school_codes'
 }
 
@@ -1502,6 +1480,66 @@ def update_self_profile():
         return jsonify({'status': 'success'}), 200
     except Exception as e:
         return jsonify({'status': 'error', 'msg': str(e)}), 500
+
+@app.route('/api/profile/upload_wallpaper', methods=['POST', 'OPTIONS'])
+@require_auth
+def upload_wallpaper():
+    """Uploads a wallpaper image to the database and links it to the user."""
+    try:
+        if 'wallpaper' not in request.files:
+            return jsonify({'status': 'error', 'message': 'No file provided'}), 400
+
+        file = request.files['wallpaper']
+        username = g.current_user
+
+        old_res = get_db().table("users").select("wallpaper").eq("username", username).execute()
+        old_photo = old_res.data[0].get('wallpaper') if old_res.data else None
+        
+        if old_photo and 'supabase.co' in old_photo:
+            try:
+                old_filename = old_photo.split('/')[-1]
+                get_db().storage.from_("profile pictures").remove([old_filename])
+            except Exception as cleanup_err:
+                print(f"Old wallpaper cleanup warning: {cleanup_err}")
+
+        file_ext = file.filename.rsplit('.', 1)[-1] if '.' in file.filename else 'jpg'
+        file_bytes = file.read()
+        new_filename = f"wallpaper_{username}_{int(time.time())}.{file_ext}"
+
+        get_db().storage.from_("profile pictures").upload(
+            path=new_filename,
+            file=file_bytes,
+            file_options={"content-type": file.content_type or "image/jpeg"}
+        )
+        public_url = get_db().storage.from_("profile pictures").get_public_url(new_filename)
+
+        get_db().table("users").update({"wallpaper": public_url}).eq("username", username).execute()
+
+        return jsonify({'status': 'success', 'wallpaper_url': public_url}), 200
+    except Exception as e:
+        print(f"Wallpaper upload error: {e}")
+        return jsonify({'status': 'error', 'message': str(e)}), 500
+
+@app.route('/api/profile/delete_wallpaper', methods=['POST', 'OPTIONS'])
+@require_auth
+def delete_wallpaper():
+    """Deletes the user's custom wallpaper."""
+    try:
+        username = g.current_user
+        old_res = get_db().table("users").select("wallpaper").eq("username", username).execute()
+        old_photo = old_res.data[0].get('wallpaper') if old_res.data else None
+
+        if old_photo and 'supabase.co' in old_photo:
+            try:
+                old_filename = old_photo.split('/')[-1]
+                get_db().storage.from_("profile pictures").remove([old_filename])
+            except Exception as cleanup_err:
+                print(f"Wallpaper cleanup warning: {cleanup_err}")
+
+        get_db().table("users").update({"wallpaper": None}).eq("username", username).execute()
+        return jsonify({'status': 'success'}), 200
+    except Exception as e:
+        return jsonify({'status': 'error', 'message': str(e)}), 500
 
 
 @app.route('/api/profile/upload_photo', methods=['POST', 'OPTIONS'])
