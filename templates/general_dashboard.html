@@ -9,6 +9,14 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script> 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.23/jspdf.plugin.autotable.min.js"></script> 
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
+    <!-- PREVENTS THEME FLASHING ON LOAD -->
+    <script>
+        if (localStorage.getItem('theme') === 'light') {
+            document.documentElement.classList.add('light-mode');
+        }
+    </script>
+
     <style> 
         /* ===== CSS VARIABLES FOR THEMING ===== */
         :root {  
@@ -30,7 +38,7 @@
         } 
         
         /* Light Mode Overrides */
-        body.light-mode {
+        html.light-mode body {
             --primary: #008069; 
             --bg-grad-1: #efeae2;
             --bg-grad-2: #efeae2;
@@ -124,6 +132,12 @@
         .view-section.active { display: flex; }
         @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
 
+        /* Full Screen Home Image */
+        .home-image-container { position: relative; width: 100%; height: 50vh; }
+        .home-image-container img { width: 100%; height: 100%; object-fit: cover; display: block; }
+        .home-image-overlay { position: absolute; bottom: 0; left: 0; width: 100%; background: linear-gradient(to top, var(--bg-grad-1) 0%, transparent 100%); padding: 40px 20px 20px; }
+        .home-controls { padding: 15px 20px; display: flex; flex-direction: column; gap: 15px; background: var(--bg-grad-1); flex: 1; }
+
         .card { background: var(--card-bg); width: 100%; border-bottom: 8px solid var(--bg-grad-1); } 
         .card-header { padding: 15px 20px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; background: var(--card-bg-alt); flex-wrap: wrap; gap: 10px;} 
         .card-header h3 { margin: 0; font-size: 0.95rem; letter-spacing: 0.5px; color: var(--text-muted); font-weight: 700; text-transform: uppercase; display: flex; align-items: center;} 
@@ -147,7 +161,7 @@
         .btn-danger { background: var(--danger); color: white; }
         .btn-warning { background: var(--warning); color: #020218; }
         .btn-pdf { background: #3b82f6; color: white; width: auto; padding: 8px 16px; font-size: 11px;}
-        .btn-hide { background: transparent; border: 1px solid var(--border); color: var(--text-muted); padding: 8px 15px; font-size: 11px; box-shadow: none; border-radius: 8px; width: auto;}
+        .btn-remove { background: transparent; color: var(--danger); border: 1px solid var(--danger); }
 
         input, select { background: var(--input-bg); border: none; border-bottom: 2px solid var(--border); color: var(--text-main); padding: 14px 15px; border-radius: 8px 8px 0 0; outline: none; width: 100%; box-sizing: border-box; font-family: inherit; margin-bottom: 15px; transition: 0.2s; font-size: 15px;}
         input:focus, select:focus { border-color: var(--accent); background: rgba(0,0,0,0.1); }
@@ -164,12 +178,12 @@
         .msg { padding: 8px 12px; border-radius: 12px; font-size: 14px; max-width: 85%; line-height: 1.4; box-shadow: 0 1px 2px rgba(0,0,0,0.1); position: relative; } 
         .msg.me { background: #005c4b; color: #e9edef; align-self: flex-end; border-top-right-radius: 4px; } 
         .msg.them { background: #202c33; color: #e9edef; align-self: flex-start; border-top-left-radius: 4px; } 
-        body.light-mode .msg.me { background: #d9fdd3; color: #111b21; }
-        body.light-mode .msg.them { background: #ffffff; color: #111b21; }
+        html.light-mode .msg.me { background: #d9fdd3; color: #111b21; }
+        html.light-mode .msg.them { background: #ffffff; color: #111b21; }
 
         .app-alert-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.8); display: none; justify-content: center; align-items: center; z-index: 9999; opacity: 0; pointer-events: auto; backdrop-filter: blur(2px); transition: opacity 0.2s ease; padding: 20px;}
         .app-alert-overlay.show { display: flex !important; opacity: 1; }
-        .app-alert-box { background: var(--card-bg); border-radius: 16px; padding: 25px 20px; width: 100%; max-width: 380px; text-align: center; box-shadow: 0 15px 30px rgba(0, 0, 0, 0.4); transform: scale(0.95); transition: transform 0.2s ease; }
+        .app-alert-box { background: var(--card-bg); border-radius: 16px; padding: 25px 20px; width: 100%; max-width: 380px; text-align: center; box-shadow: 0 15px 30px rgba(0, 0, 0, 0.4); transform: scale(0.95); transition: transform 0.2s ease; max-height: 90vh; overflow-y: auto; }
         .app-alert-overlay.show .app-alert-box { transform: scale(1); }
         .app-alert-message { color: var(--text-muted); font-size: 14px; line-height: 1.5; margin-bottom: 25px; margin-top: 5px; white-space: pre-line; }
 
@@ -209,7 +223,7 @@
         </div>
         <div class="drawer-nav">
             <button class="drawer-item active" data-view="view-home" onclick="switchView('view-home', this)">
-                <span class="ico">🏠</span> Home
+                <span class="ico">🏠</span> Home Dashboard
             </button>
             <button class="drawer-item" data-view="view-monitored" onclick="switchView('view-monitored', this)">
                 <span class="ico">🛡️</span> Monitored Children
@@ -248,7 +262,7 @@
 
     <!-- Profile Management Modal -->
     <div id="profileMenuOverlay" class="app-alert-overlay">
-        <div class="app-alert-box" style="padding: 25px 20px; max-height: 90vh; overflow-y: auto;">
+        <div class="app-alert-box">
             <h3 style="margin-top: 0; color: var(--text-main); font-size: 18px; margin-bottom: 20px;">Profile Settings</h3>
             
             <button onclick="viewFullProfile()" class="btn btn-chat" style="margin-bottom:10px;">VIEW PICTURE</button>
@@ -332,19 +346,32 @@
             <button class="btn btn-warning" style="padding: 12px;" onclick="document.getElementById('profileUpload').click()">UPLOAD PHOTO</button>
         </div>
 
-        <!-- ===== VIEW: HOME (CLEAN LOGO BANNER) ===== -->
-        <div id="view-home" class="view-section active" style="padding: 20px;">
-            <div style="text-align: center; margin-bottom: 25px;">
-                <img id="mainLogoPic" src="/images/logo.jpeg" alt="Safe Drive Logo" style="width: 100%; max-width: 500px; border-radius: 16px; box-shadow: 0 10px 30px rgba(0,0,0,0.3); border: 1px solid var(--border);">
-                <h2 style="margin: 20px 0 5px 0; font-size: 1.8rem; font-weight: 800; color: var(--text-main);">Welcome,</h2>
-                <p id="homeGreetingName" style="margin: 0; color: var(--text-muted); font-size: 1.1rem;"></p>
+        <!-- ===== VIEW: HOME (WALLPAPER & BUTTONS) ===== -->
+        <div id="view-home" class="view-section active">
+            
+            <div class="home-image-container">
+                <!-- Using logo.jpeg by default as requested -->
+                <img id="generalHomeImg" src="logo.jpeg" alt="Home Wallpaper">
+                <div class="home-image-overlay">
+                    <h2 style="margin: 0; color: white; font-size: 1.8rem; font-weight: 800; text-shadow: 0 2px 4px rgba(0,0,0,0.8);">Welcome,</h2>
+                    <p id="homeGreetingName" style="margin: 0; color: rgba(255,255,255,0.9); font-size: 1.1rem; text-shadow: 0 1px 3px rgba(0,0,0,0.8);"></p>
+                </div>
             </div>
 
-            <div style="display: flex; flex-direction: column; gap: 12px; max-width: 500px; margin: 0 auto; width: 100%;">
-                <button class="btn btn-primary" style="height: 55px; font-size: 13px;" onclick="switchView('view-monitored', document.querySelector('[data-view=view-monitored]'))">🛡️ MONITORED CHILDREN</button>
-                <button class="btn btn-secondary" style="height: 55px; font-size: 13px; background: #3b82f6;" onclick="switchView('view-find-d2d', document.querySelector('[data-view=view-find-d2d]'))">🚐 FIND DOOR-TO-DOOR RIDES</button>
-                <button class="btn btn-secondary" style="height: 55px; font-size: 13px; background: #8b5cf6;" onclick="switchView('view-find-event', document.querySelector('[data-view=view-find-event]'))">🎉 FIND EVENT DRIVERS</button>
+            <div class="home-controls">
+                <div style="display: flex; gap: 10px;">
+                    <button class="btn btn-chat" onclick="document.getElementById('generalImgUpload').click()" style="flex: 1;">CHANGE WALLPAPER</button>
+                    <button class="btn btn-remove" onclick="removeGeneralPicture()" style="flex: 1;">RESET</button>
+                    <input type="file" id="generalImgUpload" style="display:none;" onchange="handleGeneralImgUpload(event)" accept="image/*">
+                </div>
+
+                <div style="display: flex; flex-direction: column; gap: 12px; margin-top: 15px;">
+                    <button class="btn btn-primary" style="height: 55px; font-size: 13px;" onclick="switchView('view-monitored', document.querySelector('[data-view=view-monitored]'))">🛡️ MONITORED CHILDREN</button>
+                    <button class="btn btn-secondary" style="height: 55px; font-size: 13px; background: #3b82f6;" onclick="switchView('view-find-d2d', document.querySelector('[data-view=view-find-d2d]'))">🚐 FIND DOOR-TO-DOOR RIDES</button>
+                    <button class="btn btn-secondary" style="height: 55px; font-size: 13px; background: #8b5cf6;" onclick="switchView('view-find-event', document.querySelector('[data-view=view-find-event]'))">🎉 FIND EVENT DRIVERS</button>
+                </div>
             </div>
+
         </div>
 
         <!-- ===== VIEW: MONITORED CHILDREN ===== -->
@@ -485,17 +512,63 @@
         }
 
         // --- Theme Management ---
-        function toggleTheme() {
-            const isLight = document.body.classList.toggle('light-mode');
-            localStorage.setItem('theme', isLight ? 'light' : 'dark');
+        async function toggleTheme() {
+            const isLight = document.documentElement.classList.toggle('light-mode');
+            const newTheme = isLight ? 'light' : 'dark';
+            localStorage.setItem('theme', newTheme);
             const ico = document.getElementById('themeIcon');
             if (ico) ico.innerText = isLight ? '🌙' : '🌓';
-            setChatBackground(); 
+            if (typeof setChatBackground === 'function') setChatBackground(); 
+
+            try {
+                await authFetch('/api/profile/update_self', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ theme: newTheme })
+                });
+            } catch(e) { console.error("Theme cloud sync failed", e); }
         }
-        if (localStorage.getItem('theme') === 'light') {
-            document.body.classList.add('light-mode');
-            const ico = document.getElementById('themeIcon');
-            if (ico) ico.innerText = '🌙';
+
+        // --- Wallpaper Management ---
+        async function handleGeneralImgUpload(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            showAppAlert("Uploading wallpaper to secure storage... Please wait.", "VERIFICATION");
+
+            try {
+                const formData = new FormData();
+                formData.append('wallpaper', file);
+
+                const res = await authFetch('/api/profile/upload_wallpaper', { method: 'POST', body: formData });
+                const data = await res.json();
+
+                if (data.status === 'success') {
+                    document.getElementById('generalHomeImg').src = data.wallpaper_url;
+                    localStorage.setItem('generalHomeWallpaper', data.wallpaper_url);
+                    showAppAlert("Wallpaper successfully updated.", "SUCCESS");
+                } else {
+                    showAppAlert("Could not sync wallpaper to database.");
+                }
+            } catch (err) { showAppAlert("Storage upload failed. Please verify your connection."); }
+        }
+
+        async function removeGeneralPicture() {
+            try {
+                await authFetch('/api/profile/delete_wallpaper', { method: 'POST' });
+                document.getElementById('generalHomeImg').src = "logo.jpeg";
+                localStorage.removeItem('generalHomeWallpaper');
+                showAppAlert("Wallpaper reset to default.", "SUCCESS");
+            } catch(e) {
+                showAppAlert("Failed to reset wallpaper.");
+            }
+        }
+        
+        // Restore local wallpaper on boot before network fetch if available
+        const savedHomeImg = localStorage.getItem('generalHomeWallpaper');
+        if(savedHomeImg) {
+            const el = document.getElementById('generalHomeImg');
+            if(el) el.src = savedHomeImg;
         }
 
         // --- Drawer Management ---
@@ -602,21 +675,6 @@
         function getDB() { return new Promise((resolve) => { const request = indexedDB.open(dbName, 2); request.onupgradeneeded = (e) => e.target.result.createObjectStore(storeName, { keyPath: "username" }); request.onsuccess = (e) => resolve(e.target.result); }); } 
         async function getFromVault() { const db = await getDB(); return new Promise((resolve) => { const request = db.transaction(storeName, "readonly").objectStore(storeName).getAll(); request.onsuccess = () => resolve(request.result); }); } 
 
-        (async function restoreProfilePhoto() {
-            try {
-                if (!cachedPhoto && myU) {
-                    const profRes = await authFetch('/api/profile/get_self', { method: 'POST' });
-                    const profJson = await profRes.json();
-                    const data = profJson.status === 'success' ? profJson.profile : null;
-                    if (data && data.photo) {
-                        sessionStorage.setItem('userPhoto', data.photo);
-                        const avatarEl = document.getElementById('userImg');
-                        if (avatarEl) avatarEl.src = data.photo;
-                    }
-                }
-            } catch (err) { }
-        })();
-
         document.getElementById('displayName').innerText = myN.toUpperCase();
         document.getElementById('homeGreetingName').innerText = myN;
         const avatarEl = document.getElementById('userImg');
@@ -634,10 +692,36 @@
 
         async function initDashboard() {
             try {
-                const profRes2 = await authFetch('/api/profile/get_self', { method: 'POST' });
-                const profJson2 = await profRes2.json();
-                const data = profJson2.status === 'success' ? profJson2.profile : null;
+                const profRes = await authFetch('/api/profile/get_self', { method: 'POST' });
+                const profJson = await profRes.json();
+                const data = profJson.status === 'success' ? profJson.profile : null;
+                
                 if(data) {
+                    // Sync Photo
+                    if (data.photo) {
+                        sessionStorage.setItem('userPhoto', data.photo);
+                        if (avatarEl) avatarEl.src = data.photo;
+                    }
+                    // Sync Wallpaper
+                    if (data.wallpaper) {
+                        document.getElementById('generalHomeImg').src = data.wallpaper;
+                        localStorage.setItem('generalHomeWallpaper', data.wallpaper);
+                    }
+                    // Sync Theme
+                    if (data.theme) {
+                        if (data.theme === 'light') {
+                            document.documentElement.classList.add('light-mode');
+                            localStorage.setItem('theme', 'light');
+                            const ico = document.getElementById('themeIcon');
+                            if (ico) ico.innerText = '🌙';
+                        } else {
+                            document.documentElement.classList.remove('light-mode');
+                            localStorage.setItem('theme', 'dark');
+                            const ico = document.getElementById('themeIcon');
+                            if (ico) ico.innerText = '🌓';
+                        }
+                    }
+
                     const regDate = new Date(data.created_at || Date.now());
                     const daysActive = (Date.now() - regDate) / (1000 * 60 * 60 * 24);
                     if((!data.photo || data.photo === "") && daysActive >= 3) {
@@ -1401,9 +1485,9 @@
         function downloadPDF() { 
             const { jsPDF } = window.jspdf; const doc = new jsPDF(); 
             doc.setFillColor(11, 20, 26); doc.rect(0, 0, 210, 35, 'F');
-            doc.setTextColor(255, 255, 255); doc.setFontSize(22); doc.text("SAFE DRIVE TRANSCRIPT LEDGER", 14, 20);
-            doc.autoTable({ html: '#safetyTable', startY: 45, headStyles: { fillColor: [37, 211, 102] } }); 
-            doc.save("Safe_Drive_Ledger.pdf"); 
+            doc.setTextColor(255, 255, 255); doc.setFontSize(22); doc.text("SAFE DRIVE LOGISTICS", 14, 25);
+            doc.setTextColor(100, 100, 100); doc.setFontSize(10); doc.text("PARENT TRAVEL TRANSCRIPT", 14, 35);
+            doc.autoTable({ html: '#safetyTable', startY: 45, headStyles: { fillColor: [37, 211, 102] } }); doc.save("Safe_Drive_Ledger.pdf"); 
         }
 
         function logout() { 
