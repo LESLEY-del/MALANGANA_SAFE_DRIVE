@@ -318,7 +318,7 @@
             <h3 style="margin-top: 0; color: var(--text-main); font-size: 18px; margin-bottom: 5px;" id="appAlertTitle">Notice</h3>
             <p id="appAlertMessage" class="app-alert-message"></p>
             <div id="alertActionGroupContainer" style="display: flex; gap: 10px; width: 100%;">
-                <button id="alertDefaultCloseBtn" class="btn btn-dropoff" style="margin-bottom:0;">OK</button>
+                <button id="alertDefaultCloseBtn" onclick="closeAppAlert()" class="btn btn-dropoff" style="margin-bottom:0;">OK</button>
             </div>
         </div>
     </div>
@@ -507,6 +507,10 @@
     </div> 
 
     <script>
+        // --- Global Storage Maps ---
+        let myLastSeenChats = {}; // Holds my count of messages viewed, stored in the DB
+        let globalLastSeenMap = {}; // Holds the other people's counts so we know if they read our messages (blue ticks)
+
         // --- Theme Management ---
         async function toggleTheme() {
             const isLight = document.documentElement.classList.toggle('light-mode');
@@ -578,25 +582,22 @@
         let alarmTimeout = null; 
         let audioMuteTimeout = null;
 
-        // HEURISTIC: Count unread messages based on trailing unreplied texts.
+        // DB Room Key Generator to make sure Driver, Parent, and Student all refer to the same room
+        function getDbRoomKey(rType, rId, supportBaseChildName) {
+            if (rType === 'general_driver_room') return `d2d_${rId}`;
+            if (rType === 'booking_shared') return `school_${rId}`;
+            if (rType === 'parent_driver_matrix') return `pd_${supportBaseChildName}`;
+            if (rType === 'booking_shared_parent') return `pd_${supportBaseChildName}`; // Same logic since it's the parent-driver channel
+            if (rType === 'triple_party_matrix') return `pp_${supportBaseChildName}`;
+            return `${rType}_${rId}`;
+        }
+
+        // Updated getUnreadCount uses database memory (myLastSeenChats) to give exact math
         function getUnreadCount(messages, roomKey) {
             if (!messages || messages.length === 0) return 0;
-            let trailing = 0;
-            for (let i = messages.length - 1; i >= 0; i--) {
-                const sender = messages[i].sender || messages[i].sender_username;
-                if (sender === myU) break; // Stop counting as soon as we hit a message YOU sent
-                trailing++;
-            }
-            
-            // If you replied, trailing is 0, so clear any session override.
-            if (trailing === 0) {
-                sessionStorage.removeItem('read_trailing_' + roomKey);
-                return 0;
-            }
-            
-            // If you opened the chat but didn't reply, we temporarily hide the badge for this session
-            const cleared = parseInt(sessionStorage.getItem('read_trailing_' + roomKey) || '0');
-            return Math.max(0, trailing - cleared);
+            const msgCount = messages.length;
+            const storedLen = myLastSeenChats[roomKey] || 0;
+            return Math.max(0, msgCount - storedLen);
         }
 
         function updateBadge(id, count) {
@@ -741,6 +742,8 @@
                 const res2 = await authFetch('/api/users/lookup', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ role: 'general' }) });
                 const lookupData2 = await res2.json();
                 allSystemStudents = [...(lookupData.users || []), ...(lookupData2.users || [])];
+                
+                allSystemStudents.forEach(u => { globalLastSeenMap[u.username] = u.last_seen_chats || {}; });
             } catch(e) {}
 
             try {
@@ -748,6 +751,8 @@
                 const profJson = await profRes.json();
                 const data = profJson.status === 'success' ? profJson.profile : null;
                 if(data) {
+                    myLastSeenChats = data.last_seen_chats || {};
+
                     if (data.wallpaper) {
                         document.getElementById('schoolHomeImg').src = data.wallpaper;
                         localStorage.setItem('driverHomeWallpaper', data.wallpaper);
@@ -1267,8 +1272,16 @@
                             name: p.name,
                             photo: p.photo
                         };
+                        globalLastSeenMap[p.username] = p.last_seen_chats || {};
                     });
                 }
+
+                const countRes = await authFetch('/api/support/get_all_counts', { 
+                    method: 'POST', 
+                    headers:{'Content-Type':'application/json'}, 
+                    body: JSON.stringify({ receiver: myU }) 
+                }); 
+                const counts = (await countRes.json()).counts || {}; 
 
                 const filteredPending = bookings.filter(b => b.status === 'Pending');
                 
@@ -1285,9 +1298,9 @@
                     const displayLabel = isEventRequest ? `<div class="status-tag" style="color:#3498db;">EVENT REQUEST</div>` : `<div class="status-tag" style="color:var(--accent);">SCHOOL REQUEST</div>`;
 
                     const chatArr = b.chat || [];
-                    const studentRoomKey = isEventRequest ? `general_driver_room_${b.booking_id}` : `booking_shared_${b.booking_id}`;
-                    
+                    const studentRoomKey = getDbRoomKey(isEventRequest ? "general_driver_room" : "booking_shared", b.booking_id, b.student_username);
                     let unreadCount = getUnreadCount(chatArr, studentRoomKey);
+                    
                     const badgeHtml = unreadCount > 0 ? `<span class="chat-badge">+${unreadCount}</span>` : '';
 
                     const rowHtml = `
@@ -1327,10 +1340,9 @@
 
                     const isDoorToDoor = b.school_code === "D2D_GLOBAL";
                     const isEventTrip = isDoorToDoor;
+                    const studentRoomKey = getDbRoomKey(isDoorToDoor ? "general_driver_room" : "booking_shared", b.booking_id, b.student_username);
 
                     let unread = 0;
-                    const studentRoomKey = isDoorToDoor ? `general_driver_room_${b.booking_id}` : `booking_shared_${b.booking_id}`;
-
                     if (isDoorToDoor) {
                         try {
                             const histRes = await authFetch('/api/support/get_history', {
@@ -1346,7 +1358,6 @@
                     }
 
                     const chatLabel = unread > 0 ? `Chat <span class="chat-badge">+${unread}</span>` : 'Message';
-
                     if (isDoorToDoor) eventUnreadTotal += unread; else schoolUnreadTotal += unread;
 
                     let motherBtnHtml = "";
@@ -1354,13 +1365,12 @@
                     
                     if (!isEventTrip) {
                         const parentProfile = parentProfilesMap[linkedMotherUsername];
-                        
                         if (linkedMotherUsername && parentProfile) {
                             const motherRealName = parentProfile.name || "Mother";
                             const motherPhotoUrl = parentProfile.photo ? parentProfile.photo : `https://ui-avatars.com/api/?name=${encodeURIComponent(motherRealName)}&background=8e44ad&color=fff`;
 
                             let motherBadgeHtml = "";
-                            const parentRoomKey = `booking_shared_parent_${b.booking_id}`;
+                            const parentRoomKey = getDbRoomKey("booking_shared_parent", b.booking_id, b.student_username);
                             
                             let pUnread = 0;
                             try {
@@ -1430,6 +1440,8 @@
                 backendFinished = bookings.filter(b => b.status === 'Finished');
                 renderHistory(); 
 
+                if (currentRoomID) syncChatMessages();
+
             } catch(e) { console.log("Dashboard sync pipeline exception:", e); } 
         }
 
@@ -1453,13 +1465,15 @@
             currentRoomID = bid; 
             currentRoomType = isEvent ? "general_driver_room" : "booking_shared";
             currentSupportTarget = dUser;
+            supportBaseChildName = null;
 
             document.getElementById('chatTarget').innerText = sName;
             document.getElementById('chatTargetImg').src = photoUrl;
             setChatBackground();
             document.getElementById('chatOverlay').style.display = 'flex';
 
-            const cacheKey = `cache_support_${currentRoomType}_${bid}`;
+            const dbRoomKey = getDbRoomKey(currentRoomType, bid, null);
+            const cacheKey = `cache_support_${dbRoomKey}`;
             const cachedMessages = localStorage.getItem(cacheKey);
             if (cachedMessages) {
                 document.getElementById('chatMessages').innerHTML = cachedMessages;
@@ -1494,7 +1508,8 @@
             setChatBackground();
             document.getElementById('chatOverlay').style.display = 'flex';
             
-            const cacheKey = `cache_support_booking_shared_parent_${bid}`;
+            const dbRoomKey = getDbRoomKey(currentRoomType, bid, childUserKey);
+            const cacheKey = `cache_support_${dbRoomKey}`;
             const cachedMessages = localStorage.getItem(cacheKey);
             if (cachedMessages) {
                 document.getElementById('chatMessages').innerHTML = cachedMessages;
@@ -1537,21 +1552,19 @@
                 }));
             }
 
-            if (currentRoomID) {
-                const roomCacheKey = currentRoomType === 'booking_shared_parent' 
-                    ? `booking_shared_parent_${currentRoomID}` 
-                    : (currentRoomType === 'general_driver_room' ? `general_driver_room_${currentRoomID}` : `booking_shared_${currentRoomID}`);
-                    
-                let trailing = 0;
-                for (let i = messages.length - 1; i >= 0; i--) {
-                    const sender = messages[i].sender || messages[i].sender_username;
-                    if (sender === myU) break;
-                    trailing++;
-                }
-                sessionStorage.setItem('read_trailing_' + roomCacheKey, trailing);
+            const dbRoomKey = getDbRoomKey(currentRoomType, currentRoomID, supportBaseChildName);
+            const currentLen = messages.length;
+            
+            if (currentLen > (myLastSeenChats[dbRoomKey] || 0)) {
+                myLastSeenChats[dbRoomKey] = currentLen;
+                authFetch('/api/profile/update_self', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ last_seen_chats: myLastSeenChats })
+                });
             }
 
-            renderMessages(messages);
+            renderMessages(messages, dbRoomKey);
         }
 
         function formatTime(timestamp) {
@@ -1575,8 +1588,16 @@
             if(!msgText || !currentRoomID) return;
 
             const tempTime = new Date().toISOString();
+            const dbRoomKey = getDbRoomKey(currentRoomType, currentRoomID, supportBaseChildName);
             const area = document.getElementById('chatMessages');
-            area.innerHTML += `<div class="msg me">${escapeHtml(msgText)} <span class="msg-time">${escapeHtml(formatTime(tempTime))}</span></div>`;
+            
+            // Single gray tick locally before server responds
+            const tempTick = `<span style="color: #8696a0; font-size: 15px; margin-left: 4px; display:inline-block; vertical-align:middle; line-height:1;">✓</span>`;
+            
+            area.innerHTML += `<div class="msg me">
+                <div>${escapeHtml(msgText)}</div>
+                <div class="msg-time">${escapeHtml(formatTime(tempTime))} ${tempTick}</div>
+            </div>`;
             area.scrollTop = area.scrollHeight;
             i.value = "";
 
@@ -1605,18 +1626,36 @@
                 .then(() => syncChatMessages());
         }
 
-        function renderMessages(chat) { 
+        function renderMessages(chat, dbRoomKey) { 
+            const otherSeen = globalLastSeenMap[currentSupportTarget]?.[dbRoomKey] || 0;
             const area = document.getElementById('chatMessages');
-            const newHtml = (chat || []).map(m => `<div class="msg ${m.sender === myU ? 'me' : 'them'}">${escapeHtml(m.text || m.message)} <span class="msg-time">${escapeHtml(formatTime(m.time || m.timestamp))}</span></div>`).join('');
+            
+            const newHtml = (chat || []).map((m, i) => {
+                const isMe = m.sender === myU || m.sender_username === myU;
+                let ticks = "";
+                
+                if (isMe) {
+                    if ((i + 1) <= otherSeen) {
+                        // Blue Ticks (Read)
+                        ticks = `<span style="color: #34b7f1; font-size: 15px; margin-left: 4px; display:inline-block; vertical-align:middle; line-height:1;">✓✓</span>`;
+                    } else {
+                        // Gray Ticks (Delivered to DB)
+                        ticks = `<span style="color: #8696a0; font-size: 15px; margin-left: 4px; display:inline-block; vertical-align:middle; line-height:1;">✓✓</span>`;
+                    }
+                }
+                
+                return `
+                <div class="msg ${isMe ? 'me' : 'them'}">
+                    <div>${escapeHtml(m.text || m.message)}</div>
+                    <div class="msg-time">${escapeHtml(formatTime(m.time || m.timestamp))} ${ticks}</div>
+                </div>`;
+            }).join('');
             
             if (area.innerHTML !== newHtml) {
                 area.innerHTML = newHtml;
                 area.scrollTop = area.scrollHeight;
-                
-                const roomCacheKey = currentRoomType === 'booking_shared_parent' 
-                    ? `cache_support_booking_shared_parent_${currentRoomID}` 
-                    : `cache_support_${currentRoomType}_${currentRoomID}`;
-                localStorage.setItem(roomCacheKey, newHtml);
+                const cacheKey = `cache_support_${dbRoomKey}`;
+                localStorage.setItem(cacheKey, newHtml);
             }
         }
         
