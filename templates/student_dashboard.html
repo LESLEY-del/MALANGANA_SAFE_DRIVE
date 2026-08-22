@@ -20,7 +20,6 @@
     <style> 
         /* ===== CSS VARIABLES FOR THEMING ===== */
         :root {  
-            /* WhatsApp-inspired Dark Mode Defaults */
             --primary: #0b141a; 
             --accent: #25D366; 
             --warning: #f39c12; 
@@ -37,7 +36,6 @@
             --input-bg: #2a3942;
         } 
         
-        /* Light Mode Overrides */
         html.light-mode body {
             --primary: #008069; 
             --bg-grad-1: #efeae2;
@@ -80,7 +78,7 @@
         .hamburger-btn span { display: block; width: 22px; height: 2px; background: white; border-radius: 2px; }
         
         .header-titles { flex: 1; min-width: 0; margin-left: 5px;}
-        .header h1 { margin: 0; font-size: 1.15rem; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; cursor: pointer; }
+        .header h1 { margin: 0; font-size: 1.15rem; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
         .header-overwatch { font-size: 11px; opacity:0.85; display:block; margin-top:2px; white-space: nowrap; font-weight: 400;}
         .header-right { display:flex; align-items:center; gap:12px; flex-shrink: 0; }
         
@@ -93,47 +91,28 @@
         .initials-avatar:active { transform: scale(0.95); opacity: 0.8; }
 
         .chat-badge { background: var(--accent); color: white; padding: 2px 6px; border-radius: 10px; font-weight: 800; font-size: 10px; margin-left: 6px; display: inline-block; }
-        .req-badge { background: var(--accent); color: white; font-size: 10px; font-weight: 900; padding: 4px 9px; border-radius: 20px; min-width: 18px; text-align: center; display: none; margin-left: 8px;}
         
-        /* Edge to Edge Container */
         .container { width: 100%; max-width: 100%; margin: 0; padding: 0; box-sizing: border-box; flex: 1; display: flex; flex-direction: column; overflow-x: hidden;} 
         
-        /* Drawer Navigation */
-        .drawer-overlay {
-            position: fixed; inset: 0; background: rgba(0,0,0,0.6); backdrop-filter: blur(2px);
-            z-index: 2999; opacity: 0; pointer-events: none; transition: opacity 0.25s;
-        }
+        .drawer-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.6); backdrop-filter: blur(2px); z-index: 2999; opacity: 0; pointer-events: none; transition: opacity 0.25s; }
         .drawer-overlay.open { opacity: 1; pointer-events: auto; }
-        .drawer {
-            position: fixed; top: 0; left: -300px; width: 80vw; max-width: 320px; height: 100%;
-            background: var(--card-bg);
-            border-right: 1px solid var(--border); z-index: 3000; transition: left 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
-            display: flex; flex-direction: column; box-shadow: 2px 0 12px rgba(0,0,0,0.5);
-        }
+        .drawer { position: fixed; top: 0; left: -300px; width: 80vw; max-width: 320px; height: 100%; background: var(--card-bg); border-right: 1px solid var(--border); z-index: 3000; transition: left 0.3s cubic-bezier(0.25, 0.8, 0.25, 1); display: flex; flex-direction: column; box-shadow: 2px 0 12px rgba(0,0,0,0.5); }
         .drawer.open { left: 0; }
         .drawer-head { padding: 30px 20px 20px; border-bottom: 1px solid var(--border); color: var(--text-main); background: var(--nav-bg); }
         .drawer-head .brand { font-size: 1.2rem; font-weight: 700; color: white;}
         .drawer-head .sub { font-size: 12px; color: rgba(255,255,255,0.7); margin-top: 6px; text-transform: uppercase; letter-spacing: 1px; font-weight: 600;}
-        
         .drawer-nav { flex: 1; padding: 10px 0; overflow-y: auto; display: flex; flex-direction: column; }
         .drawer-bottom-actions { margin-top: auto; border-top: 1px solid var(--border); display: flex; flex-direction: column; padding: 5px 0;}
-        
-        .drawer-item {
-            display: flex; align-items: center; gap: 18px; width: 100%; text-align: left;
-            background: transparent; border: none; color: var(--text-main); padding: 14px 20px;
-            font-size: 15px; font-weight: 600; cursor: pointer; transition: background 0.2s;
-        }
+        .drawer-item { display: flex; align-items: center; gap: 18px; width: 100%; text-align: left; background: transparent; border: none; color: var(--text-main); padding: 14px 20px; font-size: 15px; font-weight: 600; cursor: pointer; transition: background 0.2s; }
         .drawer-item .ico { font-size: 20px; width: 24px; text-align: center; flex-shrink: 0; }
         .drawer-item:active { background: var(--hover-bg); }
-        .drawer-item.active { background: rgba(37, 211, 102, 0.08); color: var(--accent); border-left: 4px solid var(--accent); padding-left: 16px; }
-        .drawer-item .count-pill { margin-left: auto; background: var(--accent); color: white; font-size: 11px; font-weight: 800; padding: 3px 8px; border-radius: 12px; }
+        .drawer-item.active { background: rgba(37, 211, 102, 0.08); color: var(--accent); }
+        .drawer-item .count-pill { margin-left: auto; background: var(--accent); color: white; font-size: 11px; font-weight: 800; padding: 3px 8px; border-radius: 12px; display: none;}
         
-        /* View Sections - Edge to Edge */
         .view-section { display: none; flex-direction: column; animation: fadeIn 0.2s ease; width: 100%; }
         .view-section.active { display: flex; }
         @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
 
-        /* Full Screen Home Image */
         .home-image-container { position: relative; width: 100%; height: 55vh; }
         .home-image-container img { width: 100%; height: 100%; object-fit: cover; display: block; }
         .home-image-overlay { position: absolute; bottom: 0; left: 0; width: 100%; background: linear-gradient(to top, var(--bg-grad-1) 0%, transparent 100%); padding: 40px 20px 20px; }
@@ -143,12 +122,10 @@
         .card-header { padding: 15px 20px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; background: var(--card-bg-alt); flex-wrap: wrap; gap: 10px;} 
         .card-header h3 { margin: 0; font-size: 0.95rem; letter-spacing: 0.5px; color: var(--text-muted); font-weight: 700; text-transform: uppercase; display: flex; align-items: center;} 
         
-        /* WhatsApp Style List Row */
         .list-row { padding: 15px 20px; border-bottom: 1px solid var(--border); display: flex; flex-direction: column; gap: 12px; transition: background 0.15s; background: var(--card-bg);} 
         .list-row:last-child { border-bottom: none; }
         .list-row:active { background: var(--hover-bg); }
         
-        /* Thumb-friendly grid for actions */
         .btn-group-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; width: 100%; margin-top: 4px;} 
         
         .btn { padding: 14px 15px; border-radius: 10px; border: none; font-weight: 700; cursor: pointer; font-size: 13px; transition: 0.2s; letter-spacing: 0.2px; width: 100%; display: flex; align-items: center; justify-content: center; } 
@@ -192,7 +169,6 @@
 
         .system-warning-banner { padding: 20px; text-align: center; border-bottom: 1px solid var(--warning); background: rgba(243, 156, 18, 0.05);}
         .system-warning-banner p { font-size: 13px; margin: 5px 0 15px 0; color: var(--text-muted); }
-
     </style> 
 </head> 
 <body> 
@@ -456,7 +432,11 @@
     </div> 
 
     <script> 
-        // --- Core AuthFetch (Required for database pipelines) ---
+        // --- Global Storage Maps ---
+        let myLastSeenChats = {}; 
+        let globalLastSeenMap = {}; 
+
+        // --- Core AuthFetch ---
         async function authFetch(url, options = {}) {
             const token = sessionStorage.getItem('authToken');
             const headers = new Headers(options.headers || {});
@@ -500,7 +480,6 @@
                 document.querySelectorAll('.drawer-item[data-view]').forEach(b => b.classList.remove('active'));
                 if (btn) btn.classList.add('active');
                 
-                // When switching to search tabs, ensure default states render
                 if (viewId === 'view-find-d2d') currentSearchMode = 'Door to Door';
                 if (viewId === 'view-find-event') currentSearchMode = 'Events and School';
                 if (viewId === 'view-find-d2d' || viewId === 'view-find-event') {
@@ -529,6 +508,28 @@
         }
         function closeAppAlert() { document.getElementById("appAlertOverlay").classList.remove("show"); }
 
+        function getDbRoomKey(rType, rId, supportBaseChildName) {
+            if (rType === 'general_driver_room') return `d2d_${rId}`;
+            if (rType === 'booking_shared') return `school_${rId}`;
+            return `${rType}_${rId}`;
+        }
+
+        function getUnreadCount(messages, roomKey) {
+            if (!messages || messages.length === 0) return 0;
+            let trailing = 0;
+            for (let i = messages.length - 1; i >= 0; i--) {
+                const sender = messages[i].sender || messages[i].sender_username;
+                if (sender === myU) break; 
+                trailing++;
+            }
+            if (trailing === 0) {
+                sessionStorage.removeItem('read_trailing_' + roomKey);
+                return 0;
+            }
+            const cleared = parseInt(sessionStorage.getItem('read_trailing_' + roomKey) || '0');
+            return Math.max(0, trailing - cleared);
+        }
+
         const myU = sessionStorage.getItem('username');
         const myN = sessionStorage.getItem('userName') || "Student"; 
         const myRole = sessionStorage.getItem('userRole'); 
@@ -547,23 +548,23 @@
         let allDrivers = []; 
         let rawBookings = []; 
         let bookingStateCache = JSON.parse(sessionStorage.getItem('student_booking_states') || "{}"); 
-        let chatLengthsCache = JSON.parse(sessionStorage.getItem('chatLengthsCache') || "{}");
         
         let activeChatBid = null; 
         let targetDriverUser = null;
         let targetDriverName = null;
         let targetTripType = null;
+        let currentRoomType = "booking"; 
 
-        // Restore Profile and Settings
         (async function restoreProfilePhoto() {
             try {
                 if (myU) {
                     const profRes = await authFetch('/api/profile/get_self', { method: 'POST' });
                     const profJson = await profRes.json();
                     const data = profJson.status === 'success' ? profJson.profile : null;
-                    const error = profJson.status !== 'success';
 
-                    if (!error && data) {
+                    if (data) {
+                        myLastSeenChats = data.last_seen_chats || {};
+
                         if (data.photo) {
                             sessionStorage.setItem('userPhoto', data.photo);
                             if (avatarEl) avatarEl.src = data.photo;
@@ -604,7 +605,6 @@
             avatarEl.src = `https://ui-avatars.com/api/?name=${encodeURIComponent(myN)}&background=27ae60&color=fff&size=256`;
         }
         
-        // Fast load local wallpaper
         const savedHomeImg = localStorage.getItem('studentHomeWallpaper');
         if(savedHomeImg) {
             const el = document.getElementById('studentHomeImg');
@@ -613,7 +613,6 @@
 
         setInterval(() => { 
             const now = new Date();
-            const dateStr = now.toLocaleDateString(undefined, { weekday: 'short', year: 'numeric', month: 'short', day: 'numeric' });
             const timeStr = now.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit', second: '2-digit' });
             document.getElementById('liveClock').innerText = `${timeStr}`; 
         }, 1000);
@@ -762,6 +761,7 @@
                 const driverJson = await driverRes.json();
                 if (driverJson.users) { 
                     allDrivers = driverJson.users; 
+                    allDrivers.forEach(d => { globalLastSeenMap[d.username] = d.last_seen_chats || {}; });
                     renderDrivers(); 
                 }
             } catch (err) {}
@@ -810,14 +810,12 @@
                 let pending = rawBookings.filter(b => b.status === 'Pending');
                 const accepted = rawBookings.filter(b => b.status === 'Accepted');
 
-                // Split into School vs Event
                 let pendingSchoolTrips = pending.filter(b => b.initial_msg && b.initial_msg.includes('[SCHOOL]'));
                 let pendingEventTrips = pending.filter(b => !b.initial_msg || !b.initial_msg.includes('[SCHOOL]'));
 
                 let activeSchoolTrips = accepted.filter(b => b.initial_msg && b.initial_msg.includes('[SCHOOL]'));
                 let activeEventTrips = accepted.filter(b => !b.initial_msg || !b.initial_msg.includes('[SCHOOL]'));
 
-                // The old logic: if there is an active school trip, delete pending school trips
                 if (activeSchoolTrips.length > 0 && pendingSchoolTrips.length > 0) {
                     pendingSchoolTrips.forEach(pb => {
                         authFetch('/api/delete_account', { 
@@ -830,7 +828,6 @@
 
                 window.hasActiveSchoolTransport = activeSchoolTrips.length > 0;
 
-                // --- PIPELINE: RENDER SCHOOL BOOKINGS ---
                 let schoolUnreadTotal = 0;
                 let sEmpty = true;
                 
@@ -857,7 +854,6 @@
                 document.getElementById('schoolEmptyState').style.display = sEmpty ? 'block' : 'none';
                 updateBadge('badgeSchoolActive', schoolUnreadTotal);
 
-                // --- PIPELINE: RENDER EVENT BOOKINGS ---
                 let eventUnreadTotal = 0;
                 let eEmpty = true;
                 
@@ -892,20 +888,15 @@
             } catch(e) { console.log("Booking refresh error", e); } 
         }
 
-        // Helper to generate consistent UI rows for bookings
         function generateBookingRow(b, isPending) {
             const dObj = allDrivers.find(d => d.username === b.driver_username);
             const dPhoto = (dObj && dObj.photo) ? dObj.photo : `https://ui-avatars.com/api/?name=${encodeURIComponent(b.driver_name || 'D')}&background=3498db&color=fff`;
             
+            const isEventRequest = b.school_code === "D2D_GLOBAL";
             const chatArr = b.chat || [];
-            const currentLen = chatArr.length;
-            const storedLen = chatLengthsCache[b.booking_id] || 0;
-            let unreadCount = 0;
-            if (currentLen > storedLen) {
-                for(let i = storedLen; i < currentLen; i++) {
-                    if(chatArr[i].sender !== myU) unreadCount++;
-                }
-            }
+            const studentRoomKey = getDbRoomKey(isEventRequest ? "general_driver_room" : "booking_shared", b.booking_id, null);
+            
+            let unreadCount = getUnreadCount(chatArr, studentRoomKey);
             const badgeHtml = unreadCount > 0 ? `<span class="chat-badge">+${unreadCount}</span>` : '';
 
             if (isPending) {
@@ -919,7 +910,7 @@
                         </div>
                     </div>
                     <div class="btn-group-grid">
-                        <button class="btn btn-chat" onclick="openChat('${escapeHtml(b.booking_id)}', '${escapeHtml(b.driver_name)}', '${dPhoto}', ${currentLen})">CHAT ${badgeHtml}</button>
+                        <button class="btn btn-chat" onclick="openChat('${escapeHtml(b.booking_id)}', '${escapeHtml(b.driver_name)}', '${dPhoto}', ${isEventRequest}, '${escapeHtml(b.driver_username)}')">CHAT ${badgeHtml}</button>
                         <button class="btn btn-cancel" onclick="cancelRide('${escapeHtml(b.booking_id)}')">CANCEL RIDE</button>
                     </div>
                 </div>`;
@@ -938,7 +929,7 @@
                             <span class="status-tag" style="background: rgba(39, 174, 96, 0.1); border-color: var(--accent); color: var(--accent);">${statusText}</span>
                         </div>
                     </div>
-                    <button class="btn btn-primary" onclick="openChat('${escapeHtml(b.booking_id)}', '${escapeHtml(b.driver_name)}', '${dPhoto}', ${currentLen})" style="margin-top:4px;">MESSAGE DRIVER ${badgeHtml}</button>
+                    <button class="btn btn-primary" onclick="openChat('${escapeHtml(b.booking_id)}', '${escapeHtml(b.driver_name)}', '${dPhoto}', ${isEventRequest}, '${escapeHtml(b.driver_username)}')" style="margin-top:4px;">MESSAGE DRIVER ${badgeHtml}</button>
                 </div>`;
                 return { html, unread: unreadCount };
             }
@@ -1191,18 +1182,24 @@
             }
         }
 
-        function openChat(bid, dName, photoUrl, currentLen = null) { 
+        function openChat(bid, dName, photoUrl, isEvent, driverUsername) { 
             activeChatBid = bid;
+            currentRoomType = isEvent ? "general_driver_room" : "booking_shared";
+            targetDriverUser = driverUsername;
+
             document.getElementById('chatTarget').innerText = dName;
             document.getElementById('chatTargetImg').src = photoUrl;
             
             setChatBackground();
             document.getElementById('chatOverlay').style.display = 'flex'; 
 
-            if (currentLen !== null) {
-                chatLengthsCache[bid] = currentLen;
-                sessionStorage.setItem('chatLengthsCache', JSON.stringify(chatLengthsCache));
-                loadBookings();
+            const dbRoomKey = getDbRoomKey(currentRoomType, bid, null);
+            const cacheKey = `cache_support_${dbRoomKey}`;
+            const cachedMessages = localStorage.getItem(cacheKey);
+
+            if (cachedMessages) {
+                document.getElementById('chatMessages').innerHTML = cachedMessages;
+                document.getElementById('chatMessages').scrollTop = document.getElementById('chatMessages').scrollHeight;
             }
             syncChatMessages();
         }
@@ -1210,35 +1207,56 @@
         function closeChat() { 
             activeChatBid = null; 
             document.getElementById('chatOverlay').style.display = 'none'; 
+            loadBookings();
         }
         
         async function syncChatMessages() {
             if(!activeChatBid) return;
             try {
-                const res = await authFetch('/api/get_my_bookings', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({username: myU, role:'student'}) }); 
-                const data = await res.json();
-                const b = (data.bookings || []).find(x => x.booking_id === activeChatBid);
-                if(b) {
-                    renderMessages(b.chat);
-                    chatLengthsCache[activeChatBid] = (b.chat || []).length;
-                    sessionStorage.setItem('chatLengthsCache', JSON.stringify(chatLengthsCache));
+                let url, body;
+                if (currentRoomType === 'general_driver_room') {
+                    url = '/api/support/get_history';
+                    body = { child_username: activeChatBid, room_type: "general_driver_room" };
+                } else {
+                    url = '/api/get_my_bookings';
+                    body = { username: myU, role: 'student' };
                 }
-            } catch(e) {}
-        }
 
-        function sendChatMessage() {
-            const i = document.getElementById('chatInput');
-            const msgText = i.value.trim();
-            if(!msgText || !activeChatBid) return;
-            
-            const area = document.getElementById('chatMessages');
-            area.innerHTML += `<div class="msg me">${escapeHtml(msgText)}</div>`;
-            area.scrollTop = area.scrollHeight;
-            i.value = ""; 
-            
-            const tempMsg = { sender: myU, text: msgText, time: new Date().toISOString() };
-            authFetch('/api/booking/chat', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ booking_id: activeChatBid, message_obj: tempMsg }) })
-                .then(() => syncChatMessages());
+                const res = await authFetch(url, { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(body) }); 
+                const data = await res.json();
+                
+                let messages = [];
+                if (currentRoomType === 'general_driver_room') {
+                    messages = (data.messages || []).map(m => ({ 
+                        sender: m.sender_username, text: m.message, time: m.time || m.timestamp 
+                    }));
+                } else {
+                    const b = (data.bookings || []).find(x => x.booking_id === activeChatBid);
+                    messages = b ? (b.chat || []) : [];
+                }
+
+                const dbRoomKey = getDbRoomKey(currentRoomType, activeChatBid, null);
+                const currentLen = messages.length;
+                
+                if (currentLen > (myLastSeenChats[dbRoomKey] || 0)) {
+                    myLastSeenChats[dbRoomKey] = currentLen;
+                    authFetch('/api/profile/update_self', {
+                        method: 'POST', headers: {'Content-Type': 'application/json'},
+                        body: JSON.stringify({ last_seen_chats: myLastSeenChats })
+                    });
+                }
+
+                let trailing = 0;
+                for (let i = messages.length - 1; i >= 0; i--) {
+                    const sender = messages[i].sender || messages[i].sender_username;
+                    if (sender === myU) break;
+                    trailing++;
+                }
+                sessionStorage.setItem('read_trailing_' + dbRoomKey, trailing);
+
+                renderMessages(messages, dbRoomKey);
+
+            } catch(e) {}
         }
 
         function formatTime(timestamp) {
@@ -1247,23 +1265,79 @@
             const now = new Date();
             const sameDay = d.getDate() === now.getDate() && d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
 
+            const timeStr = d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false });
             if (sameDay) {
-                return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                return timeStr;
             }
-            return d.toLocaleDateString([], { day: '2-digit', month: 'short' }) + " " + d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+            const day = d.getDate();
+            const month = d.toLocaleDateString('en-US', { month: 'short' });
+            return `${day} ${month} ${timeStr}`;
         }
 
-        function renderMessages(chat) {
+        function sendChatMessage() {
+            const i = document.getElementById('chatInput');
+            const msgText = i.value.trim();
+            if(!msgText || !activeChatBid) return;
+            
+            const tempTime = new Date().toISOString();
+            const dbRoomKey = getDbRoomKey(currentRoomType, activeChatBid, null);
             const area = document.getElementById('chatMessages');
-            const newHtml = (chat || []).map(m => `
-            <div class="msg ${m.sender === myU ? 'me' : 'them'}">
-                <div>${escapeHtml(m.text || m.message)}</div>
-                <div class="msg-time">${formatTime(m.time || m.timestamp)}</div>
-            </div>`).join('');
+
+            const tempTick = `<span style="color: #8696a0; font-size: 15px; margin-left: 4px; display:inline-block; vertical-align:middle; line-height:1;">✓</span>`;
+            
+            area.innerHTML += `<div class="msg me">
+                <div>${escapeHtml(msgText)}</div>
+                <div class="msg-time">${escapeHtml(formatTime(tempTime))} ${tempTick}</div>
+            </div>`;
+            area.scrollTop = area.scrollHeight;
+            i.value = ""; 
+            
+            if (currentRoomType === "general_driver_room") {
+                authFetch('/api/support/send_msg', {
+                    method: 'POST', headers: {'Content-Type':'application/json'},
+                    body: JSON.stringify({
+                        room_id: activeChatBid,
+                        room_type: "general_driver_room",
+                        message: msgText
+                    })
+                }).then(() => syncChatMessages());
+                return;
+            }
+
+            const tempMsg = { sender: myU, text: msgText, time: tempTime };
+            authFetch('/api/booking/chat', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ booking_id: activeChatBid, message_obj: tempMsg }) })
+                .then(() => syncChatMessages());
+        }
+
+        function renderMessages(chat, dbRoomKey) {
+            const otherSeen = globalLastSeenMap[targetDriverUser]?.[dbRoomKey] || 0;
+            const area = document.getElementById('chatMessages');
+            
+            const newHtml = (chat || []).map((m, i) => {
+                const isMe = m.sender === myU || m.sender_username === myU;
+                let ticks = "";
+                
+                if (isMe) {
+                    if ((i + 1) <= otherSeen) {
+                        ticks = `<span style="color: #34b7f1; font-size: 15px; margin-left: 4px; display:inline-block; vertical-align:middle; line-height:1;">✓✓</span>`;
+                    } else {
+                        ticks = `<span style="color: #8696a0; font-size: 15px; margin-left: 4px; display:inline-block; vertical-align:middle; line-height:1;">✓✓</span>`;
+                    }
+                }
+
+                return `
+                <div class="msg ${isMe ? 'me' : 'them'}">
+                    <div>${escapeHtml(m.text || m.message)}</div>
+                    <div class="msg-time">${escapeHtml(formatTime(m.time || m.timestamp))} ${ticks}</div>
+                </div>`;
+            }).join('');
             
             if (area.innerHTML !== newHtml) {
                 area.innerHTML = newHtml;
                 area.scrollTop = area.scrollHeight;
+                const cacheKey = `cache_support_${dbRoomKey}`;
+                localStorage.setItem(cacheKey, newHtml);
             }
         }
 
