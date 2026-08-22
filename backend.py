@@ -219,7 +219,7 @@ def admin_get_users():
         all_users = get_db().table("users").select(
             "username, name, email, phone, role, school_code, driver_mode, transport_type, "
             "vehicle_type, number_plate, verification_image, license_image, grade, "
-            "moderator_type, moderated_grade, created_at, wallpaper"
+            "moderator_type, moderated_grade, created_at, wallpaper, theme"
         ).execute().data or []
 
         drivers = [u for u in all_users if u.get('role') == 'driver' and u.get('transport_type') != 'school_events']
@@ -352,7 +352,8 @@ def login():
                 'school_code': str(user['school_code']).upper() if user.get('school_code') else None,
                 'driver_mode': user.get('driver_mode'),
                 'moderator_type': user.get('moderator_type'),
-                'moderated_grade': user.get('moderated_grade')
+                'moderated_grade': user.get('moderated_grade'),
+                'theme': user.get('theme', 'dark')
             }), 200
 
         return jsonify({'status': 'error', 'msg': 'Identity Verification Failed: Invalid User Credentials'}), 401
@@ -1462,7 +1463,7 @@ def get_self_profile():
 # another account's identity, even by a malicious request).
 ALLOWED_SELF_UPDATE_FIELDS = {
     'photo', 'wallpaper', 'town', 'location', 'current_town', 'grade',
-    'transport_type', 'driver_mode', 'moderated_grade', 'school_codes'
+    'transport_type', 'driver_mode', 'moderated_grade', 'school_codes', 'theme'
 }
 
 @app.route('/api/profile/update_self', methods=['POST', 'OPTIONS'])
