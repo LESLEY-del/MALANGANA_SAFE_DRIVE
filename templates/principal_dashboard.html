@@ -78,7 +78,7 @@
         .hamburger-btn:active { transform: scale(0.92); background: rgba(255,255,255,0.15); } 
         .hamburger-btn span { display: block; width: 20px; height: 2px; background: white; border-radius: 2px; } 
         .header-titles { flex: 1; min-width: 0; } 
-        .header h1 { margin: 0; font-size: 1.05rem; font-weight: 800; letter-spacing: -0.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; } 
+        .header h1 { margin: 0; font-size: 1.05rem; font-weight: 800; letter-spacing: -0.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; cursor: pointer;} 
         .header h1 span { color: var(--success); } 
         .header-overwatch { font-size: 9.5px; opacity:0.75; font-weight:600; display:block; margin-top:2px; white-space: nowrap; } 
         .header-right { display:flex; align-items:center; gap:12px; flex-shrink: 0; } 
@@ -113,7 +113,7 @@
         .drawer-head { padding: 24px 20px 18px; border-bottom: 1px solid var(--border); color: var(--text-main); } 
         .drawer-head .brand { font-size: 1rem; font-weight: 800; letter-spacing: -0.5px; } 
         .drawer-head .brand span { color: var(--success); } 
-        .drawer-head .sub { font-size: 10px; color: var(--text-muted); margin-top: 4px; text-transform: uppercase; letter-spacing: 1px; } 
+        .drawer-head .sub { font-size: 10px; color: var(--text-muted); margin-top: 4px; text-transform: uppercase; letter-spacing: 1px; font-weight: 600; } 
         
         .drawer-nav { flex: 1; padding: 14px 10px; overflow-y: auto; display: flex; flex-direction: column; gap: 4px; } 
         .drawer-bottom-actions { margin-top: auto; padding-top: 15px; border-top: 1px solid var(--border); display: flex; flex-direction: column; gap: 4px; } 
@@ -316,7 +316,7 @@
             <span></span><span></span><span></span> 
         </button> 
         <div class="header-titles"> 
-            <h1>PRINCIPAL<span>COMMAND</span></h1> 
+            <h1 onclick="switchView('view-home', null)">PRINCIPAL<span>COMMAND</span></h1> 
             <small class="header-overwatch">OVERWATCH: <b id="schoolCodeDisp" style="color: var(--success);">---</b></small> 
         </div> 
         <div class="header-right"> 
@@ -529,6 +529,47 @@
     </footer> 
 
     <script> 
+        // --- Global Storage Maps --- 
+        let myLastSeenChats = {}; 
+        let globalLastSeenMap = {}; 
+
+        // Database ID generator function
+        function getDbRoomKey(rType, rId, supportBaseChildName) {
+            if (rType === 'general_driver_room') return `d2d_${rId}`;
+            if (rType === 'booking_shared') return `school_${rId}`;
+            if (rType === 'parent_driver_matrix') return `pd_${supportBaseChildName}`;
+            if (rType === 'booking_shared_parent') return `pd_${supportBaseChildName}`;
+            if (rType === 'triple_party_matrix') return `pp_${supportBaseChildName}`;
+            return `${rType}_${rId}`;
+        }
+
+        // True "Yebo Heuristic" Unread Counter
+        function getUnreadCount(messages, roomKey) {
+            if (!messages || messages.length === 0) return 0;
+            let trailing = 0;
+            for (let i = messages.length - 1; i >= 0; i--) {
+                const sender = messages[i].sender || messages[i].sender_username;
+                if (sender === myU) break; 
+                trailing++;
+            }
+            if (trailing === 0) {
+                sessionStorage.removeItem('read_trailing_' + roomKey);
+                return 0;
+            }
+            const cleared = parseInt(sessionStorage.getItem('read_trailing_' + roomKey) || '0');
+            return Math.max(0, trailing - cleared);
+        }
+
+        // --- Core AuthFetch ---
+        async function authFetch(url, options = {}) { 
+            const token = sessionStorage.getItem('authToken'); 
+            const headers = new Headers(options.headers || {}); 
+            if (token) { 
+                headers.set('Authorization', 'Bearer ' + token); 
+            } 
+            return fetch(url, { ...options, headers }); 
+        } 
+
         // --- Theme Management --- 
         async function toggleTheme() { 
             const isLight = document.documentElement.classList.toggle('light-mode'); 
@@ -570,15 +611,6 @@
         const supabaseKey = 'sb_publishable_ehnY1o3Vm1YCHVhaL5NL-Q_UZN-xRIp'; 
         const _supabase = supabase.createClient(supabaseUrl, supabaseKey); 
 
-        async function authFetch(url, options = {}) { 
-            const token = sessionStorage.getItem('authToken'); 
-            const headers = new Headers(options.headers || {}); 
-            if (token) { 
-                headers.set('Authorization', 'Bearer ' + token); 
-            } 
-            return fetch(url, { ...options, headers }); 
-        } 
-
         // --- Init User Data --- 
         const myU = sessionStorage.getItem('username'); 
         const myN = sessionStorage.getItem('userName') || "Sunny";  
@@ -595,7 +627,7 @@
         let allLogs = []; 
         let currentRoomType = null; 
         let currentSupportTarget = null; 
-        let lastSeenPrincipalCounts = JSON.parse(localStorage.getItem('lastSeenPrincipalCounts') || '{}'); 
+        let currentChildContext = null;
         let cachedStudentData = []; 
 
         document.getElementById('schoolCodeDisp').innerText = scCode || "N/A"; 
@@ -617,6 +649,8 @@
                 const data = profJson.status === 'success' ? profJson.profile : null;
                 
                 if (data) {
+                    myLastSeenChats = data.last_seen_chats || {};
+
                     if (data.photo) {
                         sessionStorage.setItem('userPhoto', data.photo);
                         cachedPhoto = data.photo;
@@ -708,7 +742,6 @@
                 document.querySelectorAll('.drawer-item[data-view]').forEach(b => b.classList.remove('active')); 
                 if (btn) btn.classList.add('active'); 
                 
-                // Hide footer when in "Registered Students" view to maximize screen space 
                 const footer = document.querySelector('.site-footer'); 
                 if (footer) { 
                     footer.style.display = (viewId === 'view-students') ? 'none' : 'flex'; 
@@ -864,7 +897,10 @@
                             body: JSON.stringify({ usernames: motherUsernames }) 
                         }); 
                         const lookJson = await lookRes.json(); 
-                        (lookJson.users || []).forEach(u => { motherLookup[u.username] = u.name || u.username; }); 
+                        (lookJson.users || []).forEach(u => { 
+                            motherLookup[u.username] = u.name || u.username; 
+                            globalLastSeenMap[u.username] = u.last_seen_chats || {};
+                        }); 
                     } catch(e) {} 
                 } 
 
@@ -889,23 +925,24 @@
 
                     if (hasMotherChat) { 
                         let msgCount = 0; 
+                        let messages = [];
                         try { 
                             const histRes = await authFetch('/api/support/get_history', { 
                                 method: 'POST', headers: {'Content-Type':'application/json'}, 
-                                body: JSON.stringify({ child_username: s.username }) 
+                                body: JSON.stringify({ child_username: s.username, room_type: 'triple_party_matrix' }) 
                             }); 
                             const histData = await histRes.json(); 
-                            msgCount = (histData.messages || []).length; 
+                            messages = histData.messages || [];
+                            msgCount = messages.length; 
                         } catch(e) { msgCount = 0; } 
 
-                        const unread = Math.max(0, msgCount - (lastSeenPrincipalCounts[s.username] || 0)); 
+                        const dbRoomKey = getDbRoomKey('triple_party_matrix', null, s.username);
+                        const unread = getUnreadCount(messages, dbRoomKey);
                         let timeStr = ""; 
                         
-                        // Fake a time for visual match with the reference image if there are messages 
                         if (msgCount > 0) { 
-                             const d = new Date(); 
-                             d.setMinutes(d.getMinutes() - Math.floor(Math.random() * 60)); 
-                             timeStr = d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false }); 
+                             const lastMsg = messages[messages.length - 1];
+                             timeStr = formatTime(lastMsg.time || lastMsg.timestamp); 
                         } 
 
                         let badgeHtml = ""; 
@@ -1027,7 +1064,8 @@
         async function openSupportChat(motherUser, baseTitle, baseChildName) { 
             document.getElementById('supportChatOverlay').style.display = 'flex'; 
             currentSupportTarget = motherUser; 
-            currentRoomType = baseChildName; 
+            currentChildContext = baseChildName; 
+            currentRoomType = "triple_party_matrix";
             document.getElementById('supportChatSubtitle').innerText = `Student: ${baseChildName}`; 
 
             try { 
@@ -1049,7 +1087,8 @@
             } 
 
             setChatBackground(); 
-            const cacheKey = `cache_support_${baseChildName}_${motherUser}`; 
+            const dbRoomKey = getDbRoomKey(currentRoomType, null, currentChildContext);
+            const cacheKey = `cache_support_${dbRoomKey}`; 
             const cachedMessages = localStorage.getItem(cacheKey); 
 
             if (cachedMessages) { 
@@ -1067,6 +1106,7 @@
         function closeSupportChat() { 
             document.getElementById('supportChatOverlay').style.display = 'none'; 
             currentSupportTarget = null; 
+            currentChildContext = null;
             currentRoomType = null; 
             load(); 
         } 
@@ -1076,26 +1116,51 @@
 
             const res = await authFetch('/api/support/get_history', { 
                 method: 'POST', headers: {'Content-Type': 'application/json'}, 
-                body: JSON.stringify({ child_username: currentRoomType, sender: myPrincipalID, receiver: currentSupportTarget }) 
+                body: JSON.stringify({ child_username: currentChildContext, sender: myPrincipalID, receiver: currentSupportTarget, room_type: currentRoomType }) 
             }); 
             const data = await res.json(); 
+            const messages = data.messages || [];
 
-            if (currentRoomType) { 
-                lastSeenPrincipalCounts[currentRoomType] = (data.messages || []).length; 
-                localStorage.setItem('lastSeenPrincipalCounts', JSON.stringify(lastSeenPrincipalCounts)); 
-            } 
+            const dbRoomKey = getDbRoomKey(currentRoomType, null, currentChildContext);
+            const currentLen = messages.length;
+            
+            if (currentLen > (myLastSeenChats[dbRoomKey] || 0)) {
+                myLastSeenChats[dbRoomKey] = currentLen;
+                authFetch('/api/profile/update_self', {
+                    method: 'POST', headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ last_seen_chats: myLastSeenChats })
+                });
+            }
 
+            let trailing = 0;
+            for (let i = messages.length - 1; i >= 0; i--) {
+                const sender = messages[i].sender || messages[i].sender_username;
+                if (sender === myU) break;
+                trailing++;
+            }
+            sessionStorage.setItem('read_trailing_' + dbRoomKey, trailing);
+
+            const otherSeen = globalLastSeenMap[currentSupportTarget]?.[dbRoomKey] || 0;
             const area = document.getElementById('supportChatMessages'); 
 
-            const newHtml = (data.messages || []).map(m => { 
+            const newHtml = messages.map((m, i) => { 
                 const isMe = m.sender_username === myPrincipalID; 
                 const alarmStyle = m.is_alarm ? 'border: 2px solid var(--danger);' : ''; 
+                
+                let ticks = "";
+                if (isMe) {
+                    if ((i + 1) <= otherSeen) {
+                        ticks = `<span style="color: #34b7f1; font-size: 15px; margin-left: 4px; display:inline-block; vertical-align:middle; line-height:1;">✓✓</span>`;
+                    } else {
+                        ticks = `<span style="color: #8696a0; font-size: 15px; margin-left: 4px; display:inline-block; vertical-align:middle; line-height:1;">✓✓</span>`;
+                    }
+                }
 
                 return ` 
                 <div class="msg ${isMe ? 'me' : 'them'}" style="${alarmStyle}"> 
                     <div>${escapeHtml(m.message)}</div> 
                     <div style="font-size:10px; opacity:0.7; text-align:right; margin-top:4px;"> 
-                        ${formatTime(m.time || m.timestamp)} 
+                        ${formatTime(m.time || m.timestamp)} ${ticks}
                     </div> 
                 </div>`; 
             }).join(''); 
@@ -1103,36 +1168,49 @@
             if (area.innerHTML !== newHtml) { 
                 area.innerHTML = newHtml; 
                 area.scrollTop = area.scrollHeight; 
-                const cacheKey = `cache_support_${currentRoomType}_${currentSupportTarget}`; 
+                const cacheKey = `cache_support_${dbRoomKey}`; 
                 localStorage.setItem(cacheKey, newHtml); 
             } 
         } 
 
-        function formatTime(timestamp) { 
-            if (!timestamp) return ""; 
-            const d = new Date(timestamp); 
-            const now = new Date(); 
-            const sameDay = d.getDate() === now.getDate() && d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear(); 
+        function formatTime(timestamp) {
+            if (!timestamp) return "";
+            const d = new Date(timestamp);
+            const now = new Date();
+            const sameDay = d.getDate() === now.getDate() && d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
 
-            if (sameDay) { 
-                return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }); 
-            } 
-            return d.toLocaleDateString([], { day: '2-digit', month: 'short' }) + " " + d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }); 
-        } 
+            const timeStr = d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false });
+            if (sameDay) {
+                return timeStr;
+            }
+
+            const day = d.getDate();
+            const month = d.toLocaleDateString('en-US', { month: 'short' });
+            return `${day} ${month} ${timeStr}`;
+        }
 
         function sendSupportMessage() { 
             const i = document.getElementById('supportChatInput'); 
             const msgText = i.value.trim(); 
             if(!msgText || !currentRoomType || !currentSupportTarget) return; 
 
+            const tempTime = new Date().toISOString();
+            const dbRoomKey = getDbRoomKey(currentRoomType, null, currentChildContext);
+            const tempTick = `<span style="color: #8696a0; font-size: 15px; margin-left: 4px; display:inline-block; vertical-align:middle; line-height:1;">✓</span>`;
+
             const area = document.getElementById('supportChatMessages'); 
-            area.innerHTML += `<div class="msg me">${escapeHtml(msgText)}</div>`; 
+            area.innerHTML += `<div class="msg me">
+                <div>${escapeHtml(msgText)}</div>
+                <div style="font-size:10px; opacity:0.7; text-align:right; margin-top:4px;">
+                    ${formatTime(tempTime)} ${tempTick}
+                </div>
+            </div>`; 
             area.scrollTop = area.scrollHeight; 
             i.value = ""; 
 
             authFetch('/api/support/send_msg', { 
                 method: 'POST', headers: {'Content-Type': 'application/json'}, 
-                body: JSON.stringify({ sender: myPrincipalID, receiver: currentSupportTarget, child_name: currentRoomType, message: msgText }) 
+                body: JSON.stringify({ sender: myPrincipalID, receiver: currentSupportTarget, child_name: currentChildContext, room_type: currentRoomType, message: msgText }) 
             }).then(() => syncSupportMessages()); 
         } 
 
