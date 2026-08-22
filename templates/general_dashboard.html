@@ -161,7 +161,7 @@
         .btn-danger { background: var(--danger); color: white; }
         .btn-warning { background: var(--warning); color: #020218; }
         .btn-pdf { background: #3b82f6; color: white; width: auto; padding: 8px 16px; font-size: 11px;}
-        .btn-remove { background: transparent; color: var(--danger); border: 1px solid var(--danger); }
+        .btn-hide { background: transparent; border: 1px solid var(--border); color: var(--text-muted); padding: 8px 15px; font-size: 11px; box-shadow: none; border-radius: 8px; width: auto;}
 
         input, select { background: var(--input-bg); border: none; border-bottom: 2px solid var(--border); color: var(--text-main); padding: 14px 15px; border-radius: 8px 8px 0 0; outline: none; width: 100%; box-sizing: border-box; font-family: inherit; margin-bottom: 15px; transition: 0.2s; font-size: 15px;}
         input:focus, select:focus { border-color: var(--accent); background: rgba(0,0,0,0.1); }
@@ -262,7 +262,7 @@
 
     <!-- Profile Management Modal -->
     <div id="profileMenuOverlay" class="app-alert-overlay">
-        <div class="app-alert-box">
+        <div class="app-alert-box" style="padding: 25px 20px; max-height: 90vh; overflow-y: auto;">
             <h3 style="margin-top: 0; color: var(--text-main); font-size: 18px; margin-bottom: 20px;">Profile Settings</h3>
             
             <button onclick="viewFullProfile()" class="btn btn-chat" style="margin-bottom:10px;">VIEW PICTURE</button>
@@ -501,7 +501,38 @@
     </table>
 
     <script> 
-        // --- Core AuthFetch (Required for database pipelines) ---
+        // --- Global Storage Maps ---
+        let myLastSeenChats = {}; 
+        let globalLastSeenMap = {}; 
+
+        // Database ID generator function
+        function getDbRoomKey(rType, rId, supportBaseChildName) {
+            if (rType === 'general_driver_room') return `d2d_${rId}`;
+            if (rType === 'booking_shared') return `school_${rId}`;
+            if (rType === 'parent_driver_matrix') return `pd_${supportBaseChildName}`;
+            if (rType === 'booking_shared_parent') return `pd_${supportBaseChildName}`;
+            if (rType === 'triple_party_matrix') return `pp_${supportBaseChildName}`;
+            return `${rType}_${rId}`;
+        }
+
+        // True "Yebo Heuristic" Unread Counter
+        function getUnreadCount(messages, roomKey) {
+            if (!messages || messages.length === 0) return 0;
+            let trailing = 0;
+            for (let i = messages.length - 1; i >= 0; i--) {
+                const sender = messages[i].sender || messages[i].sender_username;
+                if (sender === myU) break; 
+                trailing++;
+            }
+            if (trailing === 0) {
+                sessionStorage.removeItem('read_trailing_' + roomKey);
+                return 0;
+            }
+            const cleared = parseInt(sessionStorage.getItem('read_trailing_' + roomKey) || '0');
+            return Math.max(0, trailing - cleared);
+        }
+
+        // --- Core AuthFetch ---
         async function authFetch(url, options = {}) {
             const token = sessionStorage.getItem('authToken');
             const headers = new Headers(options.headers || {});
@@ -669,7 +700,6 @@
 
         let vaultChildrenCache = [];
         let fetchedAttendanceLogsGlobal = [];
-        let lastSeenParentCounts = JSON.parse(localStorage.getItem('lastSeenParentCounts') || '{}');
         
         const dbName = "SafeDriveData", storeName = "ChildrenVault"; 
         function getDB() { return new Promise((resolve) => { const request = indexedDB.open(dbName, 2); request.onupgradeneeded = (e) => e.target.result.createObjectStore(storeName, { keyPath: "username" }); request.onsuccess = (e) => resolve(e.target.result); }); } 
@@ -697,6 +727,8 @@
                 const data = profJson.status === 'success' ? profJson.profile : null;
                 
                 if(data) {
+                    myLastSeenChats = data.last_seen_chats || {};
+
                     // Sync Photo
                     if (data.photo) {
                         sessionStorage.setItem('userPhoto', data.photo);
@@ -801,7 +833,11 @@
             try {
                 const driverRes = await authFetch('/api/users/lookup', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ role: 'driver' }) });
                 const driverJson = await driverRes.json();
-                if (driverJson.users) { allSystemDrivers = driverJson.users; filterGlobalDrivers(); }
+                if (driverJson.users) { 
+                    allSystemDrivers = driverJson.users; 
+                    allSystemDrivers.forEach(d => { globalLastSeenMap[d.username] = d.last_seen_chats || {}; });
+                    filterGlobalDrivers(); 
+                }
             } catch(e) {}
         }
 
@@ -903,15 +939,16 @@
             }
         }
 
-        async function getMsgCount(childUsername, roomType) {
+        // Returns messages array for proper getUnreadCount math
+        async function getMsgArray(childUsername, roomType) {
             try {
                 const res = await authFetch('/api/support/get_history', {
                     method: 'POST', headers: {'Content-Type':'application/json'},
                     body: JSON.stringify({ child_username: childUsername, room_type: roomType })
                 });
                 const data = await res.json();
-                return (data.messages || []).length;
-            } catch(e) { return 0; }
+                return data.messages || [];
+            } catch(e) { return []; }
         }
 
         async function loadNegotiationList() {
@@ -937,9 +974,9 @@
                     const statusText = b.status === "Accepted" ? "APPROVED • DRIVER ACCEPTED" : "AWAITING ACCEPTANCE & NEGOTIATING";
                     const statusColor = b.status === "Accepted" ? "var(--success)" : "var(--warning)";
 
-                    const msgCount = await getMsgCount(roomId, roomType);
-                    const seenKey = `${roomType}_${roomId}`;
-                    const unread = Math.max(0, msgCount - (lastSeenParentCounts[seenKey] || 0));
+                    const msgs = await getMsgArray(roomId, roomType);
+                    const dbRoomKeyD2D = getDbRoomKey(roomType, roomId, null);
+                    const unread = getUnreadCount(msgs, dbRoomKeyD2D);
                     const badgeHtml = unread > 0 ? `<span class="chat-badge">+${unread}</span>` : "";
 
                     const rowHtml = `
@@ -1196,16 +1233,16 @@
                 
                 const unifiedRoomKey = c.username; 
 
-                const principalMsgCount = await getMsgCount(unifiedRoomKey, "triple_party_matrix");
-                const principalSeenKey = `triple_party_matrix_${unifiedRoomKey}`;
-                const principalUnread = Math.max(0, principalMsgCount - (lastSeenParentCounts[principalSeenKey] || 0));
+                const prinMsgs = await getMsgArray(unifiedRoomKey, "triple_party_matrix");
+                const dbRoomKeyPrin = getDbRoomKey("triple_party_matrix", null, unifiedRoomKey);
+                const principalUnread = getUnreadCount(prinMsgs, dbRoomKeyPrin);
                 const principalBadge = principalUnread > 0 ? `<span class="chat-badge">+${principalUnread}</span>` : "";
 
                 let driverChatBtn;
                 if (s.hasD) {
-                    const driverMsgCount = await getMsgCount(unifiedRoomKey, "parent_driver_matrix");
-                    const driverSeenKey = `parent_driver_matrix_${unifiedRoomKey}`;
-                    const driverUnread = Math.max(0, driverMsgCount - (lastSeenParentCounts[driverSeenKey] || 0));
+                    const driverMsgs = await getMsgArray(unifiedRoomKey, "parent_driver_matrix");
+                    const dbRoomKeyDriver = getDbRoomKey("parent_driver_matrix", null, unifiedRoomKey);
+                    const driverUnread = getUnreadCount(driverMsgs, dbRoomKeyDriver);
                     const driverBadge = driverUnread > 0 ? `<span class="chat-badge">+${driverUnread}</span>` : "";
 
                     driverChatBtn = `<button class="btn btn-primary" onclick="openMotherToDriverChat('${escapeHtml(c.username)}', '${escapeHtml(c.name)}')">CHAT DRIVER ${driverBadge}</button>`;
@@ -1276,6 +1313,10 @@
                 const principalRes2 = await authFetch('/api/users/lookup', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ usernames: [roomJson.room.partner_username] }) });
                 const principalJson2 = await principalRes2.json();
                 const principal = (principalJson2.users || [])[0] || null;
+                
+                if (principal) {
+                    globalLastSeenMap[principal.username] = principal.last_seen_chats || {};
+                }
 
                 const principalName = principal?.name || "Principal";
                 const principalPhoto = principal?.photo || `https://ui-avatars.com/api/?name=${encodeURIComponent(principalName)}`;
@@ -1341,7 +1382,11 @@
             setChatBackground(); 
             document.getElementById('supportChatOverlay').style.display = 'flex'; 
 
-            const cacheKey = `cache_support_${baseChildName}_${tid}`;
+            let rId = currentRoomType === 'general_driver_room' ? currentSupportTarget : null;
+            let cName = currentRoomType !== 'general_driver_room' ? currentSupportTarget : null;
+            const dbRoomKey = getDbRoomKey(currentRoomType, rId, cName);
+
+            const cacheKey = `cache_support_${dbRoomKey}`;
             const cachedMessages = localStorage.getItem(cacheKey);
 
             if (cachedMessages) {
@@ -1363,8 +1408,14 @@
             const now = new Date();
             const sameDay = d.getDate() === now.getDate() && d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
 
-            if (sameDay) return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-            return d.toLocaleDateString([], { day: '2-digit', month: 'short' }) + " " + d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+            const timeStr = d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false });
+            if (sameDay) {
+                return timeStr;
+            }
+
+            const day = d.getDate();
+            const month = d.toLocaleDateString('en-US', { month: 'short' });
+            return `${day} ${month} ${timeStr}`;
         }
 
         async function syncChat() { 
@@ -1378,37 +1429,76 @@
                 }) 
             }); 
             const data = await res.json(); 
+            const messages = data.messages || [];
 
-            const seenKey = `${currentRoomType}_${currentSupportTarget}`;
-            lastSeenParentCounts[seenKey] = (data.messages || []).length;
-            localStorage.setItem('lastSeenParentCounts', JSON.stringify(lastSeenParentCounts));
+            let rId = currentRoomType === 'general_driver_room' ? currentSupportTarget : null;
+            let cName = currentRoomType !== 'general_driver_room' ? currentSupportTarget : null;
+            const dbRoomKey = getDbRoomKey(currentRoomType, rId, cName);
+
+            const currentLen = messages.length;
+            if (currentLen > (myLastSeenChats[dbRoomKey] || 0)) {
+                myLastSeenChats[dbRoomKey] = currentLen;
+                authFetch('/api/profile/update_self', {
+                    method: 'POST', headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ last_seen_chats: myLastSeenChats })
+                });
+            }
+
+            let trailing = 0;
+            for (let i = messages.length - 1; i >= 0; i--) {
+                const sender = messages[i].sender || messages[i].sender_username;
+                if (sender === myU) break;
+                trailing++;
+            }
+            sessionStorage.setItem('read_trailing_' + dbRoomKey, trailing);
 
             const area = document.getElementById('supportChatMessages');
             
-            (data.messages || []).forEach(m => {
+            messages.forEach(m => {
                 if (m.is_alarm === true && !sessionStorage.getItem('triggered_' + m.timestamp)) {
                     sessionStorage.setItem('triggered_' + m.timestamp, 'true');
-                    triggerSchoolOutAlarm(m.child_name); 
+                    triggerSchoolOutAlarm(m.school_name); 
                 }
             });
+
+            // Find Partner for Blue Ticks
+            let partnerUsername = null;
+            for(let m of messages) {
+                if (m.sender_username && m.sender_username !== myU) {
+                    partnerUsername = m.sender_username; break;
+                }
+                if (m.receiver_username && m.receiver_username !== myU) {
+                    partnerUsername = m.receiver_username; break;
+                }
+            }
             
-            const newHtml = (data.messages || []).map(m => {
+            const otherSeen = partnerUsername && globalLastSeenMap[partnerUsername] ? (globalLastSeenMap[partnerUsername][dbRoomKey] || 0) : 0;
+            
+            const newHtml = messages.map((m, i) => {
                 const isMe = m.sender_username === myU;
                 const alarmStyle = m.is_alarm ? 'border: 2px solid var(--danger); background: rgba(225,29,72,0.1); color: var(--danger);' : '';
+                
+                let ticks = "";
+                if (isMe) {
+                    if ((i + 1) <= otherSeen) {
+                        ticks = `<span style="color: #34b7f1; font-size: 15px; margin-left: 4px; display:inline-block; vertical-align:middle; line-height:1;">✓✓</span>`;
+                    } else {
+                        ticks = `<span style="color: #8696a0; font-size: 15px; margin-left: 4px; display:inline-block; vertical-align:middle; line-height:1;">✓✓</span>`;
+                    }
+                }
                 
                 return `
                 <div class="msg ${isMe ? 'me' : 'them'}" style="${alarmStyle}">
                     <div style="font-size:10px; font-weight:700; opacity:0.6; margin-bottom:4px; text-transform:uppercase;">${escapeHtml(isMe ? 'YOU' : m.sender_username)}</div>
                     <div>${escapeHtml(m.message)}</div>
-                    <div class="msg-time">${formatTime(m.time || m.timestamp)}</div>
+                    <div class="msg-time">${formatTime(m.time || m.timestamp)} ${ticks}</div>
                 </div>`;
             }).join(''); 
 
             if (area.innerHTML !== newHtml) {
                 area.innerHTML = newHtml;
                 area.scrollTop = area.scrollHeight;
-                
-                const cacheKey = `cache_support_${currentRoomType}_${currentSupportTarget}`;
+                const cacheKey = `cache_support_${dbRoomKey}`;
                 localStorage.setItem(cacheKey, newHtml);
             }
         }
@@ -1443,11 +1533,15 @@
             const msgText = i.value.trim();
             if(!msgText || !currentRoomType || !currentSupportTarget) return; 
             
+            const tempTime = new Date().toISOString();
+            const tempTick = `<span style="color: #8696a0; font-size: 15px; margin-left: 4px; display:inline-block; vertical-align:middle; line-height:1;">✓</span>`;
+
             const area = document.getElementById('supportChatMessages');
             area.innerHTML += `
                 <div class="msg me">
                     <div style="font-size:10px; font-weight:700; opacity:0.6; margin-bottom:4px; text-transform:uppercase;">YOU</div>
                     <div>${escapeHtml(msgText)}</div>
+                    <div class="msg-time">${formatTime(tempTime)} ${tempTick}</div>
                 </div>`;
             area.scrollTop = area.scrollHeight; 
             i.value = ""; 
@@ -1459,6 +1553,7 @@
                     body: JSON.stringify({ 
                         room_id: currentSupportTarget,
                         room_type: currentRoomType,
+                        child_name: currentSupportTarget,
                         message: msgText 
                     }) 
                 });
@@ -1501,7 +1596,6 @@
             setInterval(syncSafetyAndStatus, 5000); 
             setInterval(syncChat, 3000); 
             setInterval(pollForAlarms, 5000); 
-            setInterval(loadNegotiationList, 4000); 
         }; 
     </script> 
 </body> 
