@@ -219,7 +219,7 @@ def admin_get_users():
         all_users = get_db().table("users").select(
             "username, name, email, phone, role, school_code, driver_mode, transport_type, "
             "vehicle_type, number_plate, verification_image, license_image, grade, "
-            "moderator_type, moderated_grade, created_at, wallpaper, theme"
+            "moderator_type, moderated_grade, created_at, wallpaper, theme, last_seen_chats"
         ).execute().data or []
 
         drivers = [u for u in all_users if u.get('role') == 'driver' and u.get('transport_type') != 'school_events']
@@ -1463,7 +1463,7 @@ def get_self_profile():
 # another account's identity, even by a malicious request).
 ALLOWED_SELF_UPDATE_FIELDS = {
     'photo', 'wallpaper', 'town', 'location', 'current_town', 'grade',
-    'transport_type', 'driver_mode', 'moderated_grade', 'school_codes', 'theme'
+    'transport_type', 'driver_mode', 'moderated_grade', 'school_codes', 'theme', 'last_seen_chats'
 }
 
 @app.route('/api/profile/update_self', methods=['POST', 'OPTIONS'])
@@ -1660,7 +1660,7 @@ def users_lookup():
                 if not caller_code or caller_code.upper() != str(school_code).upper():
                     return jsonify({'status': 'error', 'msg': 'Not authorized for this school roster'}), 403
 
-        select_fields = "username, name, photo, role, school_code, school_codes, moderated_grade, grade, driver_mode, transport_type, vehicle_type, town, location, current_town"
+        select_fields = "username, name, photo, role, school_code, school_codes, moderated_grade, grade, driver_mode, transport_type, vehicle_type, town, location, current_town, last_seen_chats"
         if g.current_role in ('moderator', 'principal'):
             select_fields += ", email"
 
