@@ -93,7 +93,6 @@
         .initials-avatar:active { transform: scale(0.95); opacity: 0.8; }
 
         .chat-badge { background: var(--accent); color: white; padding: 2px 6px; border-radius: 10px; font-weight: 800; font-size: 10px; margin-left: 6px; display: inline-block; }
-        .req-badge { background: var(--accent); color: white; font-size: 10px; font-weight: 900; padding: 4px 9px; border-radius: 20px; min-width: 18px; text-align: center; display: none; margin-left: 8px;}
         
         /* Edge to Edge Container */
         .container { width: 100%; max-width: 100%; margin: 0; padding: 0; box-sizing: border-box; flex: 1; display: flex; flex-direction: column; overflow-x: hidden;} 
@@ -573,13 +572,32 @@
 
         const alarmAudio = new Audio('https://actions.google.com/sounds/v1/alarms/digital_watch_alarm_long.ogg');
         alarmAudio.loop = true;
-        let lastAlarmCheck = new Date().toISOString(); 
         let driverSchoolCodes = [];
         let allSystemStudents = []; 
         let backendFinished = []; 
         let alarmTimeout = null; 
         let audioMuteTimeout = null;
-        let lastSeenCounts = JSON.parse(localStorage.getItem('lastSeenMsgCounts') || '{}');
+
+        // HEURISTIC: Count unread messages based on trailing unreplied texts.
+        function getUnreadCount(messages, roomKey) {
+            if (!messages || messages.length === 0) return 0;
+            let trailing = 0;
+            for (let i = messages.length - 1; i >= 0; i--) {
+                const sender = messages[i].sender || messages[i].sender_username;
+                if (sender === myU) break; // Stop counting as soon as we hit a message YOU sent
+                trailing++;
+            }
+            
+            // If you replied, trailing is 0, so clear any session override.
+            if (trailing === 0) {
+                sessionStorage.removeItem('read_trailing_' + roomKey);
+                return 0;
+            }
+            
+            // If you opened the chat but didn't reply, we temporarily hide the badge for this session
+            const cleared = parseInt(sessionStorage.getItem('read_trailing_' + roomKey) || '0');
+            return Math.max(0, trailing - cleared);
+        }
 
         function updateBadge(id, count) {
             const el = document.getElementById(id);
@@ -1252,18 +1270,8 @@
                     });
                 }
 
-                const countRes = await authFetch('/api/support/get_all_counts', { 
-                    method: 'POST', 
-                    headers:{'Content-Type':'application/json'}, 
-                    body: JSON.stringify({ receiver: myU }) 
-                }); 
-                const counts = (await countRes.json()).counts || {}; 
-
                 const filteredPending = bookings.filter(b => b.status === 'Pending');
                 
-                // -----------------------------------------------------------------
-                // PIPELINE 1: RENDER PENDING REQUESTS (EDGE TO EDGE, THUMB GRID)
-                // -----------------------------------------------------------------
                 let schoolPendingHtml = "";
                 let eventPendingHtml = "";
                 let schoolPendingCount = 0;
@@ -1277,16 +1285,9 @@
                     const displayLabel = isEventRequest ? `<div class="status-tag" style="color:#3498db;">EVENT REQUEST</div>` : `<div class="status-tag" style="color:var(--accent);">SCHOOL REQUEST</div>`;
 
                     const chatArr = b.chat || [];
-                    const currentLen = chatArr.length;
                     const studentRoomKey = isEventRequest ? `general_driver_room_${b.booking_id}` : `booking_shared_${b.booking_id}`;
-                    const storedLen = lastSeenCounts[studentRoomKey] || 0;
-                    let unreadCount = 0;
-                    if (currentLen > storedLen) {
-                        for(let i = storedLen; i < currentLen; i++) {
-                            const senderU = chatArr[i].sender || chatArr[i].sender_username;
-                            if(senderU !== myU) unreadCount++;
-                        }
-                    }
+                    
+                    let unreadCount = getUnreadCount(chatArr, studentRoomKey);
                     const badgeHtml = unreadCount > 0 ? `<span class="chat-badge">+${unreadCount}</span>` : '';
 
                     const rowHtml = `
@@ -1315,9 +1316,6 @@
                 updateBadge('badgeSchoolRequests', schoolPendingCount);
                 updateBadge('badgeEventRequests', eventPendingCount);
 
-                // -----------------------------------------------------------------
-                // PIPELINE 2: RENDER ACTIVE TRIPS (EDGE TO EDGE, THUMB GRID)
-                // -----------------------------------------------------------------
                 let schoolActiveHtml = "";
                 let eventActiveHtml = "";
                 let schoolUnreadTotal = 0;
@@ -1330,7 +1328,6 @@
                     const isDoorToDoor = b.school_code === "D2D_GLOBAL";
                     const isEventTrip = isDoorToDoor;
 
-                    let msgCount = 0;
                     let unread = 0;
                     const studentRoomKey = isDoorToDoor ? `general_driver_room_${b.booking_id}` : `booking_shared_${b.booking_id}`;
 
@@ -1341,25 +1338,11 @@
                                 body: JSON.stringify({ child_username: b.booking_id, room_type: "general_driver_room" })
                             });
                             const histData = await histRes.json();
-                            const messages = histData.messages || [];
-                            msgCount = messages.length;
-                            const storedLen = lastSeenCounts[studentRoomKey] || 0;
-                            if (msgCount > storedLen) {
-                                for(let i = storedLen; i < msgCount; i++) {
-                                    if(messages[i].sender_username !== myU) unread++;
-                                }
-                            }
-                        } catch(e) { msgCount = 0; }
+                            unread = getUnreadCount(histData.messages || [], studentRoomKey);
+                        } catch(e) { }
                     } else {
                         const chatArr = b.chat || [];
-                        msgCount = chatArr.length;
-                        const storedLen = lastSeenCounts[studentRoomKey] || 0;
-                        if (msgCount > storedLen) {
-                            for(let i = storedLen; i < msgCount; i++) {
-                                const senderU = chatArr[i].sender || chatArr[i].sender_username;
-                                if(senderU !== myU) unread++;
-                            }
-                        }
+                        unread = getUnreadCount(chatArr, studentRoomKey);
                     }
 
                     const chatLabel = unread > 0 ? `Chat <span class="chat-badge">+${unread}</span>` : 'Message';
@@ -1378,9 +1361,17 @@
 
                             let motherBadgeHtml = "";
                             const parentRoomKey = `booking_shared_parent_${b.booking_id}`;
-                            const pMsgCount = counts[b.student_username] || 0;
-                            const pStoredLen = lastSeenCounts[parentRoomKey] || 0;
-                            const pUnread = Math.max(0, pMsgCount - pStoredLen);
+                            
+                            let pUnread = 0;
+                            try {
+                                const pHistRes = await authFetch('/api/support/get_history', {
+                                    method: 'POST', headers: {'Content-Type':'application/json'},
+                                    body: JSON.stringify({ child_username: b.student_username, room_type: "parent_driver_matrix" })
+                                });
+                                const pHistData = await pHistRes.json();
+                                pUnread = getUnreadCount(pHistData.messages || [], parentRoomKey);
+                            } catch(e) {}
+
                             if (pUnread > 0) {
                                 motherBadgeHtml = `<span class="chat-badge" style="margin-left:6px;">+${pUnread}</span>`;
                                 schoolUnreadTotal += pUnread;
@@ -1551,8 +1542,13 @@
                     ? `booking_shared_parent_${currentRoomID}` 
                     : (currentRoomType === 'general_driver_room' ? `general_driver_room_${currentRoomID}` : `booking_shared_${currentRoomID}`);
                     
-                lastSeenCounts[roomCacheKey] = messages.length;
-                localStorage.setItem('lastSeenMsgCounts', JSON.stringify(lastSeenCounts));
+                let trailing = 0;
+                for (let i = messages.length - 1; i >= 0; i--) {
+                    const sender = messages[i].sender || messages[i].sender_username;
+                    if (sender === myU) break;
+                    trailing++;
+                }
+                sessionStorage.setItem('read_trailing_' + roomCacheKey, trailing);
             }
 
             renderMessages(messages);
