@@ -1,5 +1,5 @@
-<!DOCTYPE html> 
-<html lang="en"> 
+<!DOCTYPE html>
+<html lang="en">
 <head> 
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -55,20 +55,84 @@
             font-size: 24px; letter-spacing: 8px; text-align: center; font-weight: bold;
         }
 
+        #cameraModal.modal-overlay {
+            padding: 0;
+            align-items: stretch;
+        }
+        #cameraModal .modal {
+            width: 100%;
+            max-width: 100%;
+            height: 100%;
+            max-height: 100vh;
+            border-radius: 0;
+            padding: 0;
+            display: flex;
+            flex-direction: column;
+            box-shadow: none;
+        }
+        .cam-top-bar {
+            padding: max(20px, env(safe-area-inset-top)) 20px 15px;
+            text-align: center;
+            background: linear-gradient(180deg, rgba(0,0,0,0.7) 0%, transparent 100%);
+            position: relative;
+            z-index: 2;
+        }
+        .cam-top-bar h3 { margin: 0; color: white; font-size: 16px; font-weight: 700; letter-spacing: 0.5px; }
+        .cam-step-dots { display: flex; justify-content: center; gap: 6px; margin-top: 10px; }
+        .cam-step-dots span { width: 6px; height: 6px; border-radius: 50%; background: rgba(255,255,255,0.25); transition: 0.3s; }
+        .cam-step-dots span.active { background: var(--primary); width: 20px; border-radius: 3px; }
+
         .camera-container {
-            width: 100%; height: 240px; background: #000; border-radius: 20px;
-            margin: 15px 0; overflow: hidden; position: relative;
-            border: 3px solid var(--input); transition: border-color 0.3s;
+            flex: 1;
+            width: 100%;
+            background: #000;
+            overflow: hidden;
+            position: relative;
+            margin: 0;
+            border: none;
+            border-radius: 0;
         }
         #video { width: 100%; height: 100%; object-fit: cover; transform: scaleX(-1); }
         #canvas { display: none; }
+
         .camera-overlay {
             position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
-            width: 140px; height: 180px; border: 3px dashed var(--primary);
-            border-radius: 50%; pointer-events: none; transition: all 0.3s ease;
+            width: 62vw; max-width: 220px; height: 78vw; max-height: 280px;
+            border: 3px dashed rgba(255,255,255,0.5);
+            border-radius: 50%; pointer-events: none;
+            transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+            box-shadow: 0 0 0 2000px rgba(0,0,0,0.45);
         }
-        
-        #licenseButtons { display: none; gap: 10px; margin-top: 15px; flex-direction: column; }
+        .camera-overlay.locked { border-color: var(--success); border-style: solid; }
+        .camera-overlay .scan-line {
+            position: absolute; left: 8%; right: 8%; height: 2px;
+            background: linear-gradient(90deg, transparent, var(--primary), transparent);
+            top: 0; opacity: 0; box-shadow: 0 0 8px var(--primary);
+        }
+        .camera-overlay.scanning .scan-line {
+            opacity: 1;
+            animation: scanSweep 1.2s ease-in-out infinite;
+        }
+        @keyframes scanSweep {
+            0% { top: 5%; }
+            50% { top: 92%; }
+            100% { top: 5%; }
+        }
+
+        .cam-bottom-bar {
+            padding: 20px 20px max(20px, env(safe-area-inset-bottom));
+            background: linear-gradient(0deg, rgba(0,0,0,0.85) 0%, rgba(0,0,0,0.4) 70%, transparent 100%);
+            position: relative;
+            z-index: 2;
+            margin-top: -100px;
+        }
+        #camStatus {
+            font-size: 14px; color: white; font-weight: 600; text-align: center;
+            min-height: 20px; margin: 0 0 15px;
+            text-shadow: 0 2px 8px rgba(0,0,0,0.6);
+        }
+
+        #licenseButtons { display: none; gap: 10px; margin-top: 0; flex-direction: column; }
         #schoolCodeSection { display: none; width: 100%; text-align: left; margin-top: 10px; }
         #dynamic_school_codes { margin-top: 5px; }
     </style>
@@ -109,25 +173,37 @@
         </div>
 
         <input type="password" id="password" placeholder="Password" class="input-box">
-        
-        <button class="btn" id="startVerifyBtn">START VERIFICATION</button>
+
+        <label style="display:flex; align-items:flex-start; gap:10px; text-align:left; font-size:12px; color:var(--text-dim); margin: 15px 5px 5px;">
+            <input type="checkbox" id="termsCheckbox" style="margin-top:2px; width:16px; height:16px; flex-shrink:0; accent-color: var(--primary);">
+            <span>I have read and agree to the <a href="terms.html" target="_blank" style="color: var(--primary);">Terms & Conditions</a> and <a href="privacy.html" target="_blank" style="color: var(--primary);">Privacy Policy</a>, and confirm the details I've provided are accurate.</span>
+        </label>
+
+        <button class="btn" id="startVerifyBtn" disabled>START VERIFICATION</button>
     </div>
 
     <div class="modal-overlay" id="cameraModal">
-        <div class="modal" style="padding: 25px;">
-            <h3 id="camModalTitle" style="color: white; margin-top: 0;">Face Scan</h3>
-            
+        <div class="modal">
+            <div class="cam-top-bar">
+                <h3 id="camModalTitle">Face Scan</h3>
+                <div class="cam-step-dots">
+                    <span id="dotFace" class="active"></span>
+                    <span id="dotLicense"></span>
+                </div>
+            </div>
+
             <div class="camera-container" id="camContainer">
                 <video id="video" autoplay muted playsinline></video>
-                <div class="camera-overlay" id="camOverlay"></div>
+                <div class="camera-overlay" id="camOverlay"><div class="scan-line"></div></div>
                 <canvas id="canvas"></canvas>
             </div>
-            
-            <p id="camStatus" style="font-size: 14px; color: var(--text-dim); font-weight: bold; min-height: 20px;">Initializing camera...</p>
-            
-            <div id="licenseButtons">
-                <button class="btn" id="captureLicenseBtn">CAPTURE LICENSE</button>
-                <button class="btn btn-secondary" id="skipLicenseBtn">SKIP FOR NOW</button>
+
+            <div class="cam-bottom-bar">
+                <p id="camStatus">Initializing camera...</p>
+                <div id="licenseButtons">
+                    <button class="btn" id="captureLicenseBtn">CAPTURE LICENSE</button>
+                    <button class="btn btn-secondary" id="skipLicenseBtn">SKIP FOR NOW</button>
+                </div>
             </div>
         </div>
     </div>
@@ -143,10 +219,6 @@
     </div>
 
     <script>
-        const supabaseUrl = 'https://mlzpmiccmggfwenfzvsy.supabase.co';
-        const supabaseKey = 'sb_publishable_ehnY1o3Vm1YCHVhaL5NL-Q_UZN-xRIp';
-        const _supabase = supabase.createClient(supabaseUrl, supabaseKey);
-
         const startVerifyBtn = document.getElementById('startVerifyBtn');
         const uInput = document.getElementById('username');
         const npInput = document.getElementById('number_plate');
@@ -159,6 +231,7 @@
         const camOverlay = document.getElementById('camOverlay');
         const licenseButtons = document.getElementById('licenseButtons');
         const camContainer = document.getElementById('camContainer');
+        const termsCheckbox = document.getElementById('termsCheckbox');
 
         let faceImageData = null;
         let licenseImageData = null;
@@ -167,8 +240,10 @@
         let cameraStream = null;
 
         function validateErrors() {
-            startVerifyBtn.disabled = (usernameError || plateError);
+            startVerifyBtn.disabled = (usernameError || plateError || !termsCheckbox.checked);
         }
+
+        termsCheckbox.addEventListener('change', validateErrors);
 
         uInput.addEventListener('input', async () => {
             const u = uInput.value.trim().toLowerCase();
@@ -178,8 +253,14 @@
                 validateErrors();
                 return;
             }
-            const { data } = await _supabase.from('users').select('username').eq('username', u).maybeSingle();
-            usernameError = !!data;
+            try {
+                const res = await fetch('/api/check_availability', {
+                    method: 'POST', headers: {'Content-Type':'application/json'},
+                    body: JSON.stringify({ username: u })
+                });
+                const data = await res.json();
+                usernameError = !!data.username_taken;
+            } catch(e) { usernameError = false; }
             document.getElementById('uError').style.display = usernameError ? 'block' : 'none';
             validateErrors();
         });
@@ -192,8 +273,14 @@
                 validateErrors();
                 return;
             }
-            const { data } = await _supabase.from('users').select('number_plate').eq('number_plate', np).maybeSingle();
-            plateError = !!data;
+            try {
+                const res = await fetch('/api/check_availability', {
+                    method: 'POST', headers: {'Content-Type':'application/json'},
+                    body: JSON.stringify({ number_plate: np })
+                });
+                const data = await res.json();
+                plateError = !!data.plate_taken;
+            } catch(e) { plateError = false; }
             document.getElementById('npError').style.display = plateError ? 'block' : 'none';
             validateErrors();
         });
@@ -256,10 +343,14 @@
         }
 
         function runFaceAutoScan() {
-            camContainer.style.borderColor = "var(--input)";
             document.getElementById('camModalTitle').innerText = "Face Scan";
-            camOverlay.style.width = "140px";
-            camOverlay.style.height = "180px";
+            document.getElementById('dotFace').classList.add('active');
+            document.getElementById('dotLicense').classList.remove('active');
+            camOverlay.classList.remove('locked', 'scanning');
+            camOverlay.style.width = "";
+            camOverlay.style.height = "";
+            camOverlay.style.maxWidth = "220px";
+            camOverlay.style.maxHeight = "280px";
             camOverlay.style.borderRadius = "50%";
             licenseButtons.style.display = 'none';
 
@@ -268,40 +359,41 @@
             setTimeout(() => { camStatus.innerText = "Center your face..."; }, 4500);
             setTimeout(() => { 
                 camStatus.innerText = "Perfect! Hold still..."; 
-                camStatus.style.color = "var(--success)";
-                camContainer.style.borderColor = "var(--success)";
+                camOverlay.classList.add('locked');
             }, 6000);
             setTimeout(() => {
-                camStatus.innerText = "SCANNING...";
+                camStatus.innerText = "Scanning...";
+                camOverlay.classList.add('scanning');
+            }, 6600);
+            setTimeout(() => {
                 captureFrame();
                 faceImageData = canvas.toDataURL('image/jpeg');
-                
-                camOverlay.style.backgroundColor = "rgba(255,255,255,0.5)";
-                setTimeout(() => { 
-                    camOverlay.style.backgroundColor = "transparent"; 
-                    switchToLicenseScan();
-                }, 300);
-            }, 7500);
+                camOverlay.classList.remove('scanning');
+                switchToLicenseScan();
+            }, 7800);
         }
 
         function switchToLicenseScan() {
             document.getElementById('camModalTitle').innerText = "Driver's License";
-            camStatus.innerText = "Hold your Driver's License inside the rectangle.";
-            camStatus.style.color = "var(--text-dim)";
-            camContainer.style.borderColor = "var(--input)";
-            
-            camOverlay.style.width = "240px";
-            camOverlay.style.height = "150px";
-            camOverlay.style.borderRadius = "10px";
-            
+            document.getElementById('dotFace').classList.remove('active');
+            document.getElementById('dotLicense').classList.add('active');
+            camStatus.innerText = "Hold your Driver's License steady inside the frame, then capture.";
+            camOverlay.classList.remove('locked', 'scanning');
+
+            camOverlay.style.maxWidth = "300px";
+            camOverlay.style.maxHeight = "190px";
+            camOverlay.style.width = "80vw";
+            camOverlay.style.height = "50vw";
+            camOverlay.style.borderRadius = "14px";
+
             licenseButtons.style.display = 'flex';
         }
 
         document.getElementById('captureLicenseBtn').addEventListener('click', () => {
             captureFrame();
             licenseImageData = canvas.toDataURL('image/jpeg');
-            camStatus.innerText = "License Captured!";
-            camStatus.style.color = "var(--success)";
+            camStatus.innerText = "License captured!";
+            camOverlay.classList.add('locked');
             processBackendSubmission();
         });
 
@@ -340,7 +432,8 @@
                 password: document.getElementById('password').value,
                 role: 'driver',
                 face_image: faceImageData,
-                license_image: licenseImageData 
+                license_image: licenseImageData,
+                terms_accepted: termsCheckbox.checked
             };
 
             try {
@@ -376,16 +469,13 @@
             vBtn.disabled = true;
 
             try {
-                // Correct reference assignment pointing to your valid variable layout
-                console.log("Face Image Data captured state present:", !!faceImageData);
-
                 const vRes = await fetch('/api/verify-and-save', {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
                     body: JSON.stringify({
                         username: uInput.value.trim().toLowerCase(),
                         code: code,
-                        verification_image: faceImageData // Uses your proper global state string variable
+                        verification_image: faceImageData
                     })
                 });
                 
