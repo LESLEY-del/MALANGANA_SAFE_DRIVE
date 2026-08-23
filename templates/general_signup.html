@@ -328,7 +328,7 @@
 
         termsCheckbox.addEventListener('change', validateStartBtn);
 
-        // Availability check now goes through the backend (service-role key),
+        // Availability check goes through the backend (service-role key),
         // matching the driver signup page — direct Supabase reads from the
         // client no longer work now that RLS is locked down on `users`.
         uInput.addEventListener('input', async () => {
@@ -437,7 +437,12 @@
     }
      
     try { 
-        const res = await fetch('http://127.0.0.1:5000/api/general/signup', {  
+        // FIX: relative path, not http://127.0.0.1:5000/... — the old
+        // hardcoded localhost URL told the VISITOR'S browser to call their
+        // own machine, which fails for every real user on Render. Since
+        // Flask serves this page and the API from the same origin, the
+        // relative path resolves correctly wherever it's deployed.
+        const res = await fetch('/api/general/signup', {  
             method: 'POST',  
             headers: {'Content-Type': 'application/json'},  
             body: JSON.stringify(payload)  
@@ -480,7 +485,8 @@ document.getElementById('verifyBtn').addEventListener('click', async () => {
     }
 
     try {
-        const vRes = await fetch('http://127.0.0.1:5000/api/verify-and-save', {  
+        // FIX: relative path here too.
+        const vRes = await fetch('/api/verify-and-save', {  
             method: 'POST',  
             headers: {'Content-Type': 'application/json'},  
             body: JSON.stringify(payload)  
