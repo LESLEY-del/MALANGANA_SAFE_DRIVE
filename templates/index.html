@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 
 <title>Save Drive | Safe. Connected. Moving.</title>
 
@@ -10,9 +10,9 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 
 <style>
-
 *{
     margin:0;
     padding:0;
@@ -46,7 +46,7 @@ body{
     padding:0 7%;
     z-index:1000;
 
-    background:rgba(2,6,23,.72);
+    background:rgba(2,6,23,.85);
     backdrop-filter:blur(18px);
     border-bottom:1px solid rgba(255,255,255,.08);
 }
@@ -58,6 +58,8 @@ body{
     font-size:22px;
     font-weight:900;
     letter-spacing:-.5px;
+    text-decoration: none;
+    color: white;
 }
 
 .logo-icon{
@@ -137,6 +139,51 @@ body{
     box-shadow:0 12px 30px rgba(34,197,94,.3);
 }
 
+/* =========================
+   MOBILE MENU DRAWER
+========================= */
+.mobile-menu-btn {
+    display: none;
+    background: transparent;
+    border: none;
+    color: white;
+    font-size: 24px;
+    cursor: pointer;
+}
+
+.mobile-drawer {
+    position: fixed;
+    top: 78px;
+    left: 0;
+    width: 100%;
+    background: rgba(2, 6, 23, 0.98);
+    backdrop-filter: blur(20px);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    padding: 24px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    transform: translateY(-120%);
+    transition: transform 0.3s ease-in-out;
+    z-index: 999;
+}
+
+.mobile-drawer.active {
+    transform: translateY(0);
+}
+
+.mobile-drawer a {
+    color: #cbd5e1;
+    text-decoration: none;
+    font-size: 15px;
+    font-weight: 700;
+    padding: 8px 0;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.mobile-drawer a:hover {
+    color: #22c55e;
+}
 
 /* =========================
    HERO
@@ -219,9 +266,9 @@ body{
 }
 
 .hero h1{
-    font-size:clamp(48px,7vw,88px);
+    font-size:clamp(40px,7vw,88px);
     line-height:.98;
-    letter-spacing:-4px;
+    letter-spacing:-3px;
     font-weight:900;
 
     margin-bottom:25px;
@@ -239,7 +286,7 @@ body{
     max-width:620px;
 
     color:#cbd5e1;
-    font-size:17px;
+    font-size:16px;
     line-height:1.8;
 
     margin-bottom:35px;
@@ -304,7 +351,6 @@ body{
     background:rgba(255,255,255,.12);
 }
 
-
 /* =========================
    HERO FLOATING CARD
 ========================= */
@@ -316,13 +362,13 @@ body{
 
     z-index:5;
 
-    width:300px;
+    width:280px;
 
     padding:20px;
 
     border-radius:18px;
 
-    background:rgba(15,23,42,.78);
+    background:rgba(15,23,42,.85);
     backdrop-filter:blur(20px);
 
     border:1px solid rgba(255,255,255,.13);
@@ -333,15 +379,8 @@ body{
 }
 
 @keyframes floatCard{
-
-    0%,100%{
-        transform:translateY(0);
-    }
-
-    50%{
-        transform:translateY(-12px);
-    }
-
+    0%,100%{ transform:translateY(0); }
+    50%{ transform:translateY(-12px); }
 }
 
 .live-header{
@@ -418,7 +457,6 @@ body{
     color:#64748b;
 }
 
-
 /* =========================
    TRUST BAR
 ========================= */
@@ -433,7 +471,7 @@ body{
     display:flex;
     justify-content:center;
     flex-wrap:wrap;
-    gap:55px;
+    gap:30px 55px;
 }
 
 .trust-item{
@@ -453,13 +491,12 @@ body{
     color:#e2e8f0;
 }
 
-
 /* =========================
    GENERAL SECTION
 ========================= */
 
 .section{
-    padding:110px 7%;
+    padding:100px 7%;
 }
 
 .section-header{
@@ -478,9 +515,9 @@ body{
 }
 
 .section h2{
-    font-size:clamp(34px,5vw,56px);
-    letter-spacing:-2px;
-    line-height:1.05;
+    font-size:clamp(30px,5vw,52px);
+    letter-spacing:-1.5px;
+    line-height:1.1;
 
     margin-bottom:18px;
 }
@@ -490,7 +527,6 @@ body{
     font-size:15px;
     line-height:1.8;
 }
-
 
 /* =========================
    SERVICES
@@ -502,48 +538,33 @@ body{
 
 .service-grid{
     display:grid;
-    grid-template-columns:repeat(3,1fr);
-    gap:20px;
+    grid-template-columns:repeat(auto-fit, minmax(260px, 1fr));
+    gap:24px;
 }
 
 .service-card{
     padding:30px;
-
     border-radius:20px;
-
-    background:linear-gradient(
-        145deg,
-        rgba(30,41,59,.8),
-        rgba(15,23,42,.65)
-    );
-
+    background:linear-gradient(145deg, rgba(30,41,59,.8), rgba(15,23,42,.65));
     border:1px solid rgba(255,255,255,.07);
-
     transition:.35s;
 }
 
 .service-card:hover{
-    transform:translateY(-8px);
-
+    transform:translateY(-6px);
     border-color:rgba(34,197,94,.35);
-
     box-shadow:0 20px 50px rgba(0,0,0,.25);
 }
 
 .service-icon{
     width:52px;
     height:52px;
-
     display:flex;
     align-items:center;
     justify-content:center;
-
     border-radius:15px;
-
     background:rgba(34,197,94,.1);
-
     font-size:24px;
-
     margin-bottom:23px;
 }
 
@@ -558,7 +579,6 @@ body{
     line-height:1.7;
 }
 
-
 /* =========================
    HOW IT WORKS
 ========================= */
@@ -569,19 +589,15 @@ body{
 
 .steps{
     display:grid;
-    grid-template-columns:repeat(4,1fr);
-    gap:18px;
+    grid-template-columns:repeat(auto-fit, minmax(220px, 1fr));
+    gap:20px;
 }
 
 .step{
     position:relative;
-
     padding:28px;
-
     border-radius:18px;
-
     background:rgba(2,6,23,.55);
-
     border:1px solid rgba(255,255,255,.06);
 }
 
@@ -589,8 +605,7 @@ body{
     font-size:12px;
     color:#22c55e;
     font-weight:900;
-
-    margin-bottom:35px;
+    margin-bottom:30px;
 }
 
 .step h3{
@@ -604,7 +619,6 @@ body{
     line-height:1.7;
 }
 
-
 /* =========================
    SAFETY SECTION
 ========================= */
@@ -612,28 +626,19 @@ body{
 .safety{
     display:grid;
     grid-template-columns:1fr 1fr;
-    gap:70px;
+    gap:60px;
     align-items:center;
 }
 
 .safety-image{
-    min-height:470px;
-
+    min-height:450px;
     border-radius:25px;
-
     background:
-        linear-gradient(
-            180deg,
-            transparent 30%,
-            rgba(2,6,23,.9)
-        ),
+        linear-gradient(180deg, transparent 30%, rgba(2,6,23,.9)),
         url("https://images.unsplash.com/photo-1570125909232-eb263c188f7e?auto=format&fit=crop&w=1200&q=85");
-
     background-size:cover;
     background-position:center;
-
     position:relative;
-
     overflow:hidden;
 }
 
@@ -641,20 +646,16 @@ body{
     position:absolute;
     left:25px;
     bottom:25px;
-
-    padding:18px 20px;
-
+    padding:16px 20px;
     border-radius:16px;
-
     background:rgba(2,6,23,.85);
     backdrop-filter:blur(15px);
-
     border:1px solid rgba(255,255,255,.1);
 }
 
 .safety-badge strong{
     display:block;
-    font-size:24px;
+    font-size:22px;
     color:#22c55e;
 }
 
@@ -664,10 +665,9 @@ body{
 }
 
 .safety-content h2{
-    font-size:45px;
-    line-height:1.05;
-    letter-spacing:-2px;
-
+    font-size:clamp(32px, 4vw, 44px);
+    line-height:1.1;
+    letter-spacing:-1.5px;
     margin-bottom:20px;
 }
 
@@ -675,14 +675,13 @@ body{
     color:#94a3b8;
     line-height:1.8;
     font-size:14px;
-
     margin-bottom:30px;
 }
 
 .safety-list{
     display:flex;
     flex-direction:column;
-    gap:17px;
+    gap:16px;
 }
 
 .safety-item{
@@ -691,20 +690,15 @@ body{
 }
 
 .check{
-    width:27px;
-    height:27px;
-
+    width:26px;
+    height:26px;
     flex:none;
-
     display:flex;
     align-items:center;
     justify-content:center;
-
     border-radius:50%;
-
     background:rgba(34,197,94,.12);
     color:#22c55e;
-
     font-size:12px;
 }
 
@@ -720,36 +714,24 @@ body{
     line-height:1.5;
 }
 
-
 /* =========================
    STATS
 ========================= */
 
 .stats{
-    padding:70px 7%;
-
+    padding:60px 7%;
     display:grid;
-    grid-template-columns:repeat(4,1fr);
-
-    background:
-        linear-gradient(
-            90deg,
-            #052e16,
-            #064e3b
-        );
+    grid-template-columns:repeat(auto-fit, minmax(200px, 1fr));
+    gap:30px;
+    background:linear-gradient(90deg, #052e16, #064e3b);
 }
 
 .stat{
     text-align:center;
-    border-right:1px solid rgba(255,255,255,.1);
-}
-
-.stat:last-child{
-    border:none;
 }
 
 .stat h3{
-    font-size:40px;
+    font-size:36px;
     font-weight:900;
 }
 
@@ -759,39 +741,32 @@ body{
     font-weight:700;
     text-transform:uppercase;
     letter-spacing:1px;
+    margin-top:6px;
 }
-
 
 /* =========================
    CTA
 ========================= */
 
 .cta{
-    padding:120px 7%;
+    padding:100px 7%;
     text-align:center;
-
     background:
-        radial-gradient(
-            circle at center,
-            rgba(34,197,94,.14),
-            transparent 45%
-        ),
+        radial-gradient(circle at center, rgba(34,197,94,.14), transparent 45%),
         #020617;
 }
 
 .cta h2{
     max-width:800px;
     margin:0 auto 20px;
-
-    font-size:clamp(40px,6vw,68px);
-    line-height:1;
-    letter-spacing:-3px;
+    font-size:clamp(34px,5vw,60px);
+    line-height:1.1;
+    letter-spacing:-2px;
 }
 
 .cta p{
     max-width:600px;
     margin:0 auto 35px;
-
     color:#94a3b8;
     font-size:14px;
     line-height:1.7;
@@ -804,24 +779,21 @@ body{
     flex-wrap:wrap;
 }
 
-
 /* =========================
    FOOTER
 ========================= */
 
 footer{
     padding:45px 7% 25px;
-
     background:#01030b;
-
     border-top:1px solid rgba(255,255,255,.06);
 }
 
 .footer-top{
     display:flex;
     justify-content:space-between;
-    gap:30px;
-
+    flex-wrap:wrap;
+    gap:40px;
     padding-bottom:35px;
 }
 
@@ -838,26 +810,23 @@ footer{
 
 .footer-links{
     display:flex;
-    gap:70px;
+    gap:50px;
+    flex-wrap:wrap;
 }
 
 .footer-column h4{
     font-size:11px;
     margin-bottom:15px;
     color:white;
+    letter-spacing:0.8px;
 }
 
 .footer-column a{
     display:block;
-
     color:#64748b;
-
     text-decoration:none;
-
-    font-size:10px;
-
+    font-size:11px;
     margin-bottom:10px;
-
     transition:.3s;
 }
 
@@ -867,151 +836,70 @@ footer{
 
 .footer-bottom{
     border-top:1px solid rgba(255,255,255,.06);
-
     padding-top:20px;
-
     display:flex;
     justify-content:space-between;
-
+    align-items:center;
+    flex-wrap:wrap;
+    gap:12px;
     color:#475569;
-
-    font-size:9px;
+    font-size:10px;
 }
 
-
-/* =========================
-   MOBILE
-========================= */
-
-.mobile-menu{
-    display:none;
-}
-
-@media(max-width:900px){
-
+@media(max-width:960px){
+    .navbar{
+        padding:0 5%;
+        height:70px;
+    }
+    .mobile-drawer {
+        top: 70px;
+    }
     .nav-links{
         display:none;
     }
-
-    .mobile-menu{
+    .mobile-menu-btn{
         display:block;
-
-        color:white;
-        font-size:24px;
-
-        cursor:pointer;
     }
-
     .hero{
+        padding:110px 5% 60px;
         background-position:65% center;
     }
-
     .hero-card{
         display:none;
     }
-
-    .service-grid{
-        grid-template-columns:1fr;
-    }
-
-    .steps{
-        grid-template-columns:1fr 1fr;
-    }
-
     .safety{
         grid-template-columns:1fr;
     }
-
-    .stats{
-        grid-template-columns:1fr 1fr;
-        gap:35px;
-    }
-
-    .stat:nth-child(2){
-        border:none;
-    }
-
-    .footer-top{
-        flex-direction:column;
-    }
-
 }
 
-@media(max-width:600px){
-
-    .navbar{
-        padding:0 5%;
-    }
-
+@media(max-width:640px){
     .nav-buttons .btn-login{
         display:none;
     }
-
-    .nav-buttons{
-        margin-left:auto;
-        margin-right:15px;
-    }
-
-    .hero{
-        padding:120px 5% 70px;
-        min-height:100svh;
-
-        background-position:63% center;
-    }
-
     .hero h1{
-        font-size:48px;
-        letter-spacing:-2.5px;
+        font-size:38px;
+        letter-spacing:-2px;
     }
-
     .hero-description{
         font-size:14px;
     }
-
     .hero-buttons{
         flex-direction:column;
     }
-
     .hero-primary,
     .hero-secondary{
         width:100%;
     }
-
     .section{
-        padding:75px 5%;
+        padding:65px 5%;
     }
-
-    .steps{
-        grid-template-columns:1fr;
-    }
-
     .safety-image{
-        min-height:350px;
+        min-height:300px;
     }
-
-    .safety-content h2{
-        font-size:36px;
-    }
-
-    .stats{
-        padding:55px 5%;
-    }
-
-    .stat h3{
-        font-size:30px;
-    }
-
     .footer-links{
-        gap:35px;
+        gap:30px;
     }
-
-    .footer-bottom{
-        flex-direction:column;
-        gap:10px;
-    }
-
 }
-
 </style>
 </head>
 
@@ -1020,804 +908,378 @@ footer{
 <!-- =========================
      NAVIGATION
 ========================= -->
-
 <header class="navbar">
-
-    <div class="logo">
-
-        <div class="logo-icon">
-            🚗
-        </div>
-
+    <a href="#home" class="logo">
+        <div class="logo-icon">🚗</div>
         SAVE <span>DRIVE</span>
-
-    </div>
-
+    </a>
 
     <nav class="nav-links">
-
         <a href="#home">Home</a>
-
         <a href="#services">Services</a>
-
         <a href="#how">How It Works</a>
-
         <a href="#safety">Safety</a>
-
+        <a href="policy.html"><i class="fa-solid fa-shield-halved"></i> Policy & Safety</a>
     </nav>
 
-
     <div class="nav-buttons">
-
-        <!-- CHANGE THESE IF YOUR FILE NAMES ARE DIFFERENT -->
-
-        <a href="login.html" class="btn-login">
-            LOGIN
-        </a>
-
-        <a href="choice.html" class="btn-signup">
-            SIGN UP
-        </a>
-
+        <a href="login.html" class="btn-login">LOGIN</a>
+        <a href="choice.html" class="btn-signup">SIGN UP</a>
+        <button class="mobile-menu-btn" id="menuToggle" aria-label="Toggle navigation menu">
+            <i class="fa-solid fa-bars"></i>
+        </button>
     </div>
-
-    <div class="mobile-menu">
-        ☰
-    </div>
-
 </header>
 
+<!-- MOBILE DRAWER -->
+<div class="mobile-drawer" id="mobileDrawer">
+    <a href="#home" class="mobile-nav-link">Home</a>
+    <a href="#services" class="mobile-nav-link">Services</a>
+    <a href="#how" class="mobile-nav-link">How It Works</a>
+    <a href="#safety" class="mobile-nav-link">Safety</a>
+    <a href="policy.html" style="color: #22c55e;"><i class="fa-solid fa-shield-halved"></i> Privacy & Child Safety Policy</a>
+    <a href="login.html">Login</a>
+    <a href="choice.html">Sign Up</a>
+</div>
 
 <!-- =========================
      HERO
 ========================= -->
-
 <section class="hero" id="home">
-
     <div class="hero-content">
-
         <div class="hero-label">
-
             <span class="status-dot"></span>
-
             SAFE TRANSPORTATION NETWORK
-
         </div>
 
-
         <h1>
-
             Moving People.<br>
-
             <span class="green">Protecting</span>
-
             <span class="blue">Families.</span>
-
         </h1>
 
-
         <p class="hero-description">
-
             Save Drive connects parents, students, drivers and schools
             through one intelligent transportation platform designed
             to make every journey safer, more visible and more connected.
-
         </p>
 
-
         <div class="hero-buttons">
-
             <a href="choice.html" class="hero-primary">
-
-                GET STARTED
-
-                <span>→</span>
-
+                GET STARTED <span>→</span>
             </a>
-
-
-            <a href="login.html" class="hero-secondary">
-
-                ALREADY HAVE AN ACCOUNT?
-
+            <a href="policy.html" class="hero-secondary" style="border-color: rgba(34,197,94,0.4); color: #86efac;">
+                <i class="fa-solid fa-shield-halved"></i> CHILD SAFETY POLICY
             </a>
-
         </div>
-
     </div>
-
 
     <!-- LIVE TRANSPORT CARD -->
-
     <div class="hero-card">
-
         <div class="live-header">
-
-            <div class="live-title">
-                TRANSPORT MONITOR
-            </div>
-
-            <div class="live">
-
-                <span></span>
-
-                LIVE
-
-            </div>
-
+            <div class="live-title">TRANSPORT MONITOR</div>
+            <div class="live"><span></span> LIVE</div>
         </div>
-
 
         <div class="route">
-
             <div class="route-line">
-
                 <div class="route-circle"></div>
-
                 <div class="route-line-inner"></div>
-
                 <div class="route-circle destination"></div>
-
             </div>
-
 
             <div class="route-info">
-
                 <div>
-
-                    <div class="route-location">
-                        School Pickup
-                    </div>
-
-                    <div class="route-time">
-                        Student transport
-                    </div>
-
+                    <div class="route-location">School Pickup</div>
+                    <div class="route-time">Student transport</div>
                 </div>
-
-
                 <div>
-
-                    <div class="route-location">
-                        Home Destination
-                    </div>
-
-                    <div class="route-time">
-                        Journey monitored
-                    </div>
-
+                    <div class="route-location">Home Destination</div>
+                    <div class="route-time">Journey monitored</div>
                 </div>
-
             </div>
-
         </div>
-
     </div>
-
 </section>
-
 
 <!-- =========================
      TRUST
 ========================= -->
-
 <div class="trust-bar">
-
-    <div class="trust-item">
-        ✓ <strong>Parents</strong> Connected
-    </div>
-
-    <div class="trust-item">
-        ✓ <strong>Students</strong> Protected
-    </div>
-
-    <div class="trust-item">
-        ✓ <strong>Drivers</strong> Connected
-    </div>
-
-    <div class="trust-item">
-        ✓ <strong>Schools</strong> Informed
-    </div>
-
+    <div class="trust-item">✓ <strong>Parents</strong> Connected</div>
+    <div class="trust-item">✓ <strong>Students</strong> Protected</div>
+    <div class="trust-item">✓ <strong>Drivers</strong> Connected</div>
+    <div class="trust-item">✓ <strong>Schools</strong> Informed</div>
 </div>
-
 
 <!-- =========================
      SERVICES
 ========================= -->
-
 <section class="section services" id="services">
-
     <div class="section-header">
-
-        <div class="section-tag">
-            ONE PLATFORM
-        </div>
-
-        <h2>
-            Everything needed for safer transportation.
-        </h2>
-
+        <div class="section-tag">ONE PLATFORM</div>
+        <h2>Everything needed for safer transportation.</h2>
         <p class="section-description">
-
             Save Drive brings the people involved in transportation
             together so that important information does not get lost
             between parents, drivers and schools.
-
         </p>
-
     </div>
-
 
     <div class="service-grid">
-
-
         <div class="service-card">
-
-            <div class="service-icon">
-                👨‍👩‍👧
-            </div>
-
-            <h3>
-                Parent Control
-            </h3>
-
-            <p>
-
-                Parents can monitor their children's transport,
-                communicate with drivers and stay informed about
-                important journey updates.
-
-            </p>
-
+            <div class="service-icon">👨‍👩‍👧</div>
+            <h3>Parent Control</h3>
+            <p>Parents can monitor their children's transport, communicate with drivers and stay informed about important journey updates.</p>
         </div>
 
-
         <div class="service-card">
-
-            <div class="service-icon">
-                🚌
-            </div>
-
-            <h3>
-                Driver Network
-            </h3>
-
-            <p>
-
-                Drivers can connect with families, receive transport
-                requests and communicate directly with the people
-                they transport.
-
-            </p>
-
+            <div class="service-icon">🚌</div>
+            <h3>Driver Network</h3>
+            <p>Drivers can connect with families, receive transport requests and communicate directly with the people they transport.</p>
         </div>
 
-
         <div class="service-card">
-
-            <div class="service-icon">
-                🏫
-            </div>
-
-            <h3>
-                School Connection
-            </h3>
-
-            <p>
-
-                Schools can stay connected with parents and transport
-                stakeholders while keeping important student transport
-                information organized.
-
-            </p>
-
+            <div class="service-icon">🏫</div>
+            <h3>School Connection</h3>
+            <p>Schools can stay connected with parents and transport stakeholders while keeping important student transport information organized.</p>
         </div>
 
-
         <div class="service-card">
-
-            <div class="service-icon">
-                📍
-            </div>
-
-            <h3>
-                Transport Visibility
-            </h3>
-
-            <p>
-
-                Keep track of transport activity and important journey
-                information from one centralized platform.
-
-            </p>
-
+            <div class="service-icon">📍</div>
+            <h3>Transport Visibility</h3>
+            <p>Keep track of transport activity and important journey information from one centralized platform.</p>
         </div>
 
-
         <div class="service-card">
-
-            <div class="service-icon">
-                💬
-            </div>
-
-            <h3>
-                Direct Communication
-            </h3>
-
-            <p>
-
-                Dedicated communication channels allow parents,
-                drivers and school representatives to communicate
-                when it matters.
-
-            </p>
-
+            <div class="service-icon">💬</div>
+            <h3>Direct Communication</h3>
+            <p>Dedicated communication channels allow parents, drivers and school representatives to communicate when it matters.</p>
         </div>
 
-
         <div class="service-card">
-
-            <div class="service-icon">
-                🛡️
-            </div>
-
-            <h3>
-                Safety First
-            </h3>
-
-            <p>
-
-                Save Drive is designed around visibility, communication
-                and accountability throughout the transportation journey.
-
-            </p>
-
+            <div class="service-icon">🛡️</div>
+            <h3>Safety First</h3>
+            <p>Save Drive is designed around visibility, communication and accountability throughout the transportation journey.</p>
         </div>
-
     </div>
-
 </section>
-
 
 <!-- =========================
      HOW IT WORKS
 ========================= -->
-
 <section class="section how" id="how">
-
     <div class="section-header">
-
-        <div class="section-tag">
-            HOW IT WORKS
-        </div>
-
-        <h2>
-            From request to destination.
-        </h2>
-
+        <div class="section-tag">HOW IT WORKS</div>
+        <h2>From request to destination.</h2>
         <p class="section-description">
-
             Save Drive simplifies the transportation process by
             connecting the right people at the right time.
-
         </p>
-
     </div>
-
 
     <div class="steps">
-
-
         <div class="step">
-
-            <div class="step-number">
-                01
-            </div>
-
-            <h3>
-                Create an Account
-            </h3>
-
-            <p>
-                Register as a parent, driver or school representative
-                and create your secure profile.
-            </p>
-
+            <div class="step-number">01</div>
+            <h3>Create an Account</h3>
+            <p>Register as a parent, driver or school representative and create your secure profile.</p>
         </div>
 
-
         <div class="step">
-
-            <div class="step-number">
-                02
-            </div>
-
-            <h3>
-                Connect
-            </h3>
-
-            <p>
-                Find the appropriate transport service or connect
-                with the people involved in your journey.
-            </p>
-
+            <div class="step-number">02</div>
+            <h3>Connect</h3>
+            <p>Find the appropriate transport service or connect with the people involved in your journey.</p>
         </div>
 
-
         <div class="step">
-
-            <div class="step-number">
-                03
-            </div>
-
-            <h3>
-                Communicate
-            </h3>
-
-            <p>
-                Use dedicated communication channels to share
-                important transport information.
-            </p>
-
+            <div class="step-number">03</div>
+            <h3>Communicate</h3>
+            <p>Use dedicated communication channels to share important transport information.</p>
         </div>
 
-
         <div class="step">
-
-            <div class="step-number">
-                04
-            </div>
-
-            <h3>
-                Travel Safely
-            </h3>
-
-            <p>
-                Keep everyone informed as the journey progresses
-                from pickup to destination.
-            </p>
-
+            <div class="step-number">04</div>
+            <h3>Travel Safely</h3>
+            <p>Keep everyone informed as the journey progresses from pickup to destination.</p>
         </div>
-
     </div>
-
 </section>
-
 
 <!-- =========================
      SAFETY
 ========================= -->
-
-<section class="section">
-
-    <div class="safety" id="safety">
-
-
+<section class="section" id="safety">
+    <div class="safety">
         <div class="safety-image">
-
             <div class="safety-badge">
-
                 <strong>24/7</strong>
-
-                <span>
-                    CONNECTION & VISIBILITY
-                </span>
-
+                <span>CONNECTION & VISIBILITY</span>
             </div>
-
         </div>
 
-
         <div class="safety-content">
-
-            <div class="section-tag">
-                SAFETY MATTERS
-            </div>
-
-            <h2>
-                Because every passenger matters.
-            </h2>
-
+            <div class="section-tag">SAFETY MATTERS</div>
+            <h2>Because every passenger matters.</h2>
             <p>
-
                 Transportation is more than getting from one place
                 to another. It is about knowing who is responsible,
                 staying connected and making sure important information
                 reaches the right people.
-
             </p>
 
-
             <div class="safety-list">
-
-
                 <div class="safety-item">
-
-                    <div class="check">
-                        ✓
-                    </div>
-
+                    <div class="check">✓</div>
                     <div>
-
-                        <strong>
-                            Connected Families
-                        </strong>
-
-                        <p>
-                            Parents can stay connected with the
-                            transportation process.
-                        </p>
-
+                        <strong>Connected Families</strong>
+                        <p>Parents can stay connected with the transportation process.</p>
                     </div>
-
                 </div>
 
-
                 <div class="safety-item">
-
-                    <div class="check">
-                        ✓
-                    </div>
-
+                    <div class="check">✓</div>
                     <div>
-
-                        <strong>
-                            Driver Communication
-                        </strong>
-
-                        <p>
-                            Drivers can communicate directly with
-                            parents and relevant stakeholders.
-                        </p>
-
+                        <strong>Driver Communication</strong>
+                        <p>Drivers can communicate directly with parents and relevant stakeholders.</p>
                     </div>
-
                 </div>
 
-
                 <div class="safety-item">
-
-                    <div class="check">
-                        ✓
-                    </div>
-
+                    <div class="check">✓</div>
                     <div>
-
-                        <strong>
-                            School Awareness
-                        </strong>
-
-                        <p>
-                            Important school transport information
-                            can be shared through the platform.
-                        </p>
-
+                        <strong>School Awareness</strong>
+                        <p>Important school transport information can be shared through the platform.</p>
                     </div>
-
                 </div>
 
-
                 <div class="safety-item">
-
-                    <div class="check">
-                        ✓
-                    </div>
-
+                    <div class="check">✓</div>
                     <div>
-
-                        <strong>
-                            One Connected Platform
-                        </strong>
-
-                        <p>
-                            Keep transportation communication
-                            organized in one place.
-                        </p>
-
+                        <strong>One Connected Platform</strong>
+                        <p>Keep transportation communication organized in one place.</p>
                     </div>
-
                 </div>
-
             </div>
-
         </div>
-
     </div>
-
 </section>
-
 
 <!-- =========================
      STATS
 ========================= -->
-
 <section class="stats">
-
     <div class="stat">
-
-        <h3>
-            01
-        </h3>
-
-        <p>
-            Connected Platform
-        </p>
-
+        <h3>01</h3>
+        <p>Connected Platform</p>
     </div>
-
-
     <div class="stat">
-
-        <h3>
-            24/7
-        </h3>
-
-        <p>
-            Communication
-        </p>
-
+        <h3>24/7</h3>
+        <p>Communication</p>
     </div>
-
-
     <div class="stat">
-
-        <h3>
-            3+
-        </h3>
-
-        <p>
-            Connected Stakeholders
-        </p>
-
+        <h3>3+</h3>
+        <p>Connected Stakeholders</p>
     </div>
-
-
     <div class="stat">
-
-        <h3>
-            100%
-        </h3>
-
-        <p>
-            Safety Focused
-        </p>
-
+        <h3>100%</h3>
+        <p>Safety Focused</p>
     </div>
-
 </section>
-
 
 <!-- =========================
      CTA
 ========================= -->
-
 <section class="cta">
-
-    <div class="section-tag">
-        START WITH SAVE DRIVE
-    </div>
-
-    <h2>
-        Safer journeys start with better connections.
-    </h2>
-
+    <div class="section-tag">START WITH SAVE DRIVE</div>
+    <h2>Safer journeys start with better connections.</h2>
     <p>
-
         Join Save Drive and bring parents, drivers and schools
         together through one connected transportation platform.
-
     </p>
 
-
     <div class="cta-buttons">
-
         <a href="choice.html" class="hero-primary">
             CREATE YOUR ACCOUNT →
         </a>
-
-        <a href="login.html" class="hero-secondary">
-            LOGIN
+        <a href="policy.html" class="hero-secondary">
+            <i class="fa-solid fa-shield-halved"></i> READ CHILD SAFETY POLICY
         </a>
-
     </div>
-
 </section>
-
 
 <!-- =========================
      FOOTER
 ========================= -->
-
 <footer>
-
     <div class="footer-top">
-
-
         <div class="footer-brand">
-
-            <div class="logo">
-
-                <div class="logo-icon">
-                    🚗
-                </div>
-
+            <a href="#home" class="logo" style="font-size: 18px;">
+                <div class="logo-icon" style="width: 32px; height: 32px; font-size: 16px;">🚗</div>
                 SAVE <span>DRIVE</span>
-
-            </div>
-
-
+            </a>
             <p>
-
                 A connected transportation platform designed
                 to bring families, drivers and schools closer
                 together.
-
             </p>
-
         </div>
-
 
         <div class="footer-links">
-
-
             <div class="footer-column">
-
-                <h4>
-                    PLATFORM
-                </h4>
-
-                <a href="#services">
-                    Services
-                </a>
-
-                <a href="#how">
-                    How It Works
-                </a>
-
-                <a href="#safety">
-                    Safety
-                </a>
-
+                <h4>PLATFORM</h4>
+                <a href="#services">Services</a>
+                <a href="#how">How It Works</a>
+                <a href="#safety">Safety</a>
             </div>
 
-
             <div class="footer-column">
-
-                <h4>
-                    ACCOUNT
-                </h4>
-
-                <a href="login.html">
-                    Login
-                </a>
-
-                <a href="choice.html">
-                    Sign Up
-                </a>
-
+                <h4>COMPLIANCE</h4>
+                <a href="policy.html"><i class="fa-solid fa-shield-halved"></i> Privacy & Child Safety</a>
             </div>
 
-
+            <div class="footer-column">
+                <h4>ACCOUNT</h4>
+                <a href="login.html">Login</a>
+                <a href="choice.html">Sign Up</a>
+            </div>
         </div>
-
     </div>
-
 
     <div class="footer-bottom">
-
-        <span>
-            © 2026 Save Drive. All rights reserved.
-        </span>
-
-        <span>
-            SAFE • CONNECTED • MOVING
-        </span>
-
+        <span>© 2026 Save Drive. All rights reserved.</span>
+        <span>SAFE • CONNECTED • MOVING</span>
     </div>
-
 </footer>
 
+<script>
+    // Toggle mobile navigation drawer
+    const menuToggle = document.getElementById('menuToggle');
+    const mobileDrawer = document.getElementById('mobileDrawer');
+    const mobileNavLinks = document.querySelectorAll('.mobile-nav-link');
+
+    if (menuToggle && mobileDrawer) {
+        menuToggle.addEventListener('click', () => {
+            mobileDrawer.classList.toggle('active');
+            const icon = menuToggle.querySelector('i');
+            if (mobileDrawer.classList.contains('active')) {
+                icon.classList.remove('fa-bars');
+                icon.classList.add('fa-xmark');
+            } else {
+                icon.classList.remove('fa-xmark');
+                icon.classList.add('fa-bars');
+            }
+        });
+
+        mobileNavLinks.forEach(link => {
+            link.addEventListener('click', () => {
+                mobileDrawer.classList.remove('active');
+                const icon = menuToggle.querySelector('i');
+                icon.classList.remove('fa-xmark');
+                icon.classList.add('fa-bars');
+            });
+        });
+    }
+</script>
 
 </body>
 </html>
