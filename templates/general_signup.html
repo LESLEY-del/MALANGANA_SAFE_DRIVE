@@ -4,7 +4,6 @@
     <meta charset="UTF-8"> 
     <meta name="viewport" content="width=device-width, initial-scale=1.0"> 
     <title>Public Signup | Safe Drive</title> 
-    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <style> 
         :root {
             --bg: #0f172a;
@@ -110,17 +109,81 @@
             font-size: 24px; letter-spacing: 8px; text-align: center; font-weight: bold; color: white;
         }
 
+        /* ---- Native-style camera modal (matches driver signup) ---- */
+        #cameraModal.modal-overlay {
+            padding: 0;
+            align-items: stretch;
+        }
+        #cameraModal .modal {
+            width: 100%;
+            max-width: 100%;
+            height: 100%;
+            max-height: 100vh;
+            border-radius: 0;
+            padding: 0;
+            display: flex;
+            flex-direction: column;
+            box-shadow: none;
+        }
+        .cam-top-bar {
+            padding: max(20px, env(safe-area-inset-top)) 20px 15px;
+            text-align: center;
+            background: linear-gradient(180deg, rgba(0,0,0,0.7) 0%, transparent 100%);
+            position: relative;
+            z-index: 2;
+        }
+        .cam-top-bar h3 { margin: 0; color: white; font-size: 16px; font-weight: 700; letter-spacing: 0.5px; }
+        .cam-step-dots { display: flex; justify-content: center; gap: 6px; margin-top: 10px; }
+        .cam-step-dots span { width: 20px; height: 6px; border-radius: 3px; background: var(--accent); }
+
         .camera-container {
-            width: 100%; height: 240px; background: #000; border-radius: 20px;
-            margin: 15px 0; overflow: hidden; position: relative;
-            border: 3px solid var(--input); transition: border-color 0.3s;
+            flex: 1;
+            width: 100%;
+            background: #000;
+            overflow: hidden;
+            position: relative;
+            margin: 0;
+            border: none;
+            border-radius: 0;
         }
         #video { width: 100%; height: 100%; object-fit: cover; transform: scaleX(-1); }
         #canvas { display: none; }
+
         .camera-overlay {
             position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
-            width: 140px; height: 180px; border: 3px dashed var(--accent);
-            border-radius: 50%; pointer-events: none; transition: all 0.3s ease;
+            width: 62vw; max-width: 220px; height: 78vw; max-height: 280px;
+            border: 3px dashed rgba(255,255,255,0.5);
+            border-radius: 50%; pointer-events: none;
+            transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+            box-shadow: 0 0 0 2000px rgba(0,0,0,0.45);
+        }
+        .camera-overlay.locked { border-color: var(--success); border-style: solid; }
+        .camera-overlay .scan-line {
+            position: absolute; left: 8%; right: 8%; height: 2px;
+            background: linear-gradient(90deg, transparent, var(--accent), transparent);
+            top: 0; opacity: 0; box-shadow: 0 0 8px var(--accent);
+        }
+        .camera-overlay.scanning .scan-line {
+            opacity: 1;
+            animation: scanSweep 1.2s ease-in-out infinite;
+        }
+        @keyframes scanSweep {
+            0% { top: 5%; }
+            50% { top: 92%; }
+            100% { top: 5%; }
+        }
+
+        .cam-bottom-bar {
+            padding: 20px 20px max(20px, env(safe-area-inset-bottom));
+            background: linear-gradient(0deg, rgba(0,0,0,0.85) 0%, rgba(0,0,0,0.4) 70%, transparent 100%);
+            position: relative;
+            z-index: 2;
+            margin-top: -100px;
+        }
+        #camStatus {
+            font-size: 14px; color: white; font-weight: 600; text-align: center;
+            min-height: 20px; margin: 0;
+            text-shadow: 0 2px 8px rgba(0,0,0,0.6);
         }
 
         .app-alert-overlay {
@@ -180,21 +243,31 @@
          
         <input type="email" id="email" placeholder="Email Address" class="input-box"> 
         <input type="password" id="password" placeholder="Password" class="input-box"> 
+
+        <label style="display:flex; align-items:flex-start; gap:10px; text-align:left; font-size:12px; color:var(--text-dim); margin: 15px 5px 5px;">
+            <input type="checkbox" id="termsCheckbox" style="margin-top:2px; width:16px; height:16px; flex-shrink:0; accent-color: var(--accent);">
+            <span>I have read and agree to the <a href="terms.html" target="_blank" style="color: var(--accent);">Terms & Conditions</a> and <a href="privacy.html" target="_blank" style="color: var(--accent);">Privacy Policy</a>, and confirm the details I've provided are accurate.</span>
+        </label>
          
-        <button class="btn" id="startScanBtn">SCAN FACE TO CONTINUE</button> 
+        <button class="btn" id="startScanBtn" disabled>SCAN FACE TO CONTINUE</button> 
     </div> 
 
     <div class="modal-overlay" id="cameraModal">
-        <div class="modal" style="padding: 25px;">
-            <h3 style="color: white; margin-top: 0;">Identity Security Check</h3>
-            
+        <div class="modal">
+            <div class="cam-top-bar">
+                <h3>Face Scan</h3>
+                <div class="cam-step-dots"><span></span></div>
+            </div>
+
             <div class="camera-container" id="camContainer">
                 <video id="video" autoplay muted playsinline></video>
-                <div class="camera-overlay" id="camOverlay"></div>
+                <div class="camera-overlay" id="camOverlay"><div class="scan-line"></div></div>
                 <canvas id="canvas"></canvas>
             </div>
-            
-            <p id="camStatus" style="font-size: 14px; color: var(--text-dim); font-weight: bold; min-height: 20px;">Initializing camera...</p>
+
+            <div class="cam-bottom-bar">
+                <p id="camStatus">Initializing camera...</p>
+            </div>
         </div>
     </div>
 
@@ -232,13 +305,10 @@
             }
         }
 
-        const supabaseUrl = 'https://mlzpmiccmggfwenfzvsy.supabase.co';
-        const supabaseKey = 'sb_publishable_ehnY1o3Vm1YCHVhaL5NL-Q_UZN-xRIp';
-        const _supabase = supabase.createClient(supabaseUrl, supabaseKey);
-
         const startScanBtn = document.getElementById('startScanBtn'); 
         const uError = document.getElementById('uError'); 
         const uInput = document.getElementById('username'); 
+        const termsCheckbox = document.getElementById('termsCheckbox');
         
         const cameraModal = document.getElementById('cameraModal');
         const video = document.getElementById('video');
@@ -250,30 +320,43 @@
 
         let cameraStream = null;
         let faceImageData = null;
+        let usernameError = false;
 
+        function validateStartBtn() {
+            startScanBtn.disabled = usernameError || !termsCheckbox.checked;
+        }
+
+        termsCheckbox.addEventListener('change', validateStartBtn);
+
+        // Availability check now goes through the backend (service-role key),
+        // matching the driver signup page — direct Supabase reads from the
+        // client no longer work now that RLS is locked down on `users`.
         uInput.addEventListener('input', async () => {
             const u = uInput.value.trim().toLowerCase();
             if (u.length < 1) {
                 uError.style.display = 'none';
                 uInput.style.border = "1px solid #475569";
-                startScanBtn.disabled = false;
+                usernameError = false;
+                validateStartBtn();
                 return;
             }
 
             try {
-                const { data } = await _supabase.from('users').select('username').eq('username', u).maybeSingle();
-                if (data) { 
-                    uError.style.display = 'block'; 
-                    uInput.style.border = "2px solid var(--error)"; 
-                    startScanBtn.disabled = true; 
-                } else { 
-                    uError.style.display = 'none'; 
-                    uInput.style.border = "1px solid #475569";
-                    startScanBtn.disabled = false;
-                } 
+                const res = await fetch('/api/check_availability', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ username: u })
+                });
+                const data = await res.json();
+                usernameError = !!data.username_taken;
             } catch (err) {
-                console.error("Cloud security check failed.");
+                console.error("Availability check failed.");
+                usernameError = false;
             }
+
+            uError.style.display = usernameError ? 'block' : 'none';
+            uInput.style.border = usernameError ? "2px solid var(--error)" : "1px solid #475569";
+            validateStartBtn();
         });
  
         startScanBtn.addEventListener('click', async () => { 
@@ -283,6 +366,7 @@
             const p = document.getElementById('password').value.trim();
 
             if(!u || !n || !e || !p) return showAppAlert("Please complete all registration fields first."); 
+            if(!termsCheckbox.checked) return showAppAlert("Please agree to the Terms & Conditions and Privacy Policy to continue.");
  
             cameraModal.style.display = 'flex';
             await startCamera();
@@ -306,26 +390,26 @@
         }
 
         function runFaceAutoScan(name, username, email, password) {
-            camContainer.style.borderColor = "var(--input)";
-            camOverlay.style.backgroundColor = "transparent";
+            camOverlay.classList.remove('locked', 'scanning');
 
             setTimeout(() => { camStatus.innerText = "Positioning face..."; }, 500);
             setTimeout(() => { camStatus.innerText = "Please look directly at the camera..."; }, 2500);
             setTimeout(() => { 
                 camStatus.innerText = "Perfect! Hold still..."; 
-                camStatus.style.color = "var(--success)";
-                camContainer.style.borderColor = "var(--success)";
+                camOverlay.classList.add('locked');
             }, 4500);
+            setTimeout(() => {
+                camStatus.innerText = "Scanning...";
+                camOverlay.classList.add('scanning');
+            }, 5000);
             setTimeout(() => {
                 camStatus.innerText = "CAPTURING...";
                 captureFrame();
-                
-                camOverlay.style.backgroundColor = "rgba(255,255,255,0.6)";
-                
+                camOverlay.classList.remove('scanning');
                 setTimeout(() => { 
                     submitToBackend(name, username, email, password);
                 }, 300);
-            }, 6000);
+            }, 6200);
         }
 
         function captureFrame() {
@@ -338,18 +422,16 @@
 
       async function submitToBackend(n, u, e, p) {
     camStatus.innerText = "Verifying security data...";
-    camStatus.style.color = "var(--accent)";
-    camOverlay.style.backgroundColor = "transparent";
 
     const payload = {  
         name: n,  
         username: u,  
         email: e,  
         password: p,
-        role: 'general'
+        role: 'general',
+        terms_accepted: termsCheckbox.checked
     }; 
 
-    // FIX ONLY: prevent undefined crash
     if (typeof faceImageData !== "undefined" && faceImageData) {
         payload.face_image = faceImageData;
     }
@@ -388,14 +470,13 @@ document.getElementById('verifyBtn').addEventListener('click', async () => {
     vBtn.innerText = "CHECKING...";
     vBtn.disabled = true;
 
-    // FIX ONLY: safe payload build
     const payload = {
         username: u,
         code: code
     };
 
-    if (typeof photoData !== "undefined" && photoData) {
-        payload.verification_image = photoData;
+    if (typeof faceImageData !== "undefined" && faceImageData) {
+        payload.verification_image = faceImageData;
     }
 
     try {
