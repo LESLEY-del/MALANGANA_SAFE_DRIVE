@@ -177,6 +177,16 @@ def driver_signup_page():
 def principal_signup_page():
     return render_template('principal_signup.html')
 
+@app.route('/terms')
+@app.route('/terms.html')
+def terms_page():
+    return render_template('terms.html')
+
+@app.route('/privacy')
+@app.route('/privacy.html')
+def privacy_page():
+    return render_template('privacy.html')
+
 @app.route('/student_dashboard.html')
 def student_dashboard():
     return render_template('student_dashboard.html')
@@ -210,6 +220,29 @@ def login_page():
 @app.route('/choice.html')
 def choice_page():
     return render_template('choice.html')
+
+@app.route('/api/check_availability', methods=['POST', 'OPTIONS'])
+def check_availability():
+    if request.method == 'OPTIONS':
+        return jsonify({'status': 'ok'}), 200
+    try:
+        data = request.json or {}
+        username = data.get('username', '').strip().lower()
+        number_plate = data.get('number_plate', '').strip().upper()
+
+        result = {'status': 'success'}
+
+        if username:
+            res = get_db().table("users").select("username").eq("username", username).execute()
+            result['username_taken'] = bool(res.data)
+
+        if number_plate:
+            res = get_db().table("users").select("number_plate").eq("number_plate", number_plate).execute()
+            result['plate_taken'] = bool(res.data)
+
+        return jsonify(result), 200
+    except Exception as e:
+        return jsonify({'status': 'error', 'message': str(e)}), 500
 
 @app.route('/api/admin/users', methods=['GET', 'OPTIONS'])
 @require_auth
@@ -257,6 +290,8 @@ def admin_get_users():
     except Exception as e:
         print(f"Admin users fetch error: {e}")
         return jsonify({'status': 'error', 'message': str(e)}), 500
+
+
 
 
 @app.route('/api/admin/reject_license', methods=['POST', 'OPTIONS'])
@@ -374,6 +409,9 @@ def signup(role):
         if not u:
             return jsonify({'status': 'error', 'message': 'Missing username'}), 400
 
+        if not data.get('terms_accepted'):
+            return jsonify({'status': 'error', 'message': 'You must accept the Terms & Conditions and Privacy Policy to register.'}), 400
+
         existing = get_db().table("users").select("username").eq("username", u).execute()
         if existing.data:
             return jsonify({'status': 'error', 'message': 'Username already registered to an active profile.'}), 400
@@ -407,7 +445,9 @@ def signup(role):
         pending_users[u] = {
             **data, "role": role, "v_code": otp, "school_code": sc,
             "verification_image": face_b64,
-            "parent_number": data.get("parent_number") or data.get("parent_phone") or ""
+            "parent_number": data.get("parent_number") or data.get("parent_phone") or "",
+            "terms_accepted_at": current_sa_time(),
+            "terms_version": "2026-08"
         }
         print("PENDING STORED:", u)
 
@@ -467,7 +507,8 @@ def verify_and_save():
             "verification_image": verification_image_url, "parent_email": p_u.get('parent_email'),
             "parent_number": p_u.get('parent_number'), "grade": p_u.get('grade'),
             "driver_mode": p_u.get('driver_mode'), "moderator_type": p_u.get('moderator_type'),
-            "moderated_grade": p_u.get('moderated_grade'), "vehicle_type": p_u.get('vehicle_type')
+            "moderated_grade": p_u.get('moderated_grade'), "vehicle_type": p_u.get('vehicle_type'),
+            "terms_accepted_at": p_u.get('terms_accepted_at'), "terms_version": p_u.get('terms_version')
         }).execute()
 
         del pending_users[u]
@@ -488,6 +529,9 @@ def moderator_signup():
         u = data.get('username', '').lower().strip()
         face_b64 = data.get('face_image')
 
+        if not data.get('terms_accepted'):
+            return jsonify({'status': 'error', 'message': 'You must accept the Terms & Conditions and Privacy Policy to register.'}), 400
+
         existing = get_db().table("users").select("username").eq("username", u).execute()
         if existing.data:
             return jsonify({'status': 'error', 'message': 'Username already registered to an active profile.'}), 400
@@ -506,7 +550,10 @@ def moderator_signup():
                 return jsonify({'status': 'error', 'message': msg}), 400
 
         otp = str(random.randint(1111, 9999))
-        data.update({'role': 'moderator', 'v_code': otp})
+        data.update({
+            'role': 'moderator', 'v_code': otp,
+            'terms_accepted_at': current_sa_time(), 'terms_version': '2026-08'
+        })
         pending_users[u] = data
 
         email_content = f"""
@@ -1437,17 +1484,12 @@ def delete_account():
 
 
 # =====================================================================
-# NEW: routes replacing direct frontend _supabase.from('users') calls.
-# These let the frontend stop touching the `users` table directly with
-# the public key, so `users` can eventually be locked down in RLS too.
+# routes replacing direct frontend _supabase.from('users') calls.
 # =====================================================================
 
 @app.route('/api/profile/get_self', methods=['POST', 'OPTIONS'])
 @require_auth
 def get_self_profile():
-    """Returns the logged-in user's own full row. Replaces every
-    `_supabase.from('users').select('*').eq('username', myU)` pattern
-    used across dashboards for init checks (photo, grade, license, etc.)."""
     try:
         res = get_db().table("users").select("*").eq("username", g.current_user).execute()
         if not res.data:
@@ -1457,10 +1499,6 @@ def get_self_profile():
         return jsonify({'status': 'error', 'msg': str(e)}), 500
 
 
-# Only these fields can ever be changed via update_self — nothing else
-# (role, school_code, username, password, etc. are NOT in this list,
-# so this endpoint can never be used to escalate privileges or hijack
-# another account's identity, even by a malicious request).
 ALLOWED_SELF_UPDATE_FIELDS = {
     'photo', 'wallpaper', 'town', 'location', 'current_town', 'grade',
     'transport_type', 'driver_mode', 'moderated_grade', 'school_codes', 'theme', 'last_seen_chats'
@@ -1469,9 +1507,6 @@ ALLOWED_SELF_UPDATE_FIELDS = {
 @app.route('/api/profile/update_self', methods=['POST', 'OPTIONS'])
 @require_auth
 def update_self_profile():
-    """Updates only the caller's own row, and only whitelisted fields.
-    Replaces every `_supabase.from('users').update({...}).eq('username', myU)`
-    pattern (profile photo, grade, driver location, school codes, etc.)."""
     try:
         data = request.json or {}
         updates = {k: v for k, v in data.items() if k in ALLOWED_SELF_UPDATE_FIELDS}
@@ -1485,7 +1520,6 @@ def update_self_profile():
 @app.route('/api/profile/upload_wallpaper', methods=['POST', 'OPTIONS'])
 @require_auth
 def upload_wallpaper():
-    """Uploads a wallpaper image to the database and links it to the user."""
     try:
         if 'wallpaper' not in request.files:
             return jsonify({'status': 'error', 'message': 'No file provided'}), 400
@@ -1524,7 +1558,6 @@ def upload_wallpaper():
 @app.route('/api/profile/delete_wallpaper', methods=['POST', 'OPTIONS'])
 @require_auth
 def delete_wallpaper():
-    """Deletes the user's custom wallpaper."""
     try:
         username = g.current_user
         old_res = get_db().table("users").select("wallpaper").eq("username", username).execute()
@@ -1640,11 +1673,6 @@ def delete_single_log():
 @app.route('/api/users/lookup', methods=['POST', 'OPTIONS'])
 @require_auth
 def users_lookup():
-    """Public-safe user lookups (name/photo/role only — never email,
-    phone, license images, etc. unless the caller is a moderator or
-    principal, who legitimately need student emails for their roster).
-    Replaces direct `_supabase.from('users').select('*')...` reads used
-    for driver lists, student rosters, and chat-partner profile photos."""
     try:
         data = request.json or {}
         usernames = data.get('usernames')
