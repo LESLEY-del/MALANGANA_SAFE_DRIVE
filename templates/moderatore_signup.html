@@ -5,7 +5,6 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Safe Drive | Moderator Registration</title>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
-    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <style>
         :root { 
             --bg: #0f172a; 
@@ -23,6 +22,10 @@
         input.field-error { border-color: var(--danger) !important; }
         
         .inline-feedback-msg { font-size: 12px; color: var(--danger); margin-top: -15px; margin-bottom: 15px; font-weight: 600; display: none; padding-left: 4px; }
+
+        .consent-label { display:flex; align-items:flex-start; gap:10px; text-align:left; font-size:12px; color:var(--text-muted); margin: 0 0 20px; }
+        .consent-label input[type="checkbox"] { width:16px; height:16px; flex-shrink:0; margin-top:2px; accent-color: var(--accent); }
+        .consent-label a { color: var(--accent); }
         
         .btn { width: 100%; padding: 15px; background: var(--accent); color: #020218; border: none; border-radius: 12px; font-weight: 800; cursor: pointer; text-transform: uppercase; letter-spacing: 0.5px; transition: 0.2s; }
         .btn:hover { opacity: 0.9; transform: translateY(-1px); }
@@ -76,7 +79,12 @@
                 <input type="text" id="providedCode" placeholder="Enter Lead Teacher's Passcode">
             </div>
 
-            <button class="btn" id="proceedBtn" onclick="validateBoundariesBeforeCamera()">PROCEED TO SCAN</button>
+            <label class="consent-label">
+                <input type="checkbox" id="termsCheckbox" onchange="evaluateProceedBtn()">
+                <span>I have read and agree to the <a href="terms.html" target="_blank">Terms & Conditions</a> and <a href="privacy.html" target="_blank">Privacy Policy</a>, and confirm the details I've provided are accurate.</span>
+            </label>
+
+            <button class="btn" id="proceedBtn" disabled onclick="validateBoundariesBeforeCamera()">PROCEED TO SCAN</button>
         </div>
 
         <div id="otpStage" style="display:none;">
@@ -104,10 +112,6 @@
     </div>
 
     <script>
-        const supabaseUrl = 'https://mlzpmiccmggfwenfzvsy.supabase.co';
-        const supabaseKey = 'sb_publishable_ehnY1o3Vm1YCHVhaL5NL-Q_UZN-xRIp';
-        const _supabase = supabase.createClient(supabaseUrl, supabaseKey);
-
         let base64ImageFrame = null;
         let streamThreadReference = null;
         let usernameValidityState = false;
@@ -125,6 +129,14 @@
             document.getElementById('assistantKeyBox').style.display = isTeacher ? 'none' : 'block';
         }
 
+        function evaluateProceedBtn() {
+            document.getElementById('proceedBtn').disabled = !document.getElementById('termsCheckbox').checked;
+        }
+
+        // Username availability goes through the backend (service-role key).
+        // Direct Supabase reads from the client stopped returning data once
+        // RLS was locked down on `users` — this matches /api/check_availability
+        // already used on the general and driver signup pages.
         async function handleLiveUsernameCheck() {
             const field = document.getElementById('username');
             const feedback = document.getElementById('usernameFeedback');
@@ -138,8 +150,14 @@
             }
 
             try {
-                const { data } = await _supabase.from('users').select('username').eq('username', u).maybeSingle();
-                if (data) {
+                const res = await fetch('/api/check_availability', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ username: u })
+                });
+                const data = await res.json();
+
+                if (data.username_taken) {
                     field.classList.add('field-error');
                     feedback.innerText = "❌ Username already registered to an active profile.";
                     feedback.style.display = 'block';
@@ -149,7 +167,9 @@
                     feedback.style.display = 'none';
                     usernameValidityState = true;
                 }
-            } catch(e) { console.error(e); }
+            } catch(e) {
+                console.error("Availability check failed.", e);
+            }
         }
 
         async function validateBoundariesBeforeCamera() {
@@ -162,6 +182,10 @@
                 return showAppAlert("Security Parameters Missing: Please fill all configuration form fields context parameters.");
             }
 
+            if(!document.getElementById('termsCheckbox').checked) {
+                return showAppAlert("Please agree to the Terms & Conditions and Privacy Policy to continue.");
+            }
+
             if(!usernameValidityState) {
                 return showAppAlert("Identity Conflict: Please adjust your unique username field criteria to continue.");
             }
@@ -169,22 +193,13 @@
             document.getElementById('proceedBtn').disabled = true;
 
             try {
-                const { data: records } = await _supabase
-                    .from('users')
-                    .select('username, role, moderator_type')
-                    .eq('school_code', sc)
-                    .eq('moderated_grade', gr)
-                    .eq('role', 'moderator')
-                    .eq('moderator_type', roleSelection);
-
-                if(records && records.length >= 1) {
-                    document.getElementById('proceedBtn').disabled = false;
-                    const errorMsg = roleSelection === 'teacher' 
-                        ? `CRITICAL PROTECTION ERROR: A registered Lead Teacher already exists for Grade ${gr} at this institution. Duplicate registrations are strictly rejected.`
-                        : `CRITICAL PROTECTION ERROR: A registered Assistant Personnel position is already filled for Grade ${gr} at this institution slots grid.`;
-                    return showAppAlert(errorMsg, "BOUNDARY QUOTA EXCEEDED");
-                }
-
+                // The "is this grade/role slot already filled at this school"
+                // quota check now runs entirely inside
+                // /api/moderator/verify_boundaries on the backend (service-role
+                // key). It's not just a client-side removal for RLS's sake —
+                // that lookup requires reading other schools' moderator
+                // rosters, which should never be exposed to an anonymous
+                // browser regardless of RLS state.
                 const boundaryPayload = {
                     school_code: sc,
                     grade: gr,
@@ -196,7 +211,7 @@
                     method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(boundaryPayload)
                 });
                 const data = await res.json();
-                
+
                 if(!res.ok) {
                     document.getElementById('proceedBtn').disabled = false;
                     return showAppAlert(data.message || "Boundary checking validation failure pipeline anomaly.", "VALIDATION FAILURE");
@@ -252,11 +267,16 @@
                 grade: document.getElementById('grade').value.toUpperCase().trim(),
                 moderator_type: document.getElementById('modType').value,
                 assistant_passcode: document.getElementById('modType').value === 'teacher' ? document.getElementById('generatedCode').value.trim() : document.getElementById('providedCode').value.trim(),
-                face_image: base64ImageFrame
+                face_image: base64ImageFrame,
+                terms_accepted: document.getElementById('termsCheckbox').checked
             };
 
             if(streamThreadReference) streamThreadReference.getTracks().forEach(t => t.stop());
 
+            // Relative path — this page is served by Flask itself, so the API
+            // lives on the same origin. A hardcoded http://127.0.0.1:5000/...
+            // URL would tell each visitor's browser to call their own machine
+            // instead of your deployed backend.
             fetch('/api/moderator/signup', {
                 method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(payload)
             }).then(res => res.json().then(data => {
