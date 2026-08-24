@@ -808,16 +808,37 @@ def get_driver_parent_rooms():
     except Exception as e:
         return jsonify({'status': 'success', 'rooms': []}), 200
 
+
+# =====================================================================
+# TRANSPORT LEDGERS
+#
+# Each role gets its own physically separate table. When a driver taps
+# pickup/dropoff, one row is written to EACH relevant table below.
+# Deleting a row from one table can never affect any other table — that
+# is the whole point. safety_logs is intentionally left untouched here;
+# it's still used elsewhere (school_out() broadcasts) for a different
+# feature and isn't part of pickup/dropoff tracking anymore.
+# =====================================================================
+
 @app.route('/api/parent/get_logs', methods=['POST', 'OPTIONS'])
 @require_auth
 def get_parent_logs():
+    """
+    Kept at the original path/contract so existing student and parent
+    dashboards don't need to change their fetch call — but it now reads
+    from each caller's OWN ledger table instead of the shared safety_logs
+    table, so a delete by one party can never remove another party's copy.
+    """
     try:
-        data = request.json
+        data = request.json or {}
         s_u = data.get('student_name', '').strip()
 
         if g.current_role == 'student':
-            if s_u.lower() != g.current_user.lower():
-                return jsonify({'status': 'error', 'logs': []}), 403
+            res = get_db().table("student_ledger").select("*") \
+                .eq("owner_username", g.current_user) \
+                .order("timestamp", desc=True).limit(50).execute()
+            return jsonify({'status': 'success', 'logs': res.data or []}), 200
+
         elif g.current_role == 'general':
             link_check = get_db().table("parent_principal_rooms") \
                 .select("child_username") \
@@ -826,11 +847,106 @@ def get_parent_logs():
             linked_children = [r['child_username'] for r in (link_check.data or [])]
             if s_u not in linked_children:
                 return jsonify({'status': 'error', 'logs': []}), 403
+
+            res = get_db().table("parent_ledger").select("*") \
+                .eq("owner_username", g.current_user) \
+                .ilike("student_name", s_u) \
+                .order("timestamp", desc=True).limit(50).execute()
+            return jsonify({'status': 'success', 'logs': res.data or []}), 200
+
         else:
             return jsonify({'status': 'error', 'logs': []}), 403
+    except Exception as e:
+        return jsonify({'status': 'error', 'msg': str(e)}), 500
 
-        res = get_db().table("safety_logs").select("*").ilike("student_name", s_u).order("timestamp", desc=True).limit(50).execute()
+
+@app.route('/api/parent/ledger/delete_single', methods=['POST', 'OPTIONS'])
+@require_auth
+@require_role('general')
+def delete_parent_ledger_entry():
+    try:
+        log_id = request.json.get('log_id')
+        check = get_db().table("parent_ledger").select("owner_username").eq("id", log_id).execute()
+        if not check.data or check.data[0].get('owner_username') != g.current_user:
+            return jsonify({'status': 'error', 'msg': 'Not authorized for this log'}), 403
+        get_db().table("parent_ledger").delete().eq("id", log_id).execute()
+        return jsonify({'status': 'success'}), 200
+    except Exception as e:
+        return jsonify({'status': 'error', 'msg': str(e)}), 500
+
+
+@app.route('/api/parent/ledger/clear', methods=['POST', 'OPTIONS'])
+@require_auth
+@require_role('general')
+def clear_parent_ledger():
+    try:
+        get_db().table("parent_ledger").delete().eq("owner_username", g.current_user).execute()
+        return jsonify({'status': 'success'}), 200
+    except Exception as e:
+        return jsonify({'status': 'error', 'msg': str(e)}), 500
+
+
+@app.route('/api/student/ledger/delete_single', methods=['POST', 'OPTIONS'])
+@require_auth
+@require_role('student')
+def delete_student_ledger_entry():
+    try:
+        log_id = request.json.get('log_id')
+        check = get_db().table("student_ledger").select("owner_username").eq("id", log_id).execute()
+        if not check.data or check.data[0].get('owner_username') != g.current_user:
+            return jsonify({'status': 'error', 'msg': 'Not authorized for this log'}), 403
+        get_db().table("student_ledger").delete().eq("id", log_id).execute()
+        return jsonify({'status': 'success'}), 200
+    except Exception as e:
+        return jsonify({'status': 'error', 'msg': str(e)}), 500
+
+
+@app.route('/api/student/ledger/clear', methods=['POST', 'OPTIONS'])
+@require_auth
+@require_role('student')
+def clear_student_ledger():
+    try:
+        get_db().table("student_ledger").delete().eq("owner_username", g.current_user).execute()
+        return jsonify({'status': 'success'}), 200
+    except Exception as e:
+        return jsonify({'status': 'error', 'msg': str(e)}), 500
+
+
+@app.route('/api/driver/get_ledger', methods=['POST', 'OPTIONS'])
+@require_auth
+@require_role('driver')
+def get_driver_ledger():
+    try:
+        res = get_db().table("driver_ledger").select("*") \
+            .eq("owner_username", g.current_user) \
+            .order("timestamp", desc=True).limit(200).execute()
         return jsonify({'status': 'success', 'logs': res.data or []}), 200
+    except Exception as e:
+        return jsonify({'status': 'success', 'logs': []}), 200
+
+
+@app.route('/api/driver/ledger/delete_single', methods=['POST', 'OPTIONS'])
+@require_auth
+@require_role('driver')
+def delete_driver_ledger_entry():
+    try:
+        log_id = request.json.get('log_id')
+        check = get_db().table("driver_ledger").select("owner_username").eq("id", log_id).execute()
+        if not check.data or check.data[0].get('owner_username') != g.current_user:
+            return jsonify({'status': 'error', 'msg': 'Not authorized for this log'}), 403
+        get_db().table("driver_ledger").delete().eq("id", log_id).execute()
+        return jsonify({'status': 'success'}), 200
+    except Exception as e:
+        return jsonify({'status': 'error', 'msg': str(e)}), 500
+
+
+@app.route('/api/driver/ledger/clear', methods=['POST', 'OPTIONS'])
+@require_auth
+@require_role('driver')
+def clear_driver_ledger():
+    try:
+        get_db().table("driver_ledger").delete().eq("owner_username", g.current_user).execute()
+        return jsonify({'status': 'success'}), 200
     except Exception as e:
         return jsonify({'status': 'error', 'msg': str(e)}), 500
 
@@ -880,14 +996,51 @@ def track_transport():
 
         if b_res.data:
             b = b_res.data[0]
-            get_db().table("safety_logs").insert({
-                "student_name": b['student_name'], "driver_name": b['driver_name'],
-                "school_code": b['school_code'], "status": status_msg, "timestamp": forced_time, "log_type": "transport"
+            student_u = b.get('student_username')
+            student_name = b.get('student_name')
+            driver_name = b.get('driver_name')
+            school_code = b.get('school_code')
+
+            base_entry = {
+                "booking_id": bid,
+                "student_username": student_u,
+                "student_name": student_name,
+                "driver_username": g.current_user,
+                "driver_name": driver_name,
+                "school_code": school_code,
+                "status": status_msg,
+                "timestamp": forced_time,
+            }
+
+            # --- Driver's own copy ---
+            get_db().table("driver_ledger").insert({
+                **base_entry, "owner_username": g.current_user
             }).execute()
-            get_db().table("principal_transit_logs").insert({
-                "student_username": b['student_username'], "student_name": b['student_name'],
-                "driver_name": b['driver_name'], "status": status_msg, "school_code": b['school_code'], "timestamp": forced_time
-            }).execute()
+
+            # --- Student's own copy ---
+            if student_u:
+                get_db().table("student_ledger").insert({
+                    **base_entry, "owner_username": student_u
+                }).execute()
+
+            # --- One copy per linked parent ---
+            if student_u:
+                parent_rooms = get_db().table("parent_principal_rooms") \
+                    .select("parent_username") \
+                    .eq("child_username", student_u) \
+                    .execute()
+                seen_parents = set()
+                for room in (parent_rooms.data or []):
+                    p_u = room.get("parent_username")
+                    if p_u and p_u not in seen_parents:
+                        seen_parents.add(p_u)
+                        get_db().table("parent_ledger").insert({
+                            **base_entry, "owner_username": p_u
+                        }).execute()
+
+            # --- Principal's own copy (scoped by school_code) ---
+            if school_code and school_code != "D2D_GLOBAL":
+                get_db().table("principal_ledger").insert(base_entry).execute()
 
         return jsonify({'status': 'success'}), 200
     except Exception as e:
@@ -1046,7 +1199,9 @@ def principal_get_data():
         drivers = [u for u in users if u.get('role') == 'driver']
         students = [u for u in users if u.get('role') == 'student']
 
-        log_res = get_db().table("principal_transit_logs").select("student_name, status, school_code, timestamp, driver_name").eq("school_code", sc).order("timestamp", desc=True).limit(50).execute()
+        # Reads from the principal's own ledger table now, not the old
+        # shared principal_transit_logs table.
+        log_res = get_db().table("principal_ledger").select("student_name, status, school_code, timestamp, driver_name").eq("school_code", sc).order("timestamp", desc=True).limit(50).execute()
         logs = log_res.data or []
         combined_logs = [log for log in logs if isinstance(log, dict)]
 
@@ -1466,14 +1621,17 @@ def delete_account():
         if user_role == 'driver':
             get_db().table("parent_driver_rooms").delete().eq("driver_username", username).execute()
             get_db().table("posts").delete().eq("username", username).execute()
+            get_db().table("driver_ledger").delete().eq("owner_username", username).execute()
         elif user_role == 'general':
             get_db().table("parent_driver_rooms").delete().eq("parent_username", username).execute()
             get_db().table("parent_principal_rooms").delete().eq("parent_username", username).execute()
+            get_db().table("parent_ledger").delete().eq("owner_username", username).execute()
         elif user_role == 'student':
             get_db().table("bookings").delete().eq("student_username", username).execute()
             get_db().table("attendance_logs").delete().eq("student_username", username).execute()
             get_db().table("parent_driver_rooms").delete().eq("child_username", username).execute()
             get_db().table("parent_principal_rooms").delete().eq("child_username", username).execute()
+            get_db().table("student_ledger").delete().eq("owner_username", username).execute()
 
         get_db().table("users").delete().eq("username", username).execute()
         print(f"✅ PURGE COMPLETED: [{username}] removed.")
@@ -1639,13 +1797,20 @@ def delete_profile_photo():
 @require_auth
 @require_role('principal')
 def clear_history():
+    """
+    Kept at the original path so the principal dashboard's existing
+    'clear history' button doesn't need to change — but this now clears
+    principal_ledger (what the dashboard actually displays) instead of
+    the shared safety_logs table (which never should have been touched
+    by this button, and which the dashboard didn't even read from).
+    """
     try:
         sc = request.json.get('school_code', '').strip().upper()
         my_school = get_db().table("schools").select("school_code").eq("principal_username", g.current_user).execute()
         allowed_codes = [s['school_code'] for s in (my_school.data or [])]
         if sc not in allowed_codes:
             return jsonify({'status': 'error', 'msg': 'Not authorized for this school'}), 403
-        get_db().table("safety_logs").delete().eq("school_code", sc).execute()
+        get_db().table("principal_ledger").delete().eq("school_code", sc).execute()
         return jsonify({'status': 'success'}), 200
     except Exception as e:
         return jsonify({'status': 'error', 'msg': str(e)}), 500
@@ -1655,16 +1820,21 @@ def clear_history():
 @require_auth
 @require_role('principal')
 def delete_single_log():
+    """
+    Same as above — repointed to principal_ledger instead of safety_logs
+    so a single-row delete actually removes what the principal sees, and
+    only what the principal sees.
+    """
     try:
         log_id = request.json.get('log_id')
-        log_check = get_db().table("safety_logs").select("school_code").eq("id", log_id).execute()
+        log_check = get_db().table("principal_ledger").select("school_code").eq("id", log_id).execute()
         if not log_check.data:
             return jsonify({'status': 'error', 'msg': 'Log not found'}), 404
         my_school = get_db().table("schools").select("school_code").eq("principal_username", g.current_user).execute()
         allowed_codes = [s['school_code'] for s in (my_school.data or [])]
         if log_check.data[0].get('school_code') not in allowed_codes:
             return jsonify({'status': 'error', 'msg': 'Not authorized for this log'}), 403
-        get_db().table("safety_logs").delete().eq("id", log_id).execute()
+        get_db().table("principal_ledger").delete().eq("id", log_id).execute()
         return jsonify({'status': 'success'}), 200
     except Exception as e:
         return jsonify({'status': 'error', 'msg': str(e)}), 500
