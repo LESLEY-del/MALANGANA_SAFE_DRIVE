@@ -8,7 +8,6 @@
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet"> 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script> 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.23/jspdf.plugin.autotable.min.js"></script> 
-    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 
     <!-- PREVENTS THEME FLASHING ON LOAD -->
     <script>
@@ -162,6 +161,7 @@
         .btn-warning { background: var(--warning); color: #020218; }
         .btn-pdf { background: #3b82f6; color: white; width: auto; padding: 8px 16px; font-size: 11px;}
         .btn-hide { background: transparent; border: 1px solid var(--border); color: var(--text-muted); padding: 8px 15px; font-size: 11px; box-shadow: none; border-radius: 8px; width: auto;}
+        .btn-del-entry { background: transparent; border: 1px solid var(--danger); color: var(--danger); width: auto; padding: 6px 12px; font-size: 10px; flex-shrink: 0; border-radius: 8px; cursor: pointer; }
 
         input, select { background: var(--input-bg); border: none; border-bottom: 2px solid var(--border); color: var(--text-main); padding: 14px 15px; border-radius: 8px 8px 0 0; outline: none; width: 100%; box-sizing: border-box; font-family: inherit; margin-bottom: 15px; transition: 0.2s; font-size: 15px;}
         input:focus, select:focus { border-color: var(--accent); background: rgba(0,0,0,0.1); }
@@ -504,6 +504,11 @@
         // --- Global Storage Maps ---
         let myLastSeenChats = {}; 
         let globalLastSeenMap = {}; 
+
+        // Latest filtered set of transit-ledger rows currently on screen —
+        // used by handleLedgerDelete() to know exactly which rows (by id)
+        // to remove when a search term narrows the view.
+        let currentFilteredTransitLogs = [];
 
         // Database ID generator function
         function getDbRoomKey(rType, rId, supportBaseChildName) {
@@ -1154,6 +1159,10 @@
                     const res = await authFetch('/api/get_my_bookings', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ username: child.username, role: 'student' }) }); 
                     const data = await res.json(); 
                     
+                    // Reads from parent_ledger (this parent's own copy) via
+                    // /api/parent/get_logs — same call as before, but the
+                    // rows returned now belong only to this parent, each
+                    // with a real `id` so it can be individually deleted.
                     const logRes = await authFetch('/api/parent/get_logs', { 
                         method:'POST', headers:{'Content-Type':'application/json'}, 
                         body:JSON.stringify({ student_name: child.username }) 
@@ -1198,19 +1207,22 @@
                 (l.driver_name && l.driver_name.toLowerCase().includes(searchVal))
             );
 
+            currentFilteredTransitLogs = filteredTransit;
+
             const tbody = document.getElementById('historyTableBody');
             tbody.innerHTML = filteredTransit.map(l => {
                 let statusColor = l.status.includes('URGENT') ? 'var(--danger)' : 'var(--success)';
                 return `
                 <div class="list-row">
-                    <div style="display:flex; justify-content:space-between; width: 100%;">
+                    <div style="display:flex; justify-content:space-between; width: 100%; align-items:center;">
                         <div style="display:flex; flex-direction:column; flex: 1; min-width: 0;">
                             <b style="font-size:15px; color: var(--text-main);">${escapeHtml(l.student_name)}</b>
                             <span style="font-size:11px; color:var(--text-muted); margin-top:2px;">Handler: ${escapeHtml(l.driver_name || "System")}</span>
                         </div>
-                        <div style="text-align: right;">
+                        <div style="text-align: right; display:flex; flex-direction:column; align-items:flex-end; gap:6px;">
                             <span class="status-tag" style="background:transparent; border:none; padding:0; color:${statusColor}; font-weight:800; display:block;">${escapeHtml(l.status || "LOGGED")}</span>
-                            <span style="font-size:10px; color:var(--text-muted); display:block; margin-top:4px;">${new Date(l.timestamp).toLocaleString()}</span>
+                            <span style="font-size:10px; color:var(--text-muted); display:block;">${new Date(l.timestamp).toLocaleString()}</span>
+                            <button class="btn-del-entry" onclick="deleteParentLedgerEntry('${escapeHtml(l.id)}')">DELETE</button>
                         </div>
                     </div>
                 </div>`;
@@ -1220,6 +1232,26 @@
             document.getElementById('hiddenPdfTableBody').innerHTML = filteredTransit.map(l => `<tr><td>${escapeHtml(l.student_name)}</td><td>${escapeHtml(l.status || "LOGGED")}</td><td>${escapeHtml(l.driver_name || "System")}</td><td>${new Date(l.timestamp).toLocaleString()}</td></tr>`).join('');
 
             renderChildMonitor(); 
+        }
+
+        async function deleteParentLedgerEntry(logId) {
+            const btnHtml = `
+                <button id="confirmDelParentLogBtn" class="btn btn-danger" style="flex:1;">DELETE</button>
+                <button id="cancelDelParentLogBtn" class="btn btn-chat" style="flex:1;">CANCEL</button>
+            `;
+            showAppAlert("Delete this ledger entry? This only removes your own copy.", "CONFIRM DELETE", null, btnHtml);
+
+            document.getElementById("cancelDelParentLogBtn").onclick = function() { closeAppAlert(); };
+            document.getElementById("confirmDelParentLogBtn").onclick = async function() {
+                closeAppAlert();
+                try {
+                    await authFetch('/api/parent/ledger/delete_single', {
+                        method: 'POST', headers: {'Content-Type':'application/json'},
+                        body: JSON.stringify({ log_id: logId })
+                    });
+                } catch(e) {}
+                syncSafetyAndStatus();
+            };
         }
 
         async function renderChildMonitor() { 
@@ -1562,18 +1594,39 @@
             } catch (err) {}
         }
 
+        // Wired to real backend endpoints. Empty search = every log
+        // belonging to this parent, cleared in one call. Otherwise, only
+        // the currently filtered rows (the ones actually visible) are
+        // deleted one by one — either way this only ever touches this
+        // parent's own copy of the ledger.
         function handleLedgerDelete() {
             const searchVal = document.getElementById('ledgerSearch').value.trim().toLowerCase();
             const btnHtml = `
                 <button id="confirmLedgerDelBtn" class="btn btn-danger" style="flex:1;">DELETE</button>
                 <button id="cancelLedgerDelBtn" class="btn btn-chat" style="flex:1;">CANCEL</button>
             `;
-            showAppAlert(`Delete ${searchVal || 'all'} logs?`, "CONFIRM DELETION", null, btnHtml);
+            showAppAlert(`Delete ${searchVal || 'all'} logs? This only removes your own copy.`, "CONFIRM DELETION", null, btnHtml);
 
             document.getElementById("cancelLedgerDelBtn").onclick = function() { closeAppAlert(); };
-            document.getElementById("confirmLedgerDelBtn").onclick = function() {
+            document.getElementById("confirmLedgerDelBtn").onclick = async function() {
                 closeAppAlert();
-                document.getElementById('historyTableBody').innerHTML = '<div style="padding: 20px; text-align: center; color: var(--text-muted); font-size: 13px;">All logs deleted.</div>';
+
+                if (searchVal === "") {
+                    try {
+                        await authFetch('/api/parent/ledger/clear', { method: 'POST' });
+                    } catch(e) {}
+                } else {
+                    for (const l of currentFilteredTransitLogs) {
+                        try {
+                            await authFetch('/api/parent/ledger/delete_single', {
+                                method: 'POST', headers: {'Content-Type':'application/json'},
+                                body: JSON.stringify({ log_id: l.id })
+                            });
+                        } catch(e) {}
+                    }
+                }
+
+                syncSafetyAndStatus();
             };
         }
 
