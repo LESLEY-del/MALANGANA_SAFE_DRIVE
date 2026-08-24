@@ -4,7 +4,6 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Safe Drive - Student Signup</title> 
-    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <style> 
         :root {
             --bg: #0f172a;
@@ -67,6 +66,21 @@
 
         .error-text { color: var(--error); font-size: 11px; font-weight: 800; display: none; margin-bottom: 5px; text-transform: uppercase; text-align: left; padding-left: 5px; } 
 
+        .consent-label {
+            display: flex;
+            align-items: flex-start;
+            gap: 10px;
+            text-align: left;
+            font-size: 12px;
+            color: var(--text-dim);
+            margin: 15px 5px 5px;
+        }
+        .consent-label input[type="checkbox"] {
+            width: 16px; height: 16px; flex-shrink: 0; margin-top: 2px;
+            accent-color: var(--accent);
+        }
+        .consent-label a { color: var(--accent); }
+
         .modal-overlay {
             position: fixed; top: 0; left: 0; width: 100%; height: 100%;
             background: rgba(0,0,0,0.85); display: none; justify-content: center; align-items: center; z-index: 1000; backdrop-filter: blur(5px);
@@ -99,8 +113,13 @@
 
         <input type="text" id="school_code" placeholder="School Access Code" class="input-box"> 
         <input type="password" id="password" placeholder="Password" class="input-box"> 
+
+        <label class="consent-label">
+            <input type="checkbox" id="termsCheckbox">
+            <span>I have read and agree to the <a href="terms.html" target="_blank">Terms & Conditions</a> and <a href="privacy.html" target="_blank">Privacy Policy</a>, and confirm the details I've provided are accurate.</span>
+        </label>
          
-        <button class="btn" id="signupBtn">CREATE ACCOUNT</button> 
+        <button class="btn" id="signupBtn" disabled>CREATE ACCOUNT</button> 
     </div> 
 
     <div class="modal-overlay" id="verifyModal" style="z-index: 1000;">
@@ -122,14 +141,13 @@
     </div>
 
     <script> 
-        const supabaseUrl = 'https://mlzpmiccmggfwenfzvsy.supabase.co';
-        const supabaseKey = 'sb_publishable_ehnY1o3Vm1YCHVhaL5NL-Q_UZN-xRIp';
-        const _supabase = supabase.createClient(supabaseUrl, supabaseKey);
-
         const btn = document.getElementById('signupBtn'); 
         const uError = document.getElementById('uError'); 
         const uInput = document.getElementById('username'); 
+        const termsCheckbox = document.getElementById('termsCheckbox');
         const verifyModal = document.getElementById('verifyModal');
+
+        let usernameError = false;
 
         const alertModal = document.getElementById('customAlertModal');
         const alertTitle = document.getElementById('alertTitle');
@@ -153,29 +171,42 @@
             }
         });
 
+        function validateSignupBtn() {
+            btn.disabled = usernameError || !termsCheckbox.checked;
+        }
+
+        termsCheckbox.addEventListener('change', validateSignupBtn);
+
+        // Username availability now goes through the backend (service-role
+        // key), matching the other signup pages — direct Supabase reads from
+        // the client stopped returning data once RLS was locked down on
+        // `users`.
         uInput.addEventListener('input', async () => {
             const u = uInput.value.trim().toLowerCase();
             if (u.length < 1) {
                 uError.style.display = 'none';
                 uInput.style.border = "1px solid #475569";
-                btn.disabled = false;
+                usernameError = false;
+                validateSignupBtn();
                 return;
             }
 
             try {
-                const { data } = await _supabase.from('users').select('username').eq('username', u).maybeSingle();
-                if (data) { 
-                    uError.style.display = 'block'; 
-                    uInput.style.border = "2px solid var(--error)"; 
-                    btn.disabled = true; 
-                } else { 
-                    uError.style.display = 'none'; 
-                    uInput.style.border = "1px solid #475569";
-                    btn.disabled = false;
-                } 
+                const res = await fetch('/api/check_availability', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ username: u })
+                });
+                const data = await res.json();
+                usernameError = !!data.username_taken;
             } catch (err) {
                 console.error("Cloud security check failed.");
+                usernameError = false;
             }
+
+            uError.style.display = usernameError ? 'block' : 'none';
+            uInput.style.border = usernameError ? "2px solid var(--error)" : "1px solid #475569";
+            validateSignupBtn();
         });
 
         btn.addEventListener('click', async () => { 
@@ -192,6 +223,10 @@
                 return showSystemAlert("Missing Details", "Please fill in all required fields to continue.", true);
             }
 
+            if(!termsCheckbox.checked) {
+                return showSystemAlert("Consent Required", "Please agree to the Terms & Conditions and Privacy Policy to continue.", true);
+            }
+
             btn.innerText = "SENDING VERIFICATION..."; 
             btn.disabled = true; 
 
@@ -205,7 +240,8 @@
                     school_code: sc, 
                     grade: grade, 
                     password: pass, 
-                    role: 'student' 
+                    role: 'student',
+                    terms_accepted: termsCheckbox.checked
                 }; 
                  
                 const res = await fetch('/api/student/signup', {  
