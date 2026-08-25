@@ -8,7 +8,6 @@
     
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.23/jspdf.plugin.autotable.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 
     <!-- PREVENTS THEME FLASHING ON LOAD -->
     <script>
@@ -140,6 +139,8 @@
         .btn-warning { background: var(--warning); color: #020218; }
         .btn-pdf { background: #3b82f6; color: white; width: auto; padding: 8px 16px; font-size: 11px;}
         .btn-remove { background: transparent; color: var(--danger); border: 1px solid var(--danger); }
+        .btn-clear-history { background: transparent; border: 1px solid var(--danger); color: var(--danger); width: auto; padding: 8px 16px; font-size: 11px;}
+        .btn-del-entry { background: transparent; border: 1px solid var(--danger); color: var(--danger); width: auto; padding: 6px 12px; font-size: 10px; flex-shrink: 0; border-radius: 8px; cursor: pointer; }
 
         input, select { background: var(--input-bg); border: none; border-bottom: 2px solid var(--border); color: var(--text-main); padding: 14px 15px; border-radius: 8px 8px 0 0; outline: none; width: 100%; box-sizing: border-box; font-family: inherit; margin-bottom: 15px; transition: 0.2s; font-size: 15px;}
         input:focus, select:focus { border-color: var(--accent); background: rgba(0,0,0,0.1); }
@@ -419,7 +420,10 @@
         <div id="view-history" class="view-section">
             <div class="card-header" style="border:none;">
                 <h3 style="font-size: 14px; color: var(--text-main);">Travel Transcript</h3>
-                <button class="btn btn-pdf" onclick="downloadHistoryPDF()">PDF</button>
+                <div style="display:flex; gap:8px;">
+                    <button class="btn btn-clear-history" onclick="clearStudentHistory()">CLEAR ALL</button>
+                    <button class="btn btn-pdf" onclick="downloadHistoryPDF()">PDF</button>
+                </div>
             </div>
             <div id="historyBody" style="display:block; padding:0;">
                 <div style="padding: 15px 20px;">
@@ -435,6 +439,11 @@
         // --- Global Storage Maps ---
         let myLastSeenChats = {}; 
         let globalLastSeenMap = {}; 
+
+        // Server-backed ledger rows for this student — each has a real id,
+        // so entries can be deleted one at a time or cleared without
+        // touching the driver's, parent's, or principal's own copies.
+        let studentLedgerLogs = [];
 
         // --- Core AuthFetch ---
         async function authFetch(url, options = {}) {
@@ -547,7 +556,6 @@
         }
         let allDrivers = []; 
         let rawBookings = []; 
-        let bookingStateCache = JSON.parse(sessionStorage.getItem('student_booking_states') || "{}"); 
         
         let activeChatBid = null; 
         let targetDriverUser = null;
@@ -688,6 +696,7 @@
             } catch(e) {}
             loadAllDrivers();
             loadBookings(); 
+            loadStudentLedger();
         }
 
         function openProfileMenu() { document.getElementById('profileMenuOverlay').classList.add('show'); }
@@ -767,36 +776,59 @@
             } catch (err) {}
         }
 
-        function getFullTimestamp() {
-            const now = new Date();
-            const dateOpts = { weekday: 'short', year: 'numeric', month: 'short', day: 'numeric' };
-            const timeOpts = { hour: '2-digit', minute: '2-digit', second: '2-digit' };
-            return now.toLocaleDateString(undefined, dateOpts) + ' | ' + now.toLocaleTimeString(undefined, timeOpts);
-        }
-
-        function appendLocalLog(driverName, driverUsername, action) {
-            let logs = JSON.parse(sessionStorage.getItem('student_local_logs') || "[]");
-            logs.push({ dName: driverName, dUser: driverUsername, action: action.toUpperCase(), time: getFullTimestamp() });
-            sessionStorage.setItem('student_local_logs', JSON.stringify(logs));
+        // Server-backed ledger: fetch this student's own pickup/dropoff
+        // history from /api/parent/get_logs (same path used by parents —
+        // the backend routes it to student_ledger when called by a
+        // student, filtered by owner_username automatically).
+        async function loadStudentLedger() {
+            try {
+                const res = await authFetch('/api/parent/get_logs', {
+                    method: 'POST', headers: {'Content-Type':'application/json'},
+                    body: JSON.stringify({})
+                });
+                const data = await res.json();
+                studentLedgerLogs = data.logs || [];
+            } catch(e) {
+                console.error("Student ledger fetch failed:", e);
+            }
             renderHistory();
         }
 
-        function trackBookingStates(bookings) {
-            let stateChanged = false;
-            bookings.forEach(b => {
-                const currentState = b.tracking_status || b.status;
-                const prevState = bookingStateCache[b.booking_id];
-                
-                if(prevState && prevState !== currentState) {
-                    appendLocalLog(b.driver_name, b.driver_username, currentState);
-                    stateChanged = true;
-                } else if (!prevState && (b.status === 'Accepted' || b.status === 'Finished')) {
-                    appendLocalLog(b.driver_name, b.driver_username, currentState);
-                    stateChanged = true;
-                }
-                bookingStateCache[b.booking_id] = currentState;
-            });
-            if(stateChanged) sessionStorage.setItem('student_booking_states', JSON.stringify(bookingStateCache));
+        async function deleteHistoryEntry(logId) {
+            const btnHtml = `
+                <button id="confirmDelHistBtn" class="btn btn-danger" style="flex:1;">DELETE</button>
+                <button id="cancelDelHistBtn" class="btn btn-chat" style="flex:1;">CANCEL</button>
+            `;
+            showAppAlert("Delete this transcript entry? This only removes your own copy.", "CONFIRM DELETE", null, btnHtml);
+
+            document.getElementById("cancelDelHistBtn").onclick = function() { closeAppAlert(); };
+            document.getElementById("confirmDelHistBtn").onclick = async function() {
+                closeAppAlert();
+                try {
+                    await authFetch('/api/student/ledger/delete_single', {
+                        method: 'POST', headers: {'Content-Type':'application/json'},
+                        body: JSON.stringify({ log_id: logId })
+                    });
+                } catch(e) {}
+                loadStudentLedger();
+            };
+        }
+
+        function clearStudentHistory() {
+            const btnHtml = `
+                <button id="confirmClearHistBtn" class="btn btn-danger" style="flex:1;">CLEAR ALL</button>
+                <button id="cancelClearHistBtn" class="btn btn-chat" style="flex:1;">CANCEL</button>
+            `;
+            showAppAlert("Clear your entire Travel Transcript? This only removes your own copy — your driver and parent keep theirs.", "CONFIRM CLEAR ALL", null, btnHtml);
+
+            document.getElementById("cancelClearHistBtn").onclick = function() { closeAppAlert(); };
+            document.getElementById("confirmClearHistBtn").onclick = async function() {
+                closeAppAlert();
+                try {
+                    await authFetch('/api/student/ledger/clear', { method: 'POST' });
+                } catch(e) {}
+                loadStudentLedger();
+            };
         }
 
         async function loadBookings() { 
@@ -804,8 +836,6 @@
                 const bRes = await authFetch('/api/get_my_bookings', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({username: myU, role:'student'}) }); 
                 const bData = await bRes.json(); 
                 rawBookings = bData.bookings || [];
-
-                trackBookingStates(rawBookings);
                 
                 let pending = rawBookings.filter(b => b.status === 'Pending');
                 const accepted = rawBookings.filter(b => b.status === 'Accepted');
@@ -1128,22 +1158,25 @@
                 }
             });
 
-            let logs = JSON.parse(sessionStorage.getItem('student_local_logs') || "[]");
-            logs.slice().reverse().forEach(l => {
-                if(l.dName.toLowerCase().includes(term)) {
-                    const dObj = allDrivers.find(d => d.username === l.dUser);
-                    const dPhoto = (dObj && dObj.photo) ? dObj.photo : `https://ui-avatars.com/api/?name=${encodeURIComponent(l.dName || 'D')}&background=3498db&color=fff`;
-                    let color = l.action === 'PICKUP' ? '#3b82f6' : (l.action === 'DROPOFF' ? '#f39c12' : '#27ae60');
+            studentLedgerLogs.slice().forEach(l => {
+                const dName = l.driver_name || "Driver";
+                if(dName.toLowerCase().includes(term)) {
+                    const dObj = allDrivers.find(d => d.username === l.driver_username);
+                    const dPhoto = (dObj && dObj.photo) ? dObj.photo : `https://ui-avatars.com/api/?name=${encodeURIComponent(dName)}&background=3498db&color=fff`;
+                    let color = l.status === 'PICKED UP' ? '#3b82f6' : (l.status === 'DROPPED OFF' ? '#f39c12' : '#27ae60');
                     
                     combinedHtml += `
                     <div class="history-item">
                         <div style="display:flex; align-items:center; gap:15px; width: 100%;">
                             <img src="${dPhoto}" class="driver-avatar" style="width:45px; height:45px;">
                             <div style="display:flex; flex-direction:column; flex: 1; min-width: 0;">
-                                <b style="font-size: 15px; color: var(--text-main); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${escapeHtml(l.dName)}</b>
-                                <span class="status-tag" style="background:transparent; padding:0; border:none; margin-top:4px;">TIME: ${escapeHtml(l.time)}</span>
+                                <b style="font-size: 15px; color: var(--text-main); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${escapeHtml(dName)}</b>
+                                <span class="status-tag" style="background:transparent; padding:0; border:none; margin-top:4px;">TIME: ${escapeHtml(new Date(l.timestamp).toLocaleString())}</span>
                             </div>
-                            <span style="color:${color}; font-weight:800; font-size:11px;">${escapeHtml(l.action)}</span>
+                            <div style="display:flex; align-items:center; gap:10px;">
+                                <span style="color:${color}; font-weight:800; font-size:11px;">${escapeHtml(l.status)}</span>
+                                <button class="btn-del-entry" onclick="deleteHistoryEntry('${escapeHtml(l.id)}')">DELETE</button>
+                            </div>
                         </div>
                     </div>`;
                 }
@@ -1382,6 +1415,7 @@
             initDashboard();
             setInterval(loadBookings, 8000); 
             setInterval(syncChatMessages, 20000);
+            setInterval(loadStudentLedger, 15000);
         }; 
     </script> 
 </body> 
