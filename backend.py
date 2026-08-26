@@ -857,6 +857,9 @@ def get_parent_logs():
  
             res = query.order("timestamp", desc=True).limit(200).execute()
             return jsonify({'status': 'success', 'logs': res.data or []}), 200
+            
+    except Exception as e:
+        return jsonify({'status': 'error', 'msg': str(e)}), 500
  
 
 
