@@ -840,24 +840,24 @@ def get_parent_logs():
             return jsonify({'status': 'success', 'logs': res.data or []}), 200
 
         elif g.current_role == 'general':
-            link_check = get_db().table("parent_principal_rooms") \
-                .select("child_username") \
-                .eq("parent_username", g.current_user) \
-                .execute()
-            linked_children = [r['child_username'] for r in (link_check.data or [])]
-            if s_u not in linked_children:
-                return jsonify({'status': 'error', 'logs': []}), 403
-
-            res = get_db().table("parent_ledger").select("*") \
-                .eq("owner_username", g.current_user) \
-                .ilike("student_name", s_u) \
-                .order("timestamp", desc=True).limit(50).execute()
+            if s_u:
+                link_check = get_db().table("parent_principal_rooms") \
+                    .select("child_username") \
+                    .eq("parent_username", g.current_user) \
+                    .execute()
+                linked_children = [r['child_username'] for r in (link_check.data or [])]
+                if s_u not in linked_children:
+                    return jsonify({'status': 'error', 'logs': []}), 403
+                query = get_db().table("parent_ledger").select("*") \
+                    .eq("owner_username", g.current_user) \
+                    .ilike("student_name", s_u)
+            else:
+                query = get_db().table("parent_ledger").select("*") \
+                    .eq("owner_username", g.current_user)
+ 
+            res = query.order("timestamp", desc=True).limit(200).execute()
             return jsonify({'status': 'success', 'logs': res.data or []}), 200
-
-        else:
-            return jsonify({'status': 'error', 'logs': []}), 403
-    except Exception as e:
-        return jsonify({'status': 'error', 'msg': str(e)}), 500
+ 
 
 
 @app.route('/api/parent/ledger/delete_single', methods=['POST', 'OPTIONS'])
@@ -1172,6 +1172,90 @@ def get_support_history():
     except Exception as e:
         print(f"❌ [CHAT LOG FETCH EXCEPTION]: {str(e)}")
         return jsonify({'status': 'success', 'messages': []}), 200
+
+
+@app.route('/api/support/get_history_batch', methods=['POST', 'OPTIONS'])
+@require_auth
+def get_support_history_batch():
+    """
+    Same authorization and room-lookup logic as /api/support/get_history,
+    but takes a LIST of {child_username, room_type} pairs and resolves
+    them all inside one request/response cycle, instead of the caller
+    making one round trip per room. This is what collapses:
+      - the principal dashboard's per-student mother-chat unread loop
+      - the parent dashboard's per-child driver/principal unread loop
+    from N sequential network round trips down to 1.
+    """
+    if request.method == 'OPTIONS':
+        return jsonify({'status': 'ok'}), 200
+    try:
+        data = request.json or {}
+        rooms = data.get('rooms', [])
+        results = {}
+ 
+        for r in rooms:
+            child = str(r.get('child_username', '')).strip()
+            room_type = r.get('room_type', 'triple_party_matrix')
+            key = f"{room_type}:{child}"
+ 
+            if not child:
+                results[key] = []
+                continue
+ 
+            messages = []
+            try:
+                if room_type == "general_driver_room":
+                    room_check = get_db().table("general_driver_rooms") \
+                        .select("driver_username, parent_username") \
+                        .eq("booking_id", child).limit(1).execute()
+                    if room_check.data:
+                        room = room_check.data[0]
+                        driver_u = room.get("driver_username")
+                        parent_u = room.get("parent_username")
+                        if g.current_user in (driver_u, parent_u):
+                            res = get_db().table("direct_support_messages").select("*").eq("room_id", child).or_(
+                                f"and(sender_username.eq.{parent_u},receiver_username.eq.{driver_u}),"
+                                f"and(sender_username.eq.{driver_u},receiver_username.eq.{parent_u})"
+                            ).order("timestamp", desc=False).execute()
+                            messages = res.data or []
+ 
+                elif room_type == "parent_driver_matrix":
+                    room_check = get_db().table("parent_driver_rooms") \
+                        .select("driver_username, parent_username") \
+                        .eq("child_username", child).limit(1).execute()
+                    if room_check.data:
+                        room_info = room_check.data[0]
+                        driver_u = room_info.get('driver_username')
+                        parent_u = room_info.get('parent_username')
+                        if g.current_user in (driver_u, parent_u):
+                            res = get_db().table("direct_support_messages").select("*").eq("child_name", child).or_(
+                                f"and(sender_username.eq.{parent_u},receiver_username.eq.{driver_u}),and(sender_username.eq.{driver_u},receiver_username.eq.{parent_u})"
+                            ).order("timestamp", desc=False).execute()
+                            messages = res.data or []
+ 
+                else:  # triple_party_matrix
+                    room_check = get_db().table("parent_principal_rooms") \
+                        .select("principal_username, parent_username") \
+                        .eq("child_username", child).limit(1).execute()
+                    if room_check.data:
+                        room_info = room_check.data[0]
+                        principal_u = room_info.get('principal_username')
+                        parent_u = room_info.get('parent_username')
+                        if g.current_user in (principal_u, parent_u):
+                            res = get_db().table("direct_support_messages").select("*").eq("child_name", child).or_(
+                                f"and(sender_username.eq.{parent_u},receiver_username.eq.{principal_u}),and(sender_username.eq.{principal_u},receiver_username.eq.{parent_u})"
+                            ).order("timestamp", desc=False).execute()
+                            messages = res.data or []
+            except Exception as inner_e:
+                print(f"[BATCH HISTORY] lookup failed for {key}: {inner_e}")
+                messages = []
+ 
+            results[key] = messages
+ 
+        return jsonify({'status': 'success', 'results': results}), 200
+    except Exception as e:
+        return jsonify({'status': 'error', 'message': str(e)}), 500
+ 
 
 
 @app.route('/api/principal/get_data', methods=['POST', 'OPTIONS'])
