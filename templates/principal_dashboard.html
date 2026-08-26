@@ -8,7 +8,6 @@
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script> 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.23/jspdf.plugin.autotable.min.js"></script> 
-    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script> 
 
     <!-- PREVENTS THEME FLASHING ON LOAD -->
     <script>
@@ -606,11 +605,6 @@
         } 
         function closeAppAlert() { document.getElementById("appAlertOverlay").classList.remove("show"); } 
 
-        // --- Supabase Config Placeholder --- 
-        const supabaseUrl = 'https://mlzpmiccmggfwenfzvsy.supabase.co'; 
-        const supabaseKey = 'sb_publishable_ehnY1o3Vm1YCHVhaL5NL-Q_UZN-xRIp'; 
-        const _supabase = supabase.createClient(supabaseUrl, supabaseKey); 
-
         // --- Init User Data --- 
         const myU = sessionStorage.getItem('username'); 
         const myN = sessionStorage.getItem('userName') || "Sunny";  
@@ -904,6 +898,34 @@
                     } catch(e) {} 
                 } 
 
+                // --- BATCHED CHAT HISTORY LOOKUP ---
+                // Instead of awaiting /api/support/get_history once per
+                // student with a linked parent (N sequential round trips
+                // for a school with N students), build the full list of
+                // rooms up front and resolve them all in a single request
+                // to /api/support/get_history_batch.
+                const roomsToFetch = [];
+                for (const s of (cachedStudentData || [])) {
+                    const room = parentRooms.find(r => r.child_username === s.username);
+                    if (room) {
+                        roomsToFetch.push({ child_username: s.username, room_type: 'triple_party_matrix' });
+                    }
+                }
+
+                let batchResults = {};
+                if (roomsToFetch.length > 0) {
+                    try {
+                        const batchRes = await authFetch('/api/support/get_history_batch', {
+                            method: 'POST', headers: {'Content-Type':'application/json'},
+                            body: JSON.stringify({ rooms: roomsToFetch })
+                        });
+                        const batchJson = await batchRes.json();
+                        batchResults = batchJson.results || {};
+                    } catch(e) {
+                        console.error("Batch chat history fetch failed:", e);
+                    }
+                }
+
                 let gridHtml = ""; 
                 for (const s of (cachedStudentData || [])) { 
                     const room = parentRooms.find(r => r.child_username === s.username); 
@@ -924,17 +946,10 @@
                     let sideHtml, subHtml, rowClass, rowClick, hasUnreadClass = ""; 
 
                     if (hasMotherChat) { 
-                        let msgCount = 0; 
-                        let messages = [];
-                        try { 
-                            const histRes = await authFetch('/api/support/get_history', { 
-                                method: 'POST', headers: {'Content-Type':'application/json'}, 
-                                body: JSON.stringify({ child_username: s.username, room_type: 'triple_party_matrix' }) 
-                            }); 
-                            const histData = await histRes.json(); 
-                            messages = histData.messages || [];
-                            msgCount = messages.length; 
-                        } catch(e) { msgCount = 0; } 
+                        // Pulled from the single batched response instead of
+                        // a per-student await.
+                        const messages = batchResults[`triple_party_matrix:${s.username}`] || [];
+                        const msgCount = messages.length;
 
                         const dbRoomKey = getDbRoomKey('triple_party_matrix', null, s.username);
                         const unread = getUnreadCount(messages, dbRoomKey);
