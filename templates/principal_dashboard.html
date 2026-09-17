@@ -8,6 +8,7 @@
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script> 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.23/jspdf.plugin.autotable.min.js"></script> 
+    <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
 
     <!-- PREVENTS THEME FLASHING ON LOAD -->
     <script>
@@ -347,6 +348,9 @@
                 <span class="ico">📋</span> Registered Students 
                 <span class="count-pill" id="drawerRegCount">0</span> 
             </button> 
+            <button class="drawer-item" data-view="view-scan" onclick="switchView('view-scan', this); startScanner();"> 
+                <span class="ico">📷</span> Scan Attendance 
+            </button> 
             <button class="drawer-item" data-view="view-active" onclick="switchView('view-active', this)"> 
                 <span class="ico">🚐</span> Active Transport 
             </button> 
@@ -471,6 +475,31 @@
                 </div> 
                 <div id="studentListGrid" class="student-list"></div> 
             </div> 
+        </div> 
+
+        <!-- ===== VIEW: Scan Attendance ===== --> 
+        <div id="view-scan" class="view-section"> 
+            <div class="card-header" style="border:none;"> 
+                <h4>Scan Attendance</h4> 
+            </div> 
+
+            <div style="padding: 15px 20px;"> 
+                <select id="scanStatusSelect" style="margin-bottom: 15px; padding: 12px; border-radius: 10px; border: 1px solid var(--border); background: var(--input-bg); color: var(--text-main); width: 100%;"> 
+                    <option value="PRESENT">Mark PRESENT (arriving)</option> 
+                    <option value="ABSENT">Mark ABSENT</option> 
+                </select> 
+
+                <div id="qrScannerRegion" style="width: 100%; max-width: 420px; margin: 0 auto; border-radius: 16px; overflow: hidden; border: 1px solid var(--border);"></div> 
+
+                <p id="scanStatusText" style="text-align:center; color:var(--text-muted); font-size:13px; margin-top:15px;"> 
+                    Point the camera at a student's QR code. 
+                </p> 
+            </div> 
+
+            <div class="card-header" style="border:none; padding-top: 0;"> 
+                <h4 style="font-size: 12px;">Today's Scans</h4> 
+            </div> 
+            <div id="scanResultsList" style="display: flex; flex-direction: column;"></div> 
         </div> 
 
         <!-- ===== VIEW: Active Transport Monitoring ===== --> 
@@ -730,6 +759,13 @@
             document.getElementById('drawerOverlay').classList.remove('open'); 
         } 
         function switchView(viewId, btn) { 
+            // Stop the camera when leaving the scanner view, so it isn't
+            // left running (draining battery / holding the camera lock)
+            // in the background once the principal navigates elsewhere.
+            const scanView = document.getElementById('view-scan');
+            if (scanView && scanView.classList.contains('active') && viewId !== 'view-scan') {
+                stopScanner();
+            }
             if (viewId) { 
                 document.querySelectorAll('.view-section').forEach(v => v.classList.remove('active')); 
                 document.getElementById(viewId).classList.add('active'); 
@@ -1272,6 +1308,107 @@
             sessionStorage.clear();  
             window.location.replace("login.html");  
         } 
+
+        // =====================================================================
+        // QR ATTENDANCE SCANNER
+        // Uses the device camera to read a student's QR code (their private
+        // qr_token, not their username) and POSTs it to
+        // /api/principal/scan_attendance, which verifies the student
+        // belongs to one of THIS principal's schools before marking them
+        // present/absent and notifying the linked parent.
+        // =====================================================================
+        let html5QrScanner = null;
+        let scanResultsCache = [];
+        let scanCooldown = false;
+
+        function startScanner() {
+            if (html5QrScanner) return; // already running
+
+            html5QrScanner = new Html5Qrcode("qrScannerRegion");
+            const config = { fps: 10, qrbox: { width: 240, height: 240 } };
+
+            html5QrScanner.start(
+                { facingMode: "environment" },
+                config,
+                onQrScanSuccess,
+                () => { /* per-frame scan failures are normal, ignore */ }
+            ).catch(() => {
+                const st = document.getElementById('scanStatusText');
+                st.innerText = "Camera access denied or unavailable.";
+                st.style.color = "var(--danger)";
+            });
+        }
+
+        function stopScanner() {
+            if (html5QrScanner) {
+                html5QrScanner.stop().then(() => {
+                    html5QrScanner.clear();
+                    html5QrScanner = null;
+                }).catch(() => { html5QrScanner = null; });
+            }
+        }
+
+        async function onQrScanSuccess(decodedText) {
+            if (scanCooldown) return; // debounce — avoid repeat fires while the code sits in frame
+            scanCooldown = true;
+            setTimeout(() => { scanCooldown = false; }, 2000);
+
+            const status = document.getElementById('scanStatusSelect').value;
+            const statusText = document.getElementById('scanStatusText');
+            statusText.innerText = "Checking...";
+            statusText.style.color = "var(--text-muted)";
+
+            try {
+                const res = await authFetch('/api/principal/scan_attendance', {
+                    method: 'POST', headers: {'Content-Type':'application/json'},
+                    body: JSON.stringify({ qr_token: decodedText, status: status })
+                });
+                const data = await res.json();
+
+                if (data.status === 'success') {
+                    statusText.innerText = `✔ ${data.student_name} marked ${data.attendance_status.toLowerCase()}.`;
+                    statusText.style.color = "var(--success)";
+
+                    scanResultsCache.unshift({
+                        name: data.student_name,
+                        status: data.attendance_status,
+                        time: new Date().toLocaleTimeString()
+                    });
+                    renderScanResults();
+
+                    try {
+                        const beep = new AudioContext();
+                        const osc = beep.createOscillator();
+                        osc.frequency.value = 880;
+                        osc.connect(beep.destination);
+                        osc.start(); osc.stop(beep.currentTime + 0.12);
+                    } catch(e) {}
+                } else {
+                    statusText.innerText = data.message || "Scan failed.";
+                    statusText.style.color = "var(--danger)";
+                }
+            } catch (e) {
+                statusText.innerText = "Network error — scan not recorded.";
+                statusText.style.color = "var(--danger)";
+            }
+        }
+
+        function renderScanResults() {
+            const container = document.getElementById('scanResultsList');
+            container.innerHTML = scanResultsCache.slice(0, 30).map(r => {
+                const color = r.status === 'PRESENT' ? 'var(--success)' : 'var(--danger)';
+                return `
+                <div class="reg-row">
+                    <div style="display:flex; justify-content:space-between; align-items:center; width:100%;">
+                        <b style="font-size:15px; color:var(--text-main);">${escapeHtml(r.name)}</b>
+                        <div style="text-align:right;">
+                            <span style="color:${color}; font-weight:800; font-size:11px;">${escapeHtml(r.status)}</span>
+                            <div style="font-size:10px; color:var(--text-muted);">${escapeHtml(r.time)}</div>
+                        </div>
+                    </div>
+                </div>`;
+            }).join('') || '<p style="padding:25px; text-align:center; color:var(--text-muted); font-size: 14px;">No scans yet today.</p>';
+        }
 
         window.onload = () => { 
             load(); 
