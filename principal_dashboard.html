@@ -9,6 +9,7 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script> 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.23/jspdf.plugin.autotable.min.js"></script> 
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
 
     <style> 
         :root {  
@@ -72,6 +73,85 @@
         #alertModal { display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.85); z-index:9999; align-items:center; justify-content:center; backdrop-filter: blur(8px); } 
         .modal-content { background: var(--card-bg); padding:45px; border-radius:30px; text-align:center; max-width:420px; border: 8px solid #dc2626; box-shadow: 0 25px 50px rgba(0,0,0,0.8); } 
         @media (max-width: 768px) { .header { flex-direction: column; padding: 1rem; gap: 15px; } .student-grid { grid-template-columns: 1fr; padding: 15px; } .search-box { width: 100%; margin-bottom: 10px; } }
+    
+
+        /* =========================================================
+           SAFE DRIVE — FULL SCREEN STUDENT QR SCANNER
+        ========================================================= */
+        .btn-qr-open{background:linear-gradient(135deg,#10b981,#059669);color:#fff;border:1px solid rgba(255,255,255,.14);box-shadow:0 8px 24px rgba(16,185,129,.22);}
+        .btn-qr-open:hover{transform:translateY(-2px);box-shadow:0 12px 32px rgba(16,185,129,.32);}
+        .qr-icon{font-size:15px;margin-right:7px;}
+        body.scanner-open{overflow:hidden;}
+        #studentScannerOverlay{position:fixed;inset:0;width:100vw;height:100dvh;background:radial-gradient(circle at 50% 35%,rgba(16,185,129,.09),transparent 34%),#020617;z-index:50000;display:none;flex-direction:column;overflow:hidden;}
+        #studentScannerOverlay.active{display:flex;}
+        .scanner-topbar{height:78px;flex:0 0 78px;padding:0 32px;display:flex;align-items:center;justify-content:space-between;background:rgba(2,6,23,.96);border-bottom:1px solid rgba(255,255,255,.08);backdrop-filter:blur(18px);}
+        .scanner-brand{display:flex;align-items:center;gap:22px;min-width:0;}
+        .scanner-logo{font-size:21px;font-weight:900;letter-spacing:2px;color:#fff;white-space:nowrap;}
+        .scanner-logo span{color:#10b981;}
+        .scanner-context{display:flex;flex-direction:column;border-left:1px solid #334155;padding-left:22px;min-width:0;}
+        .scanner-context strong{font-size:10px;letter-spacing:1.5px;}
+        .scanner-context small{color:#94a3b8;margin-top:3px;font-size:9px;}
+        .scanner-top-actions{display:flex;align-items:center;gap:20px;}
+        .scanner-live-indicator{display:flex;align-items:center;gap:8px;font-size:9px;font-weight:800;letter-spacing:1px;color:#10b981;}
+        .scanner-live-indicator span{width:8px;height:8px;border-radius:50%;background:#10b981;box-shadow:0 0 15px #10b981;animation:scannerPulse 1.4s infinite;}
+        @keyframes scannerPulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.35;transform:scale(.75)}}
+        .scanner-close-btn{width:44px;height:44px;border-radius:50%;border:1px solid rgba(255,255,255,.15);background:rgba(255,255,255,.06);color:#fff;font-size:27px;cursor:pointer;transition:.2s;}
+        .scanner-close-btn:hover{background:rgba(225,29,72,.18);border-color:#e11d48;transform:rotate(90deg);}
+        .scanner-main{flex:1;min-height:0;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:12px 20px;overflow:auto;}
+        .scanner-heading{text-align:center;margin-bottom:12px;}
+        .scanner-status-pill{display:inline-flex;align-items:center;gap:7px;padding:5px 11px;border-radius:50px;background:rgba(16,185,129,.08);border:1px solid rgba(16,185,129,.2);color:#10b981;font-size:8px;font-weight:900;letter-spacing:1.5px;}
+        .pulse-dot{width:6px;height:6px;border-radius:50%;background:#10b981;box-shadow:0 0 10px #10b981;}
+        .scanner-heading h1{margin:7px 0 2px;font-size:clamp(24px,3vw,38px);font-weight:900;letter-spacing:-1.5px;}
+        .scanner-heading p{margin:0;color:#64748b;font-size:10px;}
+        .scanner-camera-shell{position:relative;width:min(68vw,560px);aspect-ratio:1/1;max-height:53vh;background:#000;border-radius:25px;overflow:hidden;border:1px solid rgba(255,255,255,.12);box-shadow:0 30px 80px rgba(0,0,0,.7),0 0 70px rgba(16,185,129,.06);}
+        #studentQrReader{width:100%;height:100%;}
+        #studentQrReader video{width:100%!important;height:100%!important;object-fit:cover!important;}
+        #studentQrReader img{display:none!important;}
+        #studentQrReader__scan_region{border:none!important;}
+        #studentQrReader__dashboard{display:none!important;}
+        .scan-corner{position:absolute;width:55px;height:55px;border-color:#10b981;border-style:solid;z-index:10;pointer-events:none;filter:drop-shadow(0 0 8px rgba(16,185,129,.6));}
+        .scan-corner.top-left{top:20px;left:20px;border-width:4px 0 0 4px;border-radius:12px 0 0 0;}
+        .scan-corner.top-right{top:20px;right:20px;border-width:4px 4px 0 0;border-radius:0 12px 0 0;}
+        .scan-corner.bottom-left{bottom:20px;left:20px;border-width:0 0 4px 4px;border-radius:0 0 0 12px;}
+        .scan-corner.bottom-right{bottom:20px;right:20px;border-width:0 4px 4px 0;border-radius:0 0 12px 0;}
+        .scan-line{position:absolute;left:28px;right:28px;top:25%;height:2px;background:#10b981;box-shadow:0 0 8px #10b981,0 0 25px rgba(16,185,129,.8);z-index:9;pointer-events:none;animation:scanLineMove 2s ease-in-out infinite;}
+        @keyframes scanLineMove{0%{top:20%;opacity:.25}50%{top:80%;opacity:1}100%{top:20%;opacity:.25}}
+        .camera-center-message{position:absolute;bottom:23px;left:50%;transform:translateX(-50%);white-space:nowrap;padding:8px 13px;border-radius:30px;background:rgba(2,6,23,.76);backdrop-filter:blur(12px);color:#fff;font-size:9px;font-weight:800;letter-spacing:1px;z-index:11;pointer-events:none;}
+        .camera-center-message span{color:#10b981;margin-right:5px;}
+        .scanner-instruction{margin-top:10px;color:#94a3b8;font-size:10px;font-weight:700;display:flex;align-items:center;gap:7px;min-height:18px;}
+        .instruction-icon{color:#10b981;font-size:15px;}
+        .last-scan-card{width:min(68vw,560px);margin-top:9px;padding:10px 14px;box-sizing:border-box;display:flex;align-items:center;gap:12px;border-radius:14px;background:rgba(15,23,42,.78);border:1px solid rgba(255,255,255,.07);}
+        .last-scan-icon{width:31px;height:31px;display:flex;align-items:center;justify-content:center;border-radius:50%;background:rgba(16,185,129,.12);color:#10b981;font-weight:900;}
+        .last-scan-info{display:flex;flex-direction:column;flex:1;min-width:0;}
+        .last-scan-info small{color:#64748b;font-size:7px;font-weight:800;letter-spacing:1px;}
+        .last-scan-info strong{font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+        .last-scan-info span{color:#64748b;font-size:8px;}
+        .last-scan-status{color:#10b981;font-size:8px;font-weight:900;}
+        .scanner-bottombar{height:58px;flex:0 0 58px;display:flex;align-items:center;justify-content:space-between;padding:0 32px;background:rgba(2,6,23,.97);border-top:1px solid rgba(255,255,255,.08);}
+        .scanner-stat{display:flex;flex-direction:column;}
+        .scanner-stat small{color:#64748b;font-size:7px;font-weight:800;letter-spacing:1px;}
+        .scanner-stat strong{color:#fff;font-size:17px;line-height:17px;}
+        .scanner-security{color:#64748b;font-size:8px;font-weight:700;letter-spacing:.8px;}
+        .scanner-security span{color:#10b981;margin-right:5px;}
+        .scan-success-overlay{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(2,6,23,.84);backdrop-filter:blur(13px);z-index:100;opacity:0;pointer-events:none;transition:opacity .15s ease;}
+        .scan-success-overlay.show{opacity:1;pointer-events:auto;}
+        .scan-success-card{width:min(90%,420px);padding:28px;border-radius:25px;text-align:center;background:linear-gradient(145deg,rgba(15,23,42,.99),rgba(2,6,23,.99));border:1px solid rgba(16,185,129,.3);box-shadow:0 30px 100px rgba(0,0,0,.7),0 0 60px rgba(16,185,129,.1);transform:scale(.95);transition:transform .18s ease;}
+        .scan-success-overlay.show .scan-success-card{transform:scale(1);}
+        .success-check{width:62px;height:62px;margin:0 auto 11px;display:flex;align-items:center;justify-content:center;border-radius:50%;background:#10b981;color:#fff;font-size:32px;font-weight:900;box-shadow:0 0 0 8px rgba(16,185,129,.08),0 0 40px rgba(16,185,129,.3);}
+        .success-label{color:#10b981;font-size:9px;font-weight:900;letter-spacing:2px;}
+        .scan-success-card h2{margin:6px 0 2px;font-size:24px;font-weight:900;}
+        .scan-success-card p{margin:0;color:#94a3b8;font-size:10px;}
+        .success-divider{height:1px;background:#334155;margin:18px 0;}
+        .success-event{display:flex;justify-content:space-between;text-align:left;}
+        .success-event div{display:flex;flex-direction:column;}
+        .success-event small{color:#64748b;font-size:7px;font-weight:800;letter-spacing:1px;}
+        .success-event strong{margin-top:3px;font-size:10px;}
+        .parent-notification-status{margin-top:18px;padding:11px;border-radius:12px;background:rgba(16,185,129,.08);border:1px solid rgba(16,185,129,.15);color:#a7f3d0;font-size:9px;font-weight:800;}
+        .parent-notification-status span{color:#10b981;margin-right:5px;}
+        .scanner-error-card{border-color:rgba(225,29,72,.35)!important;}
+        .scanner-error-card .success-check{background:#e11d48;box-shadow:0 0 0 8px rgba(225,29,72,.08),0 0 40px rgba(225,29,72,.25);}
+        @media(max-width:700px){.scanner-topbar{height:66px;flex-basis:66px;padding:0 13px}.scanner-brand{gap:11px}.scanner-context{padding-left:11px}.scanner-logo{font-size:15px}.scanner-context strong{font-size:8px}.scanner-live-indicator{display:none}.scanner-main{padding:8px 10px}.scanner-camera-shell{width:min(94vw,520px);max-height:58vh}.last-scan-card{width:min(94vw,520px)}.scanner-bottombar{height:52px;flex-basis:52px;padding:0 13px}.scanner-security{display:none}.scanner-heading p{font-size:9px}.scanner-close-btn{width:40px;height:40px}.camera-center-message{font-size:8px}.scan-corner{width:45px;height:45px}}
+
     </style> 
 </head> 
 <body> 
@@ -82,6 +162,7 @@
             <small style="opacity:0.8; font-weight: 600;">ENCRYPTED OVERWATCH: <b id="schoolCodeDisp" style="color: var(--success);">---</b></small> 
         </div> 
         <div style="display:flex; align-items:center; gap:20px; flex-wrap: wrap; justify-content: center;"> 
+            <button class="btn-action btn-qr-open" onclick="openStudentScanner()"><span class="qr-icon">▣</span> SCAN STUDENT</button>
             <button class="btn-action btn-school-out" onclick="triggerSchoolOut()">   SCHOOL OUT</button> 
             <div class="profile-area" onclick="openProfileMenu()" title="Manage Profile"> 
                 <div style="text-align: right; border-right: 1px solid rgba(255,255,255,0.2); padding-right: 15px;"> 
@@ -130,6 +211,80 @@
             <button class="btn-action btn-print" style="width:100%; padding:18px; background: #020218; border-radius: 12px; margin-top: 15px;" onclick="document.getElementById('alertModal').style.display='none'">ACKNOWLEDGE</button> 
         </div> 
     </div> 
+
+
+
+    <!-- =========================================================
+         SAFE DRIVE — FULL SCREEN STUDENT QR SCANNER
+    ========================================================== -->
+    <div id="studentScannerOverlay">
+        <div class="scanner-topbar">
+            <div class="scanner-brand">
+                <div class="scanner-logo">SAFE <span>DRIVE</span></div>
+                <div class="scanner-context">
+                    <strong>STUDENT ENTRY SCANNER</strong>
+                    <small id="scannerSchoolName">SCHOOL CODE: ---</small>
+                </div>
+            </div>
+            <div class="scanner-top-actions">
+                <div class="scanner-live-indicator"><span></span> CAMERA LIVE</div>
+                <button class="scanner-close-btn" onclick="closeStudentScanner()" title="Close scanner">&times;</button>
+            </div>
+        </div>
+
+        <div class="scanner-main">
+            <div class="scanner-heading">
+                <div class="scanner-status-pill"><span class="pulse-dot"></span> READY TO SCAN</div>
+                <h1>Scan Student ID</h1>
+                <p>Students can scan one after another. Verification and parent notification happen automatically.</p>
+            </div>
+
+            <div class="scanner-camera-shell">
+                <div id="studentQrReader"></div>
+                <div class="scan-corner top-left"></div>
+                <div class="scan-corner top-right"></div>
+                <div class="scan-corner bottom-left"></div>
+                <div class="scan-corner bottom-right"></div>
+                <div class="scan-line"></div>
+                <div class="camera-center-message"><span>▣</span> ALIGN STUDENT QR CODE</div>
+            </div>
+
+            <div id="scannerInstruction" class="scanner-instruction">
+                <span class="instruction-icon">●</span> Waiting for student QR code...
+            </div>
+
+            <div id="lastScanCard" class="last-scan-card">
+                <div class="last-scan-icon">✓</div>
+                <div class="last-scan-info">
+                    <small>LAST VERIFIED STUDENT</small>
+                    <strong id="lastScanStudent">No scan yet</strong>
+                    <span id="lastScanTime">Waiting...</span>
+                </div>
+                <div id="lastScanStatus" class="last-scan-status">READY</div>
+            </div>
+        </div>
+
+        <div class="scanner-bottombar">
+            <div class="scanner-stat"><small>SCANNED TODAY</small><strong id="scannerCount">0</strong></div>
+            <div class="scanner-security"><span>🔒</span> Secure School Verification</div>
+            <div class="scanner-stat" style="text-align:right"><small>SCHOOL</small><strong id="scannerSchoolCode">---</strong></div>
+        </div>
+
+        <div id="scanSuccessOverlay" class="scan-success-overlay">
+            <div id="scanSuccessCard" class="scan-success-card">
+                <div id="successCheck" class="success-check">✓</div>
+                <div id="successLabel" class="success-label">STUDENT VERIFIED</div>
+                <h2 id="successStudentName">Student Name</h2>
+                <p id="successStudentDetails">Grade • Student ID</p>
+                <div class="success-divider"></div>
+                <div class="success-event">
+                    <div><small>EVENT</small><strong>SCHOOL ENTRY</strong></div>
+                    <div><small>TIME</small><strong id="successScanTime">--:--:--</strong></div>
+                </div>
+                <div id="parentNotificationStatus" class="parent-notification-status"><span>✓</span> Parent notification sent</div>
+            </div>
+        </div>
+    </div>
 
     <div id="supportChatOverlay"> 
         <div style="background:#020218; color:white; padding:15px 25px; display:flex; justify-content:space-between; align-items:center; border-bottom: 1px solid rgba(255,255,255,0.05);"> 
@@ -785,6 +940,242 @@ function formatTime(timestamp) {
                 body: JSON.stringify({ sender: myPrincipalID, receiver: currentSupportTarget, child_name: currentRoomType, message: msgText }) 
             }).then(() => syncSupportMessages()); 
         } 
+
+
+
+        /* =========================================================
+           SAFE DRIVE — STUDENT QR SCANNER ENGINE
+        ========================================================= */
+        let studentQrScanner = null;
+        let scannerRunning = false;
+        let scannerProcessing = false;
+        let scannerTotalScans = 0;
+        let lastScannedValue = "";
+        let lastScanTimestamp = 0;
+        let scannerAudioContext = null;
+
+        function scannerBeep(success = true) {
+            try {
+                scannerAudioContext = scannerAudioContext || new (window.AudioContext || window.webkitAudioContext)();
+                const oscillator = scannerAudioContext.createOscillator();
+                const gain = scannerAudioContext.createGain();
+                oscillator.type = "sine";
+                oscillator.frequency.value = success ? 880 : 240;
+                gain.gain.value = 0.035;
+                oscillator.connect(gain);
+                gain.connect(scannerAudioContext.destination);
+                oscillator.start();
+                oscillator.stop(scannerAudioContext.currentTime + (success ? 0.09 : 0.16));
+            } catch (_) {}
+        }
+
+        function setScannerInstruction(html) {
+            const el = document.getElementById('scannerInstruction');
+            if (el) el.innerHTML = html;
+        }
+
+        async function openStudentScanner() {
+            const overlay = document.getElementById('studentScannerOverlay');
+            if (!overlay) return;
+            overlay.classList.add('active');
+            document.body.classList.add('scanner-open');
+
+            const code = (typeof scCode !== 'undefined' ? scCode : '').toUpperCase();
+            document.getElementById('scannerSchoolCode').innerText = code || '---';
+            document.getElementById('scannerSchoolName').innerText = 'SCHOOL CODE: ' + (code || '---');
+            setScannerInstruction('<span class="instruction-icon">●</span> Starting secure camera...');
+            scannerProcessing = false;
+            scannerTotalScans = 0;
+            document.getElementById('scannerCount').innerText = '0';
+            await startStudentQrScanner();
+        }
+
+        async function startStudentQrScanner() {
+            if (scannerRunning) return;
+            if (typeof Html5Qrcode === 'undefined') {
+                setScannerInstruction('<span style="color:#e11d48">●</span> QR scanner library failed to load.');
+                return;
+            }
+
+            try {
+                if (studentQrScanner) {
+                    try { await studentQrScanner.clear(); } catch (_) {}
+                }
+                studentQrScanner = new Html5Qrcode('studentQrReader');
+                const config = {
+                    fps: 20,
+                    qrbox: function(viewfinderWidth, viewfinderHeight) {
+                        const size = Math.floor(Math.min(viewfinderWidth, viewfinderHeight) * 0.72);
+                        return { width: size, height: size };
+                    },
+                    aspectRatio: 1.0,
+                    disableFlip: false,
+                    rememberLastUsedCamera: true
+                };
+
+                try {
+                    await studentQrScanner.start(
+                        { facingMode: { exact: 'environment' } },
+                        config,
+                        decodedText => handleStudentQrScan(decodedText),
+                        () => {}
+                    );
+                } catch (cameraError) {
+                    console.warn('Rear camera exact mode failed; using environment fallback.', cameraError);
+                    await studentQrScanner.start(
+                        { facingMode: 'environment' },
+                        config,
+                        decodedText => handleStudentQrScan(decodedText),
+                        () => {}
+                    );
+                }
+
+                scannerRunning = true;
+                setScannerInstruction('<span class="instruction-icon">●</span> Waiting for student QR code...');
+            } catch (error) {
+                console.error('QR CAMERA ERROR:', error);
+                scannerRunning = false;
+                setScannerInstruction('<span style="color:#e11d48">●</span> Camera could not start. Allow camera access and try again.');
+                showAppAlert('Safe Drive could not access the camera. Please allow camera permission in your browser and reopen the scanner.', 'CAMERA ACCESS');
+            }
+        }
+
+        async function stopStudentQrScanner() {
+            if (!studentQrScanner) {
+                scannerRunning = false;
+                return;
+            }
+            try {
+                if (scannerRunning) await studentQrScanner.stop();
+            } catch (error) {
+                console.warn('QR stop warning:', error);
+            }
+            try { await studentQrScanner.clear(); } catch (_) {}
+            studentQrScanner = null;
+            scannerRunning = false;
+        }
+
+        async function closeStudentScanner() {
+            document.getElementById('scanSuccessOverlay')?.classList.remove('show');
+            await stopStudentQrScanner();
+            scannerProcessing = false;
+            document.body.classList.remove('scanner-open');
+            document.getElementById('studentScannerOverlay')?.classList.remove('active');
+            setScannerInstruction('<span class="instruction-icon">●</span> Waiting for student QR code...');
+        }
+
+        function extractStudentQrIdentity(rawValue) {
+            const raw = String(rawValue || '').trim();
+            if (!raw) return null;
+            try {
+                const parsed = JSON.parse(raw);
+                const username = parsed.username || parsed.student_username || parsed.student_id || parsed.id;
+                if (username) return { username: String(username).trim().toLowerCase(), raw };
+            } catch (_) {}
+            return { username: raw.toLowerCase(), raw };
+        }
+
+        async function handleStudentQrScan(decodedText) {
+            if (!decodedText || scannerProcessing) return;
+            const now = Date.now();
+            if (decodedText === lastScannedValue && now - lastScanTimestamp < 5000) return;
+
+            const identity = extractStudentQrIdentity(decodedText);
+            if (!identity) return;
+
+            scannerProcessing = true;
+            lastScannedValue = decodedText;
+            lastScanTimestamp = now;
+            setScannerInstruction('<span style="color:#f59e0b">●</span> Verifying student identity...');
+
+            try {
+                const response = await authFetch('http://127.0.0.1:5000/api/principal/scan_student', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ qr_data: identity.raw, student_username: identity.username, school_code: scCode })
+                });
+
+                let data = {};
+                try { data = await response.json(); } catch (_) {}
+
+                if (!response.ok || data.status !== 'success') {
+                    throw new Error(data.message || data.msg || 'Student verification failed.');
+                }
+
+                scannerTotalScans++;
+                document.getElementById('scannerCount').innerText = scannerTotalScans;
+                scannerBeep(true);
+                showStudentScanSuccess(data);
+
+                // Refresh the principal ledger behind the scanner without closing it.
+                setTimeout(() => { load().catch(() => {}); }, 150);
+            } catch (error) {
+                console.error('STUDENT SCAN ERROR:', error);
+                scannerBeep(false);
+                showScannerError(error.message || 'Safe Drive could not verify this student.');
+            }
+        }
+
+        function showStudentScanSuccess(data) {
+            const name = data.student_name || 'Student';
+            const grade = data.grade || data.moderated_grade || 'Student';
+            const username = data.username || '';
+            const time = data.timestamp ? new Date(data.timestamp).toLocaleTimeString() : new Date().toLocaleTimeString();
+
+            document.getElementById('successStudentName').innerText = name;
+            document.getElementById('successStudentDetails').innerText = grade + (username ? ' • ' + username : '');
+            document.getElementById('successScanTime').innerText = time;
+            document.getElementById('lastScanStudent').innerText = name;
+            document.getElementById('lastScanTime').innerText = 'Verified at ' + time;
+            document.getElementById('lastScanStatus').innerText = 'VERIFIED';
+            document.getElementById('lastScanCard').style.borderColor = 'rgba(16,185,129,.35)';
+
+            const notification = document.getElementById('parentNotificationStatus');
+            if (data.parent_notified) {
+                notification.innerHTML = '<span>✓</span> Parent notification sent';
+            } else {
+                notification.innerHTML = '<span style="color:#f59e0b">!</span> Student verified — no linked parent found';
+            }
+
+            document.getElementById('successCheck').innerText = '✓';
+            document.getElementById('successLabel').innerText = 'STUDENT VERIFIED';
+            document.getElementById('scanSuccessCard').classList.remove('scanner-error-card');
+            document.getElementById('scanSuccessOverlay').classList.add('show');
+
+            setTimeout(() => {
+                document.getElementById('scanSuccessOverlay').classList.remove('show');
+                scannerProcessing = false;
+                setScannerInstruction('<span class="instruction-icon">●</span> Ready for next student...');
+            }, 1100);
+        }
+
+        function showScannerError(message) {
+            document.getElementById('successCheck').innerText = '!';
+            document.getElementById('successLabel').innerText = 'SCAN NOT ACCEPTED';
+            document.getElementById('successStudentName').innerText = 'Verification blocked';
+            document.getElementById('successStudentDetails').innerText = message;
+            document.getElementById('successScanTime').innerText = new Date().toLocaleTimeString();
+            document.getElementById('parentNotificationStatus').innerHTML = '<span style="color:#e11d48">!</span> No notification was sent';
+            document.getElementById('scanSuccessCard').classList.add('scanner-error-card');
+            document.getElementById('scanSuccessOverlay').classList.add('show');
+
+            setTimeout(() => {
+                document.getElementById('scanSuccessOverlay').classList.remove('show');
+                document.getElementById('scanSuccessCard').classList.remove('scanner-error-card');
+                scannerProcessing = false;
+                setScannerInstruction('<span class="instruction-icon">●</span> Waiting for student QR code...');
+            }, 1200);
+        }
+
+        document.addEventListener('keydown', event => {
+            if (event.key === 'Escape' && document.getElementById('studentScannerOverlay')?.classList.contains('active')) {
+                closeStudentScanner();
+            }
+        });
+
+        window.addEventListener('beforeunload', () => {
+            try { if (studentQrScanner && scannerRunning) studentQrScanner.stop(); } catch (_) {}
+        });
 
         function deleteSingleLog(id) { 
             const btnHtml = `
