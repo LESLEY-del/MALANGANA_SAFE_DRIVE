@@ -258,6 +258,48 @@
 
         /* Overlays & Modals */ 
         #supportChatOverlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: var(--card-bg); z-index: 10000; flex-direction: column; overflow: hidden;} 
+
+        /* ===== Full-Screen QR Attendance Scanner ===== */
+        #scanFullscreenOverlay { display: none; position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: #000; z-index: 10500; }
+        #scanFullscreenOverlay.show { display: block; }
+        #scanFullscreenOverlay #qrScannerRegion { width: 100%; height: 100%; }
+        #scanFullscreenOverlay #qrScannerRegion video { width: 100% !important; height: 100% !important; object-fit: cover; }
+
+        .scan-hud-top {
+            position: absolute; top: 0; left: 0; width: 100%; z-index: 2;
+            display: flex; justify-content: space-between; align-items: center;
+            padding: max(20px, env(safe-area-inset-top)) 16px 16px;
+            background: linear-gradient(180deg, rgba(0,0,0,0.75) 0%, transparent 100%);
+        }
+        .scan-close-btn {
+            background: rgba(255,255,255,0.12); border: 1px solid rgba(255,255,255,0.25); color: white;
+            width: 44px; height: 44px; border-radius: 50%; font-size: 24px; line-height: 1; cursor: pointer;
+        }
+        #scanStatusSelect {
+            background: rgba(0,0,0,0.6); color: white; border: 1px solid rgba(255,255,255,0.25);
+            border-radius: 12px; padding: 12px 16px; font-size: 13px; font-weight: 700; outline: none;
+        }
+
+        .scan-frame-guide {
+            position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+            width: 260px; height: 260px; z-index: 2; pointer-events: none;
+            border: 3px solid rgba(255,255,255,0.7); border-radius: 20px;
+            box-shadow: 0 0 0 2000px rgba(0,0,0,0.35);
+        }
+
+        .scan-hud-bottom {
+            position: absolute; bottom: 0; left: 0; width: 100%; z-index: 2;
+            padding: 20px 16px max(20px, env(safe-area-inset-bottom));
+            background: linear-gradient(0deg, rgba(0,0,0,0.9) 0%, rgba(0,0,0,0.4) 70%, transparent 100%);
+            max-height: 45vh; display: flex; flex-direction: column;
+        }
+        #scanStatusText { color: white; font-size: 14px; font-weight: 700; text-align: center; margin: 0 0 15px; }
+        #scanResultsList { overflow-y: auto; display: flex; flex-direction: column; gap: 8px; }
+        #scanResultsList .scan-result-row {
+            background: rgba(255,255,255,0.08); border-radius: 12px; padding: 10px 14px;
+            display: flex; justify-content: space-between; align-items: center;
+        }
+
         #supportChatMessages { flex: 1; padding: 20px; overflow-y: auto; background: var(--bg-grad-1); display: flex; flex-direction: column; gap: 12px; scroll-behavior: smooth; } 
         .msg { padding: 12px 16px; border-radius: 15px; font-size: 14px; max-width: 80%; line-height: 1.4; box-shadow: 0 4px 10px rgba(0,0,0,0.1); } 
         .msg.me { background: var(--accent); color: white; align-self: flex-end; border-bottom-right-radius: 4px; } 
@@ -348,7 +390,7 @@
                 <span class="ico">📋</span> Registered Students 
                 <span class="count-pill" id="drawerRegCount">0</span> 
             </button> 
-            <button class="drawer-item" data-view="view-scan" onclick="switchView('view-scan', this); startScanner();"> 
+            <button class="drawer-item" data-view="view-scan" onclick="closeDrawer(); openScanOverlay();"> 
                 <span class="ico">📷</span> Scan Attendance 
             </button> 
             <button class="drawer-item" data-view="view-active" onclick="switchView('view-active', this)"> 
@@ -439,6 +481,26 @@
         </div> 
     </div> 
 
+    <!-- Full-Screen QR Attendance Scanner -->
+    <div id="scanFullscreenOverlay">
+        <div id="qrScannerRegion"></div>
+
+        <div class="scan-hud-top">
+            <button class="scan-close-btn" onclick="closeScanOverlay()">&times;</button>
+            <select id="scanStatusSelect">
+                <option value="ARRIVING">Mark ARRIVING</option>
+                <option value="SCHOOL OUT">Mark SCHOOL OUT</option>
+            </select>
+        </div>
+
+        <div class="scan-frame-guide"></div>
+
+        <div class="scan-hud-bottom">
+            <p id="scanStatusText">Point the camera at a student's QR code.</p>
+            <div id="scanResultsList"></div>
+        </div>
+    </div>
+
     <div class="container"> 
 
         <!-- ===== VIEW: Home Dashboard (New Default) ===== --> 
@@ -475,31 +537,6 @@
                 </div> 
                 <div id="studentListGrid" class="student-list"></div> 
             </div> 
-        </div> 
-
-        <!-- ===== VIEW: Scan Attendance ===== --> 
-        <div id="view-scan" class="view-section"> 
-            <div class="card-header" style="border:none;"> 
-                <h4>Scan Attendance</h4> 
-            </div> 
-
-            <div style="padding: 15px 20px;"> 
-                <select id="scanStatusSelect" style="margin-bottom: 15px; padding: 12px; border-radius: 10px; border: 1px solid var(--border); background: var(--input-bg); color: var(--text-main); width: 100%;"> 
-                    <option value="PRESENT">Mark PRESENT (arriving)</option> 
-                    <option value="ABSENT">Mark ABSENT</option> 
-                </select> 
-
-                <div id="qrScannerRegion" style="width: 100%; max-width: 420px; margin: 0 auto; border-radius: 16px; overflow: hidden; border: 1px solid var(--border);"></div> 
-
-                <p id="scanStatusText" style="text-align:center; color:var(--text-muted); font-size:13px; margin-top:15px;"> 
-                    Point the camera at a student's QR code. 
-                </p> 
-            </div> 
-
-            <div class="card-header" style="border:none; padding-top: 0;"> 
-                <h4 style="font-size: 12px;">Today's Scans</h4> 
-            </div> 
-            <div id="scanResultsList" style="display: flex; flex-direction: column;"></div> 
         </div> 
 
         <!-- ===== VIEW: Active Transport Monitoring ===== --> 
@@ -759,13 +796,6 @@
             document.getElementById('drawerOverlay').classList.remove('open'); 
         } 
         function switchView(viewId, btn) { 
-            // Stop the camera when leaving the scanner view, so it isn't
-            // left running (draining battery / holding the camera lock)
-            // in the background once the principal navigates elsewhere.
-            const scanView = document.getElementById('view-scan');
-            if (scanView && scanView.classList.contains('active') && viewId !== 'view-scan') {
-                stopScanner();
-            }
             if (viewId) { 
                 document.querySelectorAll('.view-section').forEach(v => v.classList.remove('active')); 
                 document.getElementById(viewId).classList.add('active'); 
@@ -1315,17 +1345,27 @@
         // qr_token, not their username) and POSTs it to
         // /api/principal/scan_attendance, which verifies the student
         // belongs to one of THIS principal's schools before marking them
-        // present/absent and notifying the linked parent.
+        // arriving/school-out and notifying the linked parent.
         // =====================================================================
         let html5QrScanner = null;
         let scanResultsCache = [];
         let scanCooldown = false;
 
+        function openScanOverlay() {
+            document.getElementById('scanFullscreenOverlay').classList.add('show');
+            startScanner();
+        }
+
+        function closeScanOverlay() {
+            document.getElementById('scanFullscreenOverlay').classList.remove('show');
+            stopScanner();
+        }
+
         function startScanner() {
             if (html5QrScanner) return; // already running
 
             html5QrScanner = new Html5Qrcode("qrScannerRegion");
-            const config = { fps: 10, qrbox: { width: 240, height: 240 } };
+            const config = { fps: 10, qrbox: { width: 260, height: 260 } };
 
             html5QrScanner.start(
                 { facingMode: "environment" },
@@ -1356,7 +1396,6 @@
             const status = document.getElementById('scanStatusSelect').value;
             const statusText = document.getElementById('scanStatusText');
             statusText.innerText = "Checking...";
-            statusText.style.color = "var(--text-muted)";
 
             try {
                 const res = await authFetch('/api/principal/scan_attendance', {
@@ -1367,7 +1406,6 @@
 
                 if (data.status === 'success') {
                     statusText.innerText = `✔ ${data.student_name} marked ${data.attendance_status.toLowerCase()}.`;
-                    statusText.style.color = "var(--success)";
 
                     scanResultsCache.unshift({
                         name: data.student_name,
@@ -1385,29 +1423,25 @@
                     } catch(e) {}
                 } else {
                     statusText.innerText = data.message || "Scan failed.";
-                    statusText.style.color = "var(--danger)";
                 }
             } catch (e) {
                 statusText.innerText = "Network error — scan not recorded.";
-                statusText.style.color = "var(--danger)";
             }
         }
 
         function renderScanResults() {
             const container = document.getElementById('scanResultsList');
             container.innerHTML = scanResultsCache.slice(0, 30).map(r => {
-                const color = r.status === 'PRESENT' ? 'var(--success)' : 'var(--danger)';
+                const color = r.status === 'ARRIVING' ? '#34d399' : '#fbbf24';
                 return `
-                <div class="reg-row">
-                    <div style="display:flex; justify-content:space-between; align-items:center; width:100%;">
-                        <b style="font-size:15px; color:var(--text-main);">${escapeHtml(r.name)}</b>
-                        <div style="text-align:right;">
-                            <span style="color:${color}; font-weight:800; font-size:11px;">${escapeHtml(r.status)}</span>
-                            <div style="font-size:10px; color:var(--text-muted);">${escapeHtml(r.time)}</div>
-                        </div>
+                <div class="scan-result-row">
+                    <b style="font-size:14px; color:white;">${escapeHtml(r.name)}</b>
+                    <div style="text-align:right;">
+                        <span style="color:${color}; font-weight:800; font-size:11px;">${escapeHtml(r.status)}</span>
+                        <div style="font-size:10px; color:rgba(255,255,255,0.6);">${escapeHtml(r.time)}</div>
                     </div>
                 </div>`;
-            }).join('') || '<p style="padding:25px; text-align:center; color:var(--text-muted); font-size: 14px;">No scans yet today.</p>';
+            }).join('') || '<p style="text-align:center; color:rgba(255,255,255,0.5); font-size: 12px; margin:0;">No scans yet today.</p>';
         }
 
         window.onload = () => { 
