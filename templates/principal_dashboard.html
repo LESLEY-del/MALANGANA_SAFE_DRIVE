@@ -386,11 +386,8 @@
             <button class="drawer-item" data-view="view-scan" onclick="closeDrawer(); openScanOverlay();"> 
                 <span class="ico">📷</span> Scan Attendance 
             </button> 
-            <button class="drawer-item" data-view="view-active" onclick="switchView('view-active', this)"> 
-                <span class="ico">🚐</span> Active Transport 
-            </button> 
             <button class="drawer-item" data-view="view-ledger" onclick="switchView('view-ledger', this)"> 
-                <span class="ico">🧾</span> Safety Ledger 
+                <span class="ico">🧾</span> Safety Ledger  
             </button> 
             
             <hr style="width: 100%; border: 0; border-top: 1px solid var(--border); margin: 10px 0;"> 
@@ -527,21 +524,6 @@
                     <span id="regCount" class="badge" style="background:var(--border); color:var(--text-main);">0 Registered</span> 
                 </div> 
                 <div id="studentListGrid" class="student-list"></div> 
-            </div> 
-        </div> 
-
-        <!-- ===== VIEW: Active Transport Monitoring ===== --> 
-        <div id="view-active" class="view-section"> 
-            <div class="card"> 
-                <div class="card-header"> 
-                    <h4>Active Transport Monitoring</h4> 
-                </div> 
-                <div id="activeTable" class="table-wrap"> 
-                    <table> 
-                        <thead><tr><th>Student Name</th><th>Driver</th><th>Current Phase</th></tr></thead> 
-                        <tbody id="activeBookingBody"></tbody> 
-                    </table> 
-                </div> 
             </div> 
         </div> 
 
@@ -1050,45 +1032,6 @@
                 } 
                 document.getElementById('studentListGrid').innerHTML = gridHtml || '<p style="padding:25px; text-align:center; color:var(--text-muted); font-size: 14px;">Registry empty.</p>'; 
 
-                // Active bookings 
-                const bRes = await authFetch('/api/get_all_school_bookings', { 
-                    method: 'POST', headers: { 'Content-Type': 'application/json' }, 
-                    body: JSON.stringify({ school_code: scCode }) 
-                }); 
-
-                let bookingData = { bookings: [] }; 
-                try { bookingData = await bRes.json(); } catch (e) {} 
-
-                document.getElementById('activeBookingBody').innerHTML = (bookingData.bookings || []) 
-                    .filter(b => b.tracking_status !== "Trip Completed") 
-                    .map(b => { 
-                        const currentStatus = b.tracking_status || b.status; 
-                        let badgeClass = "background: rgba(245, 158, 11, 0.1); color: #f59e0b; border: 1px solid #f59e0b;"; 
-
-                        if (currentStatus === "Accepted" || currentStatus === "APPROVED") { 
-                            badgeClass = "background: rgba(16, 185, 129, 0.1); color: #10b981; border: 1px solid #10b981;"; 
-                        } else if (currentStatus === "PICKED UP") { 
-                            badgeClass = "background: rgba(59, 130, 246, 0.1); color: #3b82f6; border: 1px solid #3b82f6; animation: blinker 1.5s infinite;"; 
-                        } else if (currentStatus === "Trip Completed" || currentStatus === "DROPPED OFF") { 
-                            badgeClass = "background: rgba(255, 255, 255, 0.1); color: var(--text-muted); border: 1px solid var(--border);"; 
-                        } 
-
-                        const st = cachedStudentData.find(student => student.username === b.student_username); 
-                        const sPhoto = (st && st.photo && st.photo !== "null" && st.photo !== "") 
-                            ? st.photo : `https://ui-avatars.com/api/?name=${encodeURIComponent(b.student_name)}&background=3498db&color=fff`; 
-
-                        return `<tr> 
-                                    <td> 
-                                        <div style="display:flex; align-items:center; gap:10px;"> 
-                                            <img src="${sPhoto}" style="width:34px; height:34px; border-radius:50%; object-fit:cover; border:2px solid var(--accent);"> 
-                                            <b style="font-size:13px; color: var(--text-main);">${escapeHtml(b.student_name)}</b> 
-                                        </div> 
-                                    </td> 
-                                    <td style="font-size:13px; color:var(--text-muted);">${escapeHtml(b.driver_name)}</td> 
-                                    <td><span class="badge" style="${badgeClass}">${currentStatus.toUpperCase()}</span></td> 
-                                </tr>`; 
-                    }).join('') || '<tr><td colspan="3" style="text-align:center; padding: 25px; color: var(--text-muted);">No active transports.</td></tr>'; 
-
                 allLogs = data.logs || []; 
                 if (!document.getElementById('logSearch').value) { renderLogs(allLogs); } 
                 if (currentRoomType) { syncSupportMessages(); } 
@@ -1358,12 +1301,9 @@
             html5QrScanner = new Html5Qrcode("qrScannerRegion");
             const config = {
                 fps: 10,
-                // 80% of the smaller screen dimension, recalculated live
-                // as html5-qrcode calls this each time the viewfinder mounts.
-                qrbox: (viewfinderWidth, viewfinderHeight) => {
-                    const size = Math.floor(Math.min(viewfinderWidth, viewfinderHeight) * 0.8);
-                    return { width: size, height: size };
-                }
+                // No qrbox constraint — html5-qrcode scans the full
+                // camera frame edge-to-edge instead of a smaller boxed
+                // region, so the scan area fills the whole screen.
             };
 
             html5QrScanner.start(
