@@ -280,13 +280,6 @@
             border-radius: 12px; padding: 12px 16px; font-size: 13px; font-weight: 700; outline: none;
         }
 
-        .scan-frame-guide {
-            position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
-            width: 260px; height: 260px; z-index: 2; pointer-events: none;
-            border: 3px solid rgba(255,255,255,0.7); border-radius: 20px;
-            box-shadow: 0 0 0 2000px rgba(0,0,0,0.35);
-        }
-
         .scan-hud-bottom {
             position: absolute; bottom: 0; left: 0; width: 100%; z-index: 2;
             padding: 20px 16px max(20px, env(safe-area-inset-bottom));
@@ -492,8 +485,6 @@
                 <option value="SCHOOL OUT">Mark SCHOOL OUT</option>
             </select>
         </div>
-
-        <div class="scan-frame-guide"></div>
 
         <div class="scan-hud-bottom">
             <p id="scanStatusText">Point the camera at a student's QR code.</p>
@@ -1365,10 +1356,18 @@
             if (html5QrScanner) return; // already running
 
             html5QrScanner = new Html5Qrcode("qrScannerRegion");
-            const config = { fps: 10, qrbox: { width: 260, height: 260 } };
+            const config = {
+                fps: 10,
+                // 80% of the smaller screen dimension, recalculated live
+                // as html5-qrcode calls this each time the viewfinder mounts.
+                qrbox: (viewfinderWidth, viewfinderHeight) => {
+                    const size = Math.floor(Math.min(viewfinderWidth, viewfinderHeight) * 0.8);
+                    return { width: size, height: size };
+                }
+            };
 
             html5QrScanner.start(
-                { facingMode: "environment" },
+                { facingMode: "user" },
                 config,
                 onQrScanSuccess,
                 () => { /* per-frame scan failures are normal, ignore */ }
