@@ -141,7 +141,7 @@ def send_mail(to_email, subject, body_content, subtitle="Security Notification")
     full_html_body = generate_email_wrapper(body_content, subtitle=subtitle)
     try:
         params = {
-            "from": "Safe Drive <onboarding@resend.dev>",
+            "from": "Safe Drive <noreply@yourdomain.com>",
             "to": [to_email],
             "subject": subject,
             "html": full_html_body,
