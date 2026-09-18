@@ -301,6 +301,106 @@ def admin_get_users():
         print(f"Admin users fetch error: {e}")
         return jsonify({'status': 'error', 'message': str(e)}), 500
 
+
+
+@app.route('/api/gps/ingest', methods=['POST', 'OPTIONS'])
+def gps_ingest():
+    """
+    Receives forwarded position updates from Traccar. Not behind
+    @require_auth — Traccar isn't logging in as one of your app users —
+    so this MUST stay locked down some other way before going to a real
+    host. For now, add a shared-secret check (see TRACCAR_INGEST_SECRET
+    below) so random internet traffic can't inject fake locations.
+    """
+    if request.method == 'OPTIONS':
+        return jsonify({'status': 'ok'}), 200
+    try:
+        # Simple shared-secret check — set TRACCAR_INGEST_SECRET in your
+        # environment, and configure the same value in Traccar's
+        # forwarding URL as a query param: ?secret=YOUR_SECRET
+        expected_secret = os.getenv("TRACCAR_INGEST_SECRET")
+        if expected_secret and request.args.get('secret') != expected_secret:
+            return jsonify({'status': 'error', 'message': 'Unauthorized'}), 401
+ 
+        data = request.json or {}
+ 
+        # Traccar's forwarded payload commonly nests device info under
+        # "device" and position fields at the top level — adjust these
+        # lookups once you see a real payload from your setup.
+        device_id = str(data.get('deviceId') or (data.get('device') or {}).get('id') or '').strip()
+        unique_id = str((data.get('device') or {}).get('uniqueId') or data.get('uniqueId') or '').strip()
+        lat = data.get('latitude') or data.get('lat')
+        lng = data.get('longitude') or data.get('lon') or data.get('lng')
+        speed = data.get('speed')
+ 
+        lookup_id = unique_id or device_id
+        if not lookup_id or lat is None or lng is None:
+            return jsonify({'status': 'error', 'message': 'Missing device or position data'}), 400
+ 
+        student_res = get_db().table("users").select("username").eq("tracker_device_id", lookup_id).eq("role", "student").execute()
+        if not student_res.data:
+            # Unknown tracker — not an error worth alarming Traccar about,
+            # just nothing to update on our side yet.
+            return jsonify({'status': 'ignored', 'message': 'No student linked to this tracker'}), 200
+ 
+        student_u = student_res.data[0]['username']
+        now = current_sa_time()
+ 
+        get_db().table("device_locations").upsert({
+            "student_username": student_u,
+            "tracker_device_id": lookup_id,
+            "latitude": float(lat),
+            "longitude": float(lng),
+            "speed": speed,
+            "updated_at": now
+        }).execute()
+ 
+        # Push live to any linked parent, if the Socket.IO layer is set up.
+        if 'emit_to_user' in globals():
+            parent_rooms = get_db().table("parent_principal_rooms").select("parent_username").eq("child_username", student_u).execute()
+            for room in (parent_rooms.data or []):
+                p_u = room.get("parent_username")
+                if p_u:
+                    emit_to_user(p_u, 'location_update', {
+                        'student_username': student_u,
+                        'latitude': float(lat),
+                        'longitude': float(lng),
+                        'updated_at': now
+                    })
+ 
+        return jsonify({'status': 'success'}), 200
+    except Exception as e:
+        print(f"[GPS INGEST ERROR]: {e}")
+        return jsonify({'status': 'error', 'message': str(e)}), 500
+ 
+ 
+@app.route('/api/parent/get_child_location', methods=['POST', 'OPTIONS'])
+@require_auth
+@require_role('general')
+def get_child_location():
+    """
+    Parent-facing fetch of a monitored child's last known position.
+    Same ownership check pattern as the rest of the parent endpoints —
+    only returns data for a child this parent actually monitors.
+    """
+    if request.method == 'OPTIONS':
+        return jsonify({'status': 'ok'}), 200
+    try:
+        data = request.json or {}
+        child_u = str(data.get('child_username', '')).strip()
+ 
+        link_check = get_db().table("parent_principal_rooms").select("child_username").eq("parent_username", g.current_user).eq("child_username", child_u).execute()
+        if not link_check.data:
+            return jsonify({'status': 'error', 'message': 'Not authorized for this child'}), 403
+ 
+        loc_res = get_db().table("device_locations").select("*").eq("student_username", child_u).execute()
+        if not loc_res.data:
+            return jsonify({'status': 'success', 'location': None}), 200
+ 
+        return jsonify({'status': 'success', 'location': loc_res.data[0]}), 200
+    except Exception as e:
+        return jsonify({'status': 'error', 'message': str(e)}), 500
+
 @app.route('/api/admin/reject_license', methods=['POST', 'OPTIONS'])
 @require_auth
 @require_role('admin')
