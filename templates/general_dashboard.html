@@ -8,6 +8,8 @@
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet"> 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script> 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.23/jspdf.plugin.autotable.min.js"></script> 
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
 
     <!-- PREVENTS THEME FLASHING ON LOAD -->
     <script>
@@ -228,6 +230,9 @@
             <button class="drawer-item" data-view="view-monitored" onclick="switchView('view-monitored', this)">
                 <span class="ico">🛡️</span> Monitored Children
             </button>
+            <button class="drawer-item" data-view="view-map" onclick="switchView('view-map', this); initMap();">
+                <span class="ico">🗺️</span> Track Child
+            </button>
             <button class="drawer-item" data-view="view-find-d2d" onclick="switchView('view-find-d2d', this)">
                 <span class="ico">🚐</span> Find D2D Driver
             </button>
@@ -404,6 +409,20 @@
                     <button id="addMonitorTriggerBtn" class="btn btn-primary" style="padding: 16px;" onclick="showGate()">+ ADD CHILD TO MONITOR</button>
                 </div>
             </div> 
+        </div>
+
+        <!-- ===== VIEW: TRACK CHILD (LIVE MAP) ===== -->
+        <div id="view-map" class="view-section">
+            <div class="card-header" style="border:none;">
+                <h3 style="font-size: 14px; color: var(--text-main);">Track Child</h3>
+            </div>
+            <div style="padding: 15px 20px;">
+                <select id="mapChildSelect" onchange="onMapChildChange()" style="margin-bottom: 15px;"></select>
+            </div>
+            <div id="mapContainer" style="width: 100%; height: 50vh; background: var(--input-bg);"></div>
+            <div style="padding: 15px 20px; text-align: center;">
+                <p id="mapStatusText" style="color: var(--text-muted); font-size: 13px; margin: 0;">Select a child to view their live location.</p>
+            </div>
         </div>
 
         <!-- ===== VIEW: FIND D2D DRIVERS ===== -->
@@ -1643,6 +1662,108 @@
             // Purposely removed indexedDB.deleteDatabase so local monitored children save cross-sessions!
             window.location.replace("login.html"); 
         } 
+
+        // =====================================================================
+        // TRACK CHILD (LIVE MAP)
+        //
+        // Backed by /api/parent/get_child_location, which reads the
+        // student's last known position from device_locations — a table
+        // fed by Traccar forwarding each tracker's raw GPS updates to
+        // /api/gps/ingest on the backend. This dashboard never talks to
+        // the tracker or Traccar directly; it just polls this parent-
+        // facing endpoint (and, if the Socket.IO real-time layer is set
+        // up, gets pushed 'location_update' events for instant refresh
+        // instead of waiting for the next poll).
+        // =====================================================================
+        let leafletMapInstance = null;
+        let leafletMarker = null;
+        let mapPollInterval = null;
+        let currentMapChild = null;
+
+        function initMap() {
+            // Populate the child selector from the same monitored-children
+            // cache the rest of the dashboard already uses.
+            const select = document.getElementById('mapChildSelect');
+            const previousValue = select.value;
+            select.innerHTML = vaultChildrenCache.map(c => `<option value="${escapeHtml(c.username)}">${escapeHtml(c.name)}</option>`).join('');
+
+            if (vaultChildrenCache.length === 0) {
+                document.getElementById('mapStatusText').innerText = "No monitored children yet — add one first.";
+                return;
+            }
+
+            if (previousValue && vaultChildrenCache.some(c => c.username === previousValue)) {
+                select.value = previousValue;
+            }
+            currentMapChild = select.value;
+
+            if (!leafletMapInstance) {
+                leafletMapInstance = L.map('mapContainer').setView([0, 0], 2);
+                L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                    attribution: '&copy; OpenStreetMap contributors',
+                    maxZoom: 19
+                }).addTo(leafletMapInstance);
+                // Leaflet needs a nudge to size correctly once its
+                // container becomes visible (it was display:none until
+                // this view was switched to).
+                setTimeout(() => leafletMapInstance.invalidateSize(), 200);
+            } else {
+                setTimeout(() => leafletMapInstance.invalidateSize(), 100);
+            }
+
+            refreshChildLocation();
+
+            if (mapPollInterval) clearInterval(mapPollInterval);
+            mapPollInterval = setInterval(refreshChildLocation, 15000);
+        }
+
+        function onMapChildChange() {
+            currentMapChild = document.getElementById('mapChildSelect').value;
+            refreshChildLocation();
+        }
+
+        async function refreshChildLocation() {
+            if (!currentMapChild) return;
+            try {
+                const res = await authFetch('/api/parent/get_child_location', {
+                    method: 'POST', headers: {'Content-Type':'application/json'},
+                    body: JSON.stringify({ child_username: currentMapChild })
+                });
+                const data = await res.json();
+
+                if (data.status !== 'success' || !data.location) {
+                    document.getElementById('mapStatusText').innerText = "No location data yet for this child's tracker.";
+                    return;
+                }
+
+                const loc = data.location;
+                const latLng = [loc.latitude, loc.longitude];
+
+                if (leafletMarker) {
+                    leafletMarker.setLatLng(latLng);
+                } else {
+                    leafletMarker = L.marker(latLng).addTo(leafletMapInstance);
+                }
+                leafletMapInstance.setView(latLng, 16);
+
+                const updatedTime = new Date(loc.updated_at).toLocaleTimeString();
+                document.getElementById('mapStatusText').innerText = `Last updated: ${updatedTime}`;
+            } catch (e) {
+                console.error("Location fetch failed:", e);
+            }
+        }
+
+        // If a Socket.IO connection exists on this dashboard, live
+        // location pushes refresh the map instantly instead of waiting
+        // for the next 15s poll. Safe to leave in even before Socket.IO
+        // is wired up here — it simply never fires until `socket` exists.
+        if (typeof socket !== 'undefined' && socket) {
+            socket.on('location_update', (payload) => {
+                if (payload && payload.student_username === currentMapChild) {
+                    refreshChildLocation();
+                }
+            });
+        }
         
         window.onload = () => { 
             initDashboard(); 
