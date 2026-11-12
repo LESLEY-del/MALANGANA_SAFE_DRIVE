@@ -1,417 +1,650 @@
-import os
-import cv2
-import numpy as np
-import base64
-import random
-import datetime
-import string
-import time
-import bcrypt
-import threading
-from flask import Flask, request, jsonify, send_from_directory, g
+import os, re, math, time, base64, secrets, threading, html as htmllib
+import bcrypt, resend
+from datetime import datetime, timedelta
+from zoneinfo import ZoneInfo
+from flask import Flask, request, jsonify, g, render_template, abort
 from flask_cors import CORS
 from supabase import create_client, Client, ClientOptions
 from httpx import Timeout
 from dotenv import load_dotenv
-from email.message import EmailMessage
-from zoneinfo import ZoneInfo
-from datetime import datetime, timedelta
-from flask import render_template
 from auth import issue_token, require_auth, require_role
-import resend
 
-print("BACKEND STARTED")
 load_dotenv()
-
 try:
     from waitress import serve
 except ImportError:
-    print("CRITICAL ENGINE ERROR: Waitress is not installed. Please run 'pip install waitress' in your terminal setup.")
-    exit(1)
+    print("Install waitress: pip install waitress"); raise SystemExit(1)
 
 app = Flask(__name__)
+app.config['MAX_CONTENT_LENGTH'] = 10 * 1024 * 1024
 SA_TIMEZONE = ZoneInfo("Africa/Johannesburg")
 
-def current_sa_time():
-    return (
-        datetime.now(SA_TIMEZONE)
-        .replace(microsecond=0)
-        .isoformat(timespec="seconds")
-    )
+ALLOWED_ORIGINS = ["http://localhost:8000", "http://127.0.0.1:8000"] + \
+    [o for o in os.getenv("EXTRA_ORIGINS", "").split(",") if o]
+CORS(app, resources={r"/api/*": {"origins": ALLOWED_ORIGINS}})
 
-def _is_expired(expires_at_str):
-    """True if expires_at (an ISO timestamp string) is in the past."""
-    if not expires_at_str:
-        return False
-    try:
-        return datetime.fromisoformat(expires_at_str) < datetime.now(SA_TIMEZONE)
-    except Exception:
-        return False
+SUPABASE_URL = os.getenv("SUPABASE_URL")
+SUPABASE_KEY = os.getenv("SUPABASE_SERVICE_KEY")
+resend.api_key = os.environ.get("RESEND_API_KEY")
+MAIL_FROM = os.getenv("MAIL_FROM", "Safe Drive <noreply@yourdomain.com>")
+BUCKET = "profile pictures"
+thread_local = threading.local()
+
+def get_db() -> Client:
+    if not hasattr(thread_local, "sb"):
+        opts = ClientOptions(postgrest_client_timeout=Timeout(30.0, connect=30.0, read=60.0, write=30.0), schema="public")
+        thread_local.sb = create_client(SUPABASE_URL, SUPABASE_KEY, options=opts)
+    return thread_local.sb
+
+# ---------------- helpers ----------------
+def current_sa_time():
+    return datetime.now(SA_TIMEZONE).replace(microsecond=0).isoformat(timespec="seconds")
 
 def _expiry(minutes=15):
     return (datetime.now(SA_TIMEZONE) + timedelta(minutes=minutes)).isoformat()
 
-@app.route('/')
-def home():
-    return render_template('index.html')
+def _is_expired(s):
+    if not s: return False
+    try: return datetime.fromisoformat(s) < datetime.now(SA_TIMEZONE)
+    except Exception: return False
 
-@app.before_request
-def log_requests():
-    print("REQUEST:", request.method, request.path)
+def _h(s): return htmllib.escape(str(s or ''))
 
-ALLOWED_ORIGINS = [
-    "http://localhost:8000",
-    "http://127.0.0.1:8000",
-]
+def _clean(q):  # safe for PostgREST .or_() filters
+    return re.sub(r'[^\w\s\-\.]', '', q or '').strip()[:60]
 
-CORS(app, resources={r"/api/*": {"origins": ALLOWED_ORIGINS}})
+def _name_key(s): return re.sub(r'\s+', ' ', (s or '').strip().lower())
 
-UPLOAD_FOLDER = os.path.join(os.getcwd(), 'uploads')
-os.makedirs(UPLOAD_FOLDER, exist_ok=True)
-app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
+_attempts = {}
+def _too_many(key, limit=5, window=900):
+    now = time.time()
+    lst = [t for t in _attempts.get(key, []) if now - t < window]
+    if len(lst) >= limit:
+        _attempts[key] = lst; return True
+    lst.append(now); _attempts[key] = lst; return False
 
-face_cascade = cv2.CascadeClassifier('haarcascade_frontalface_default.xml')
-SUPABASE_URL = os.getenv("SUPABASE_URL")
-SUPABASE_KEY = os.getenv("SUPABASE_SERVICE_KEY")
+def _haversine(a, b, c, d):
+    R = 6371000; p1, p2 = math.radians(a), math.radians(c)
+    x = math.sin((p2 - p1) / 2) ** 2 + math.cos(p1) * math.cos(p2) * math.sin(math.radians(d - b) / 2) ** 2
+    return 2 * R * math.asin(math.sqrt(x))
 
-thread_local = threading.local()
+def _upload_bytes(data, name, ctype="image/jpeg"):
+    get_db().storage.from_(BUCKET).upload(path=name, file=data, file_options={"content-type": ctype})
+    return get_db().storage.from_(BUCKET).get_public_url(name)
 
-def get_db() -> Client:
-    if not hasattr(thread_local, "supabase_client"):
-        opts = ClientOptions(
-            postgrest_client_timeout=Timeout(30.0, connect=30.0, read=60.0, write=30.0),
-            schema="public"
-        )
-        thread_local.supabase_client = create_client(
-            SUPABASE_URL, SUPABASE_KEY, options=opts
-        )
-    return thread_local.supabase_client
+def _upload_data_url(data_url, prefix):
+    if not data_url: return None
+    raw = data_url.split(',', 1)[1] if ',' in data_url else data_url
+    return _upload_bytes(base64.b64decode(raw), f"{prefix}_{int(time.time())}_{secrets.token_hex(4)}.jpg")
 
-def check_face_proximity(image_path):
-    img = cv2.imread(image_path)
-    if img is None:
-        return False, "Biometric Stream Read Error: Camera data structure unreadable."
+def _remove_file(url):
+    if url and 'supabase.co' in url:
+        try: get_db().storage.from_(BUCKET).remove([url.split('/')[-1]])
+        except Exception as e: print("cleanup:", e)
 
-    gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-    faces = face_cascade.detectMultiScale(gray, 1.1, 4)
-
-    if len(faces) == 0:
-        return False, "Biometric Match Failure: No human face detected in frame. Adjust alignment and lighting."
-
-    (x, y, w, h) = sorted(faces, key=lambda f: f[2] * f[3], reverse=True)[0]
-    face_area = w * h
-    total_area = img.shape[0] * img.shape[1]
-
-    if (face_area / total_area) < 0.20:
-        return False, "Security Boundary Warning: Face detected too far from lens. Move closer to device."
-
-    return True, "Biometric Pass Secured"
-
-SENDER_EMAIL = os.getenv("SENDER_EMAIL")
-SENDER_PASSWORD = os.getenv("SENDER_PASSWORD")
-resend.api_key = os.environ.get("RESEND_API_KEY")
-
+# ---------------- email ----------------
 def generate_email_wrapper(content, subtitle="Security Notification"):
     return f"""
-    <div style="background-color: #010409; padding: 50px 20px; font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;">
-        <div style="max-width: 650px; margin: auto; background: #0d1117; border-radius: 20px; overflow: hidden; box-shadow: 0 20px 50px rgba(0,0,0,0.5); border: 1px solid #30363d;">
-            <div style="background: linear-gradient(135deg, #020218 0%, #0a0a2e 100%); padding: 45px; text-align: center; border-bottom: 3px solid #10b981;">
-                <h1 style="margin: 0; color: #ffffff; font-size: 32px; letter-spacing: 6px; font-weight: 900; text-shadow: 0 2px 4px rgba(16,185,129,0.3);">SAFE <span style="color: #10b981;">DRIVE</span></h1>
-                <p style="margin: 10px 0 0; color: #10b981; font-size: 11px; text-transform: uppercase; letter-spacing: 3px; font-weight: 600;">{subtitle}</p>
-            </div>
-            <div style="padding: 50px 45px; color: #c9d1d9; line-height: 1.8; font-size: 16px;">
-                <h2 style="color: #ffffff; margin-top: 0; margin-bottom: 25px; font-size: 22px; border-bottom: 1px solid #30363d; padding-bottom: 10px;">Official Authorization Required</h2>
-                {content}
-                <div style="margin-top: 50px; padding-top: 25px; border-top: 1px solid #30363d; font-size: 13px; color: #8b949e; line-height: 1.6;">
-                    <p style="color: #e6edf3; font-weight: bold; margin-bottom: 5px;">Why did I receive this email?</p>
-                    <p style="margin-top: 0;">This is an automated, highly secure communication from the Safe Drive AI Network.</p>
-                    <p style="color: #e6edf3; font-weight: bold; margin-bottom: 5px; margin-top: 20px;">Need further assistance?</p>
-                    <p style="margin-top: 0;">Contact our administrative security team at:<br>
-                    <a href="mailto:safedrive@gmail.com" style="color: #10b981; text-decoration: none; font-weight: bold; font-size: 15px;">safedrive@gmail.com</a></p>
-                </div>
-            </div>
-            <div style="background: #161b22; padding: 30px; text-align: center; color: #8b949e; font-size: 12px; border-top: 1px solid #30363d;">
-                <p style="margin: 0; font-weight: 700; letter-spacing: 1px;">© 2026 SAFE DRIVE LOGISTICS & SECURITY</p>
-            </div>
-        </div>
-    </div>
-    """
+    <div style="background:#010409;padding:40px 16px;font-family:Segoe UI,Roboto,Arial,sans-serif">
+      <div style="max-width:620px;margin:auto;background:#0d1117;border-radius:18px;overflow:hidden;border:1px solid #30363d">
+        <div style="background:#020218;padding:34px;text-align:center;border-bottom:3px solid #10b981">
+          <h1 style="margin:0;color:#fff;font-size:28px;letter-spacing:5px">SAFE <span style="color:#10b981">DRIVE</span></h1>
+          <p style="margin:8px 0 0;color:#10b981;font-size:11px;letter-spacing:3px">{_h(subtitle)}</p></div>
+        <div style="padding:36px;color:#c9d1d9;line-height:1.7;font-size:16px">{content}
+          <p style="margin-top:36px;padding-top:18px;border-top:1px solid #30363d;font-size:12px;color:#8b949e">
+          Automated message from Safe Drive. Questions: safedrive@gmail.com</p></div>
+        <div style="background:#161b22;padding:18px;text-align:center;color:#8b949e;font-size:12px">© 2026 SAFE DRIVE</div>
+      </div></div>"""
 
 def send_mail(to_email, subject, body_content, subtitle="Security Notification"):
-    full_html_body = generate_email_wrapper(body_content, subtitle=subtitle)
+    if not to_email: return False
     try:
-        params = {
-            "from": "Safe Drive <noreply@yourdomain.com>",
-            "to": [to_email],
-            "subject": subject,
-            "html": full_html_body,
-        }
-        response = resend.Emails.send(params)
-        print(f"✅ Email successfully sent to {to_email}")
+        resend.Emails.send({"from": MAIL_FROM, "to": [to_email], "subject": subject,
+                            "html": generate_email_wrapper(body_content, subtitle)})
         return True
     except Exception as e:
-        print(f"❌ [RESEND API FAILURE] Error: {e}")
-        return False
+        print("[EMAIL FAIL]", e); return False
 
-# =====================================================================
-# OPEN ROUTES
-# =====================================================================
+def notify_parent(parent_u, subject, text_html, photo_url=None):
+    try:
+        r = get_db().table("users").select("email").eq("username", parent_u).execute()
+        if not r.data: return
+        img = f'<p><img src="{_h(photo_url)}" style="max-width:100%;border-radius:12px"></p>' if photo_url else ''
+        threading.Thread(target=send_mail, args=(r.data[0]['email'], subject, f"<p style='font-size:18px'>{text_html}</p>{img}", "Child Alert")).start()
+    except Exception as e: print("notify_parent:", e)
 
-@app.route('/moderator_signup')
-@app.route('/moderatore_signup.html')
-def moderator_signup_page():
-    return render_template('moderatore_signup.html')
+def send_whatsapp(group_id, text):
+    # TODO: connect WhatsApp Cloud API / Twilio. Needs a business number + approved template.
+    print("[WHATSAPP STUB]", group_id, text)
 
-@app.route('/general_signup')
-@app.route('/general_signup.html')
-def general_signup_page():
-    return render_template('general_signup.html')
+# ---------------- pages ----------------
+PAGES = {'index', 'login', 'signup', 'terms', 'privacy', 'reset_password',
+         'parent_dashboard', 'station_dashboard', 'admin_dashboard'}
 
-@app.route('/signup')
-@app.route('/signup.html')
-def signup_page():
-    return render_template('signup.html')
+@app.route('/')
+def home(): return render_template('index.html')
 
-@app.route('/student_signup')
-@app.route('/student_signup.html')
-def student_signup_page():
-    return render_template('student_signup.html')
+@app.route('/<page>.html')
+@app.route('/<page>')
+def pages(page):
+    if page not in PAGES: abort(404)
+    return render_template(f'{page}.html')
 
-@app.route('/driver_signup')
-@app.route('/driver_signup.html')
-def driver_signup_page():
-    return render_template('driver_signup.html')
-
-@app.route('/principal_signup')
-@app.route('/principal_signup.html')
-def principal_signup_page():
-    return render_template('principal_signup.html')
-
-@app.route('/terms')
-@app.route('/terms.html')
-def terms_page():
-    return render_template('terms.html')
-
-@app.route('/privacy')
-@app.route('/privacy.html')
-def privacy_page():
-    return render_template('privacy.html')
-
-@app.route('/student_dashboard.html')
-def student_dashboard():
-    return render_template('student_dashboard.html')
-
-@app.route('/admin_dashboard.html')
-def admin_dashboard():
-    return render_template('admin_dashboard.html')
-
-@app.route('/driver_dashboard.html')
-def driver_dashboard():
-    return render_template('driver_dashboard.html')
-
-@app.route('/principal_dashboard.html')
-def principal_dashboard():
-    return render_template('principal_dashboard.html')
-
-@app.route('/moderator_dashboard.html')
-def moderator_dashboard():
-    return render_template('moderator_dashboard.html')
-
-@app.route('/general_dashboard.html')
-def general_dashboard():
-    return render_template('general_dashboard.html')
-
-@app.route('/login')
-@app.route('/login.html')
-def login_page():
-    return render_template('login.html')
-
-@app.route('/choice')
-@app.route('/choice.html')
-def choice_page():
-    return render_template('choice.html')
-
+# ---------------- availability ----------------
 @app.route('/api/check_availability', methods=['POST', 'OPTIONS'])
 def check_availability():
-    if request.method == 'OPTIONS':
-        return jsonify({'status': 'ok'}), 200
+    if request.method == 'OPTIONS': return jsonify({'status': 'ok'}), 200
     try:
-        data = request.json or {}
-        username = data.get('username', '').strip().lower()
-        number_plate = data.get('number_plate', '').strip().upper()
-
-        result = {'status': 'success'}
-
-        if username:
-            res = get_db().table("users").select("username").eq("username", username).execute()
-            result['username_taken'] = bool(res.data)
-
-        if number_plate:
-            res = get_db().table("users").select("number_plate").eq("number_plate", number_plate).execute()
-            result['plate_taken'] = bool(res.data)
-
-        return jsonify(result), 200
+        u = (request.json or {}).get('username', '').strip().lower()
+        taken = False
+        if u:
+            taken = bool(get_db().table("users").select("username").eq("username", u).execute().data) or \
+                    bool(get_db().table("admins").select("username").eq("username", u).execute().data)
+        return jsonify({'status': 'success', 'username_taken': taken})
     except Exception as e:
         return jsonify({'status': 'error', 'message': str(e)}), 500
 
-@app.route('/api/admin/users', methods=['GET', 'OPTIONS'])
+# ---------------- login ----------------
+@app.route('/api/login', methods=['POST', 'OPTIONS'])
+def login():
+    if request.method == 'OPTIONS': return jsonify({'status': 'ok'}), 200
+    try:
+        d = request.json or {}
+        u = d.get('username', '').lower().strip(); p = d.get('password', '')
+        if _too_many('l:' + u, limit=10):
+            return jsonify({'status': 'error', 'msg': 'Too many attempts. Try again in 15 minutes.'}), 429
+        user = None; table = "users"
+        r = get_db().table("users").select("*").eq("username", u).execute()
+        if r.data: user = r.data[0]
+        else:
+            a = get_db().table("admins").select("*").eq("username", u).execute()
+            if a.data: user, table = a.data[0], "admins"
+        if not user:
+            return jsonify({'status': 'error', 'msg': 'Wrong username or password.'}), 401
+        stored = user.get('password', '') or ''
+        ok = False
+        try:
+            ok = bcrypt.checkpw(p.encode(), stored.encode())
+        except ValueError:   # legacy plain-text password: accept once, then hash it
+            if stored == p:
+                ok = True
+                get_db().table(table).update({"password": bcrypt.hashpw(p.encode(), bcrypt.gensalt()).decode()}).eq("username", u).execute()
+        if not ok:
+            return jsonify({'status': 'error', 'msg': 'Wrong username or password.'}), 401
+        role = user.get('role') or ('admin' if table == "admins" else None)
+        return jsonify({'status': 'success', 'token': issue_token(username=u, role=role), 'role': role,
+                        'name': user.get('name') or u, 'username': u,
+                        'school_code': (user.get('school_code') or '').upper() or None})
+    except Exception as e:
+        return jsonify({'status': 'error', 'msg': f'Login failed: {e}'}), 500
+
+# ---------------- signup (parent / school station) ----------------
+@app.route('/api/<role>/signup', methods=['POST', 'OPTIONS'])
+def signup(role):
+    if request.method == 'OPTIONS': return jsonify({'status': 'ok'}), 200
+    if role not in ('general', 'principal'): abort(404)   # never allow admin signup
+    try:
+        d = request.json or {}
+        u = d.get('username', '').lower().strip()
+        email = d.get('email', '').strip()
+        pw = d.get('password', '')
+        if not d.get('terms_accepted'):
+            return jsonify({'status': 'error', 'message': 'You must accept the Terms and Privacy Policy.'}), 400
+        if not re.fullmatch(r'[a-z0-9_.\-]{3,30}', u):
+            return jsonify({'status': 'error', 'message': 'Username: 3-30 letters, numbers, dot, dash or underscore.'}), 400
+        if not re.fullmatch(r'[^@\s]+@[^@\s]+\.[^@\s]+', email):
+            return jsonify({'status': 'error', 'message': 'Enter a valid email address.'}), 400
+        if len(pw) < 8:
+            return jsonify({'status': 'error', 'message': 'Password needs at least 8 characters.'}), 400
+        if get_db().table("users").select("username").eq("username", u).execute().data or \
+           get_db().table("admins").select("username").eq("username", u).execute().data:
+            return jsonify({'status': 'error', 'message': 'Username already registered.'}), 400
+
+        payload = {"name": d.get('name', '').strip(), "email": email, "role": role,
+                   "password": bcrypt.hashpw(pw.encode(), bcrypt.gensalt()).decode(),
+                   "terms_accepted_at": current_sa_time(), "terms_version": "2026-11"}
+        if role == 'principal':
+            sc = re.sub(r'\s+', '', str(d.get('school_code', ''))).upper()
+            sn = d.get('school_name', '').strip()
+            if not re.fullmatch(r'[A-Z0-9\-]{3,20}', sc) or not sn:
+                return jsonify({'status': 'error', 'message': 'Add the school name and a code (3-20 letters or numbers).'}), 400
+            if get_db().table("schools").select("school_code").eq("school_code", sc).execute().data:
+                return jsonify({'status': 'error', 'message': 'That school code is already taken.'}), 400
+            payload.update({"school_code": sc, "school_name": sn})
+
+        otp = str(secrets.randbelow(9000) + 1000)
+        get_db().table("pending_signups").upsert({"username": u, "payload": payload, "v_code": otp,
+            "created_at": current_sa_time(), "expires_at": _expiry()}).execute()
+        body = f"""<p>Your verification code:</p><div style="background:#161b22;padding:22px;border-radius:10px;border-left:4px solid #10b981;text-align:center">
+                   <h2 style="margin:0;font-size:32px;color:#10b981;letter-spacing:8px">{otp}</h2></div><p>It expires in 15 minutes.</p>"""
+        threading.Thread(target=send_mail, args=(email, "Safe Drive verification code", body, "Account Verification")).start()
+        return jsonify({'status': 'pending', 'username': u})
+    except Exception as e:
+        return jsonify({'status': 'error', 'message': str(e)}), 500
+
+@app.route('/api/verify-and-save', methods=['POST', 'OPTIONS'])
+def verify_and_save():
+    if request.method == 'OPTIONS': return jsonify({'status': 'ok'}), 200
+    try:
+        d = request.get_json(silent=True) or {}
+        u = str(d.get('username', '')).lower().strip(); code = str(d.get('code', '')).strip()
+        if not u or not code: return jsonify({'status': 'error', 'message': 'Missing data'}), 400
+        if _too_many('v:' + u):
+            return jsonify({'status': 'error', 'message': 'Too many tries. Sign up again later.'}), 429
+        r = get_db().table("pending_signups").select("*").eq("username", u).execute()
+        if not r.data: return jsonify({'status': 'error', 'message': 'Session expired'}), 400
+        row = r.data[0]
+        if _is_expired(row.get('expires_at')):
+            get_db().table("pending_signups").delete().eq("username", u).execute()
+            return jsonify({'status': 'error', 'message': 'Session expired'}), 400
+        if not secrets.compare_digest(str(row.get('v_code', '')), code):
+            return jsonify({'status': 'error', 'message': 'Invalid code'}), 400
+        p = row.get('payload') or {}
+        get_db().table("users").insert({"username": u, "password": p.get('password'), "name": p.get('name'),
+            "email": p.get('email'), "role": p.get('role'), "school_code": p.get('school_code'),
+            "terms_accepted_at": p.get('terms_accepted_at'), "terms_version": p.get('terms_version')}).execute()
+        if p.get('role') == 'principal':
+            try:
+                get_db().table("schools").insert({"school_code": p['school_code'], "school_name": p['school_name'],
+                                                  "principal_username": u}).execute()
+            except Exception as e:
+                get_db().table("users").delete().eq("username", u).execute()
+                return jsonify({'status': 'error', 'message': 'That school code was just taken. Sign up again.'}), 400
+        get_db().table("pending_signups").delete().eq("username", u).execute()
+        return jsonify({'status': 'success'})
+    except Exception as e:
+        print("verify error:", e)
+        return jsonify({'status': 'error', 'message': 'Server error'}), 500
+
+# ---------------- password reset ----------------
+@app.route('/api/forgot-password', methods=['POST', 'OPTIONS'])
+def forgot_password():
+    if request.method == 'OPTIONS': return jsonify({'status': 'ok'}), 200
+    try:
+        u = (request.json or {}).get('username', '').lower().strip()
+        r = get_db().table("users").select("email").eq("username", u).execute()
+        if not r.data: return jsonify({'status': 'error', 'message': 'Username not found.'}), 404
+        otp = str(secrets.randbelow(900000) + 100000)
+        get_db().table("password_reset_codes").upsert({"username": u, "code": otp,
+            "created_at": current_sa_time(), "expires_at": _expiry()}).execute()
+        body = f"""<p>Password reset for <b>{_h(u)}</b>.</p><div style="background:#161b22;padding:22px;border-radius:10px;border-left:4px solid #f59e0b;text-align:center">
+                   <h2 style="margin:0;font-size:32px;color:#f59e0b;letter-spacing:8px">{otp}</h2></div>"""
+        threading.Thread(target=send_mail, args=(r.data[0]['email'], "Password reset code", body, "Account Recovery")).start()
+        return jsonify({'status': 'success', 'message': 'Code sent to registered email.'})
+    except Exception as e:
+        return jsonify({'status': 'error', 'msg': str(e)}), 500
+
+@app.route('/api/reset-password', methods=['POST', 'OPTIONS'])
+def reset_password():
+    if request.method == 'OPTIONS': return jsonify({'status': 'ok'}), 200
+    try:
+        d = request.json or {}
+        u = d.get('username', '').lower().strip(); code = str(d.get('code', '')).strip(); new = d.get('newPassword', '')
+        if _too_many('r:' + u): return jsonify({'status': 'error', 'message': 'Too many tries. Try later.'}), 429
+        if len(new) < 8: return jsonify({'status': 'error', 'message': 'Password needs at least 8 characters.'}), 400
+        r = get_db().table("password_reset_codes").select("*").eq("username", u).execute()
+        row = r.data[0] if r.data else None
+        if row and secrets.compare_digest(str(row.get('code', '')), code) and not _is_expired(row.get('expires_at')):
+            get_db().table("users").update({"password": bcrypt.hashpw(new.encode(), bcrypt.gensalt()).decode()}).eq("username", u).execute()
+            get_db().table("password_reset_codes").delete().eq("username", u).execute()
+            return jsonify({'status': 'success'})
+        return jsonify({'status': 'error', 'message': 'Invalid or expired code.'}), 400
+    except Exception as e:
+        return jsonify({'status': 'error', 'msg': str(e)}), 500
+
+# ---------------- profile ----------------
+@app.route('/api/profile/get_self', methods=['POST', 'OPTIONS'])
 @require_auth
-@require_role('admin')
-def admin_get_users():
+def get_self_profile():
+    r = get_db().table("users").select("username, name, email, role, school_code, photo, theme, created_at").eq("username", g.current_user).execute()
+    if not r.data: return jsonify({'status': 'error', 'message': 'Not found'}), 404
+    return jsonify({'status': 'success', 'profile': r.data[0]})
+
+@app.route('/api/profile/update_self', methods=['POST', 'OPTIONS'])
+@require_auth
+def update_self_profile():
+    upd = {k: v for k, v in (request.json or {}).items() if k in {'theme'}}
+    if not upd: return jsonify({'status': 'error', 'message': 'No valid fields'}), 400
+    get_db().table("users").update(upd).eq("username", g.current_user).execute()
+    return jsonify({'status': 'success'})
+
+@app.route('/api/profile/upload_photo', methods=['POST', 'OPTIONS'])
+@require_auth
+def upload_profile_photo():
     try:
-        all_users = get_db().table("users").select(
-            "username, name, email, phone, role, school_code, driver_mode, transport_type, "
-            "vehicle_type, number_plate, verification_image, license_image, grade, "
-            "moderator_type, moderated_grade, created_at, wallpaper, theme, last_seen_chats"
-        ).execute().data or []
-
-        drivers = [u for u in all_users if u.get('role') == 'driver' and u.get('transport_type') != 'school_events']
-        event_drivers = [u for u in all_users if u.get('role') == 'driver' and u.get('transport_type') == 'school_events']
-        principals_raw = [u for u in all_users if u.get('role') == 'principal']
-        students = [u for u in all_users if u.get('role') == 'student']
-        moderators = [u for u in all_users if u.get('role') in ('moderator', 'teacher')]
-        general_users = [u for u in all_users if u.get('role') == 'general']
-
-        schools_res = get_db().table("schools").select("school_code, school_name, principal_username").execute()
-        schools_by_principal = {s['principal_username']: s.get('school_name') for s in (schools_res.data or [])}
-
-        principals = []
-        for p in principals_raw:
-            p = dict(p)
-            p['school_name'] = schools_by_principal.get(p.get('username'), 'N/A')
-            principals.append(p)
-
-        students_with_school = []
-        school_names_by_code = {s['school_code']: s.get('school_name') for s in (schools_res.data or [])}
-        for s in students:
-            s = dict(s)
-            s['school_name'] = school_names_by_code.get(s.get('school_code'), 'N/A')
-            students_with_school.append(s)
-
-        return jsonify({
-            'status': 'success',
-            'drivers': drivers,
-            'event_drivers': event_drivers,
-            'principals': principals,
-            'students': students_with_school,
-            'moderators': moderators,
-            'general_users': general_users
-        }), 200
+        f = request.files.get('photo')
+        if not f: return jsonify({'status': 'error', 'message': 'No file'}), 400
+        old = get_db().table("users").select("photo").eq("username", g.current_user).execute()
+        if old.data: _remove_file(old.data[0].get('photo'))
+        ext = f.filename.rsplit('.', 1)[-1].lower() if '.' in f.filename else 'jpg'
+        if ext not in ('jpg', 'jpeg', 'png', 'webp'): return jsonify({'status': 'error', 'message': 'Use a JPG, PNG or WEBP image.'}), 400
+        url = _upload_bytes(f.read(), f"{g.current_user}_{int(time.time())}.{ext}", f.content_type or "image/jpeg")
+        get_db().table("users").update({"photo": url}).eq("username", g.current_user).execute()
+        return jsonify({'status': 'success', 'photo_url': url})
     except Exception as e:
-        print(f"Admin users fetch error: {e}")
         return jsonify({'status': 'error', 'message': str(e)}), 500
 
+@app.route('/api/profile/delete_photo', methods=['POST', 'OPTIONS'])
+@require_auth
+def delete_profile_photo():
+    old = get_db().table("users").select("photo").eq("username", g.current_user).execute()
+    if old.data: _remove_file(old.data[0].get('photo'))
+    get_db().table("users").update({"photo": None}).eq("username", g.current_user).execute()
+    return jsonify({'status': 'success'})
 
-
-@app.route('/api/gps/ingest', methods=['POST', 'OPTIONS'])
-def gps_ingest():
-    """
-    Receives forwarded position updates from Traccar. Not behind
-    @require_auth — Traccar isn't logging in as one of your app users —
-    so this MUST stay locked down some other way before going to a real
-    host. For now, add a shared-secret check (see TRACCAR_INGEST_SECRET
-    below) so random internet traffic can't inject fake locations.
-    """
-    if request.method == 'OPTIONS':
-        return jsonify({'status': 'ok'}), 200
+@app.route('/api/delete_account', methods=['POST', 'OPTIONS'])
+@require_auth
+def delete_account():
     try:
-        # Simple shared-secret check — set TRACCAR_INGEST_SECRET in your
-        # environment, and configure the same value in Traccar's
-        # forwarding URL as a query param: ?secret=YOUR_SECRET
-        expected_secret = os.getenv("TRACCAR_INGEST_SECRET")
-        if expected_secret and request.args.get('secret') != expected_secret:
-            return jsonify({'status': 'error', 'message': 'Unauthorized'}), 401
- 
-        data = request.json or {}
- 
-        # Traccar's forwarded payload commonly nests device info under
-        # "device" and position fields at the top level — adjust these
-        # lookups once you see a real payload from your setup.
-        device_id = str(data.get('deviceId') or (data.get('device') or {}).get('id') or '').strip()
-        unique_id = str((data.get('device') or {}).get('uniqueId') or data.get('uniqueId') or '').strip()
-        lat = data.get('latitude') or data.get('lat')
-        lng = data.get('longitude') or data.get('lon') or data.get('lng')
-        speed = data.get('speed')
- 
-        lookup_id = unique_id or device_id
-        if not lookup_id or lat is None or lng is None:
-            return jsonify({'status': 'error', 'message': 'Missing device or position data'}), 400
- 
-        student_res = get_db().table("users").select("username").eq("tracker_device_id", lookup_id).eq("role", "student").execute()
-        if not student_res.data:
-            # Unknown tracker — not an error worth alarming Traccar about,
-            # just nothing to update on our side yet.
-            return jsonify({'status': 'ignored', 'message': 'No student linked to this tracker'}), 200
- 
-        student_u = student_res.data[0]['username']
-        now = current_sa_time()
- 
-        get_db().table("device_locations").upsert({
-            "student_username": student_u,
-            "tracker_device_id": lookup_id,
-            "latitude": float(lat),
-            "longitude": float(lng),
-            "speed": speed,
-            "updated_at": now
-        }).execute()
- 
-        # Push live to any linked parent, if the Socket.IO layer is set up.
-        if 'emit_to_user' in globals():
-            parent_rooms = get_db().table("parent_principal_rooms").select("parent_username").eq("child_username", student_u).execute()
-            for room in (parent_rooms.data or []):
-                p_u = room.get("parent_username")
-                if p_u:
-                    emit_to_user(p_u, 'location_update', {
-                        'student_username': student_u,
-                        'latitude': float(lat),
-                        'longitude': float(lng),
-                        'updated_at': now
-                    })
- 
-        return jsonify({'status': 'success'}), 200
+        u = g.current_user
+        r = get_db().table("users").select("role").eq("username", u).execute()
+        if not r.data: return jsonify({'status': 'error', 'message': 'Profile not found.'}), 404
+        if r.data[0]['role'] == 'principal':
+            get_db().table("schools").delete().eq("principal_username", u).execute()
+        get_db().table("users").delete().eq("username", u).execute()   # children, memberships cascade
+        return jsonify({'status': 'success'})
     except Exception as e:
-        print(f"[GPS INGEST ERROR]: {e}")
         return jsonify({'status': 'error', 'message': str(e)}), 500
- 
- 
+
+# ---------------- schools ----------------
+@app.route('/api/schools/search', methods=['POST', 'OPTIONS'])
+@require_auth
+def schools_search():
+    q = _clean((request.json or {}).get('q'))
+    if len(q) < 2: return jsonify({'status': 'success', 'schools': []})
+    r = get_db().table("schools").select("school_code, school_name").or_(f"school_name.ilike.%{q}%,school_code.ilike.{q}%").limit(10).execute()
+    return jsonify({'status': 'success', 'schools': r.data or []})
+
+# ---------------- children (parent) ----------------
+CHILD_EDIT = {'name', 'surname', 'grade', 'tracker_device_id', 'notify_school', 'notify_home', 'notify_zone',
+              'call_confirm', 'home_lat', 'home_lng', 'school_lat', 'school_lng', 'zone_radius'}
+
+@app.route('/api/children/add', methods=['POST', 'OPTIONS'])
+@require_auth
+@require_role('general')
+def children_add():
+    d = request.json or {}
+    name, surname = d.get('name', '').strip(), d.get('surname', '').strip()
+    idn = re.sub(r'\D', '', str(d.get('id_number', '')))
+    if not name or not surname or len(idn) < 6:
+        return jsonify({'status': 'error', 'message': 'Name, surname and ID number are required.'}), 400
+    sc = str(d.get('school_code', '')).strip().upper()
+    s = get_db().table("schools").select("school_code, school_name").eq("school_code", sc).execute()
+    if not s.data:
+        return jsonify({'status': 'error', 'message': 'School not found. Pick it from the search list.'}), 404
+    res = get_db().table("children").insert({"parent_username": g.current_user, "school_code": sc,
+        "school_name": s.data[0]['school_name'], "name": name, "surname": surname, "id_last4": idn[-4:],
+        "grade": d.get('grade', '').strip(), "qr_token": secrets.token_urlsafe(24)}).execute()
+    return jsonify({'status': 'success', 'child': res.data[0]})
+
+@app.route('/api/children/list', methods=['POST', 'OPTIONS'])
+@require_auth
+@require_role('general')
+def children_list():
+    r = get_db().table("children").select("*").eq("parent_username", g.current_user).order("created_at").execute()
+    return jsonify({'status': 'success', 'children': r.data or []})
+
+@app.route('/api/children/update', methods=['POST', 'OPTIONS'])
+@require_auth
+@require_role('general')
+def children_update():
+    d = request.json or {}
+    upd = {k: v for k, v in d.items() if k in CHILD_EDIT}
+    if 'tracker_device_id' in upd: upd['tracker_device_id'] = (upd['tracker_device_id'] or '').strip() or None
+    if 'zone_radius' in upd: upd['zone_radius'] = max(50, min(int(upd['zone_radius'] or 150), 2000))
+    if not upd: return jsonify({'status': 'error', 'message': 'Nothing to update'}), 400
+    try:
+        r = get_db().table("children").update(upd).eq("id", d.get('id')).eq("parent_username", g.current_user).execute()
+    except Exception as e:
+        return jsonify({'status': 'error', 'message': 'That tracker ID may already be in use.'}), 400
+    return (jsonify({'status': 'success'}), 200) if r.data else (jsonify({'status': 'error'}), 404)
+
+@app.route('/api/children/photo', methods=['POST', 'OPTIONS'])
+@require_auth
+@require_role('general')
+def children_photo():
+    f = request.files.get('photo'); cid = request.form.get('id')
+    if not f or not cid: return jsonify({'status': 'error', 'message': 'Missing file'}), 400
+    own = get_db().table("children").select("photo").eq("id", cid).eq("parent_username", g.current_user).execute()
+    if not own.data: return jsonify({'status': 'error'}), 404
+    _remove_file(own.data[0].get('photo'))
+    url = _upload_bytes(f.read(), f"child_{cid}_{int(time.time())}.jpg", f.content_type or "image/jpeg")
+    get_db().table("children").update({"photo": url}).eq("id", cid).execute()
+    return jsonify({'status': 'success', 'photo_url': url})
+
+@app.route('/api/children/delete', methods=['POST', 'OPTIONS'])
+@require_auth
+@require_role('general')
+def children_delete():
+    cid = (request.json or {}).get('id')
+    own = get_db().table("children").select("photo").eq("id", cid).eq("parent_username", g.current_user).execute()
+    if own.data: _remove_file(own.data[0].get('photo'))
+    get_db().table("children").delete().eq("id", cid).eq("parent_username", g.current_user).execute()
+    return jsonify({'status': 'success'})
+
+@app.route('/api/parent/arrivals', methods=['POST', 'OPTIONS'])
+@require_auth
+@require_role('general')
+def parent_arrivals():
+    r = get_db().table("arrivals").select("*").eq("parent_username", g.current_user).order("timestamp", desc=True).limit(100).execute()
+    return jsonify({'status': 'success', 'logs': r.data or []})
+
 @app.route('/api/parent/get_child_location', methods=['POST', 'OPTIONS'])
 @require_auth
 @require_role('general')
 def get_child_location():
-    """
-    Parent-facing fetch of a monitored child's last known position.
-    Same ownership check pattern as the rest of the parent endpoints —
-    only returns data for a child this parent actually monitors.
-    """
-    if request.method == 'OPTIONS':
-        return jsonify({'status': 'ok'}), 200
-    try:
-        data = request.json or {}
-        child_u = str(data.get('child_username', '')).strip()
- 
-        link_check = get_db().table("parent_principal_rooms").select("child_username").eq("parent_username", g.current_user).eq("child_username", child_u).execute()
-        if not link_check.data:
-            return jsonify({'status': 'error', 'message': 'Not authorized for this child'}), 403
- 
-        loc_res = get_db().table("device_locations").select("*").eq("student_username", child_u).execute()
-        if not loc_res.data:
-            return jsonify({'status': 'success', 'location': None}), 200
- 
-        return jsonify({'status': 'success', 'location': loc_res.data[0]}), 200
-    except Exception as e:
-        return jsonify({'status': 'error', 'message': str(e)}), 500
+    cid = (request.json or {}).get('child_id')
+    own = get_db().table("children").select("id").eq("id", cid).eq("parent_username", g.current_user).execute()
+    if not own.data: return jsonify({'status': 'error', 'message': 'Not authorized'}), 403
+    r = get_db().table("child_locations").select("latitude, longitude, updated_at").eq("child_id", cid).execute()
+    return jsonify({'status': 'success', 'location': r.data[0] if r.data else None})
 
-@app.route('/api/admin/reject_license', methods=['POST', 'OPTIONS'])
+# ---------------- school station ----------------
+def _my_codes():
+    r = get_db().table("schools").select("school_code").eq("principal_username", g.current_user).execute()
+    return [s['school_code'] for s in (r.data or [])]
+
+@app.route('/api/station/roster', methods=['POST', 'OPTIONS'])
+@require_auth
+@require_role('principal')
+def station_roster():
+    codes = _my_codes()
+    if not codes: return jsonify({'status': 'success', 'children': []})
+    r = get_db().table("children").select("id, name, surname, grade, photo, school_code").in_("school_code", codes).order("name").execute()
+    return jsonify({'status': 'success', 'children': r.data or []})
+
+@app.route('/api/station/logs', methods=['POST', 'OPTIONS'])
+@require_auth
+@require_role('principal')
+def station_logs():
+    codes = _my_codes()
+    if not codes: return jsonify({'status': 'success', 'logs': []})
+    r = get_db().table("arrivals").select("id, child_name, status, photo_url, timestamp").in_("school_code", codes).order("timestamp", desc=True).limit(200).execute()
+    return jsonify({'status': 'success', 'logs': r.data or []})
+
+@app.route('/api/principal/scan_attendance', methods=['POST', 'OPTIONS'])
+@require_auth
+@require_role('principal')
+def station_scan():
+    d = request.json or {}
+    status = 'DISMISSED' if str(d.get('status', '')).upper().startswith(('DISMISS', 'SCHOOL OUT')) else 'ARRIVED'
+    c = get_db().table("children").select("*").eq("qr_token", str(d.get('qr_token', ''))).execute()
+    if not c.data: return jsonify({'status': 'error', 'message': 'Unknown card.'}), 404
+    ch = c.data[0]
+    if ch['school_code'] not in _my_codes():
+        return jsonify({'status': 'error', 'message': 'This child is not registered at your school.'}), 403
+    photo = None
+    try: photo = _upload_data_url(d.get('photo'), "scan")
+    except Exception as e: print("scan photo:", e)
+    full = f"{ch['name']} {ch['surname']}"
+    get_db().table("arrivals").insert({"child_id": ch['id'], "parent_username": ch['parent_username'], "school_code": ch['school_code'],
+        "child_name": full, "status": status, "photo_url": photo, "station_username": g.current_user}).execute()
+    word = "has arrived at school" if status == 'ARRIVED' else "has been dismissed from school"
+    if ch.get('notify_school', True):
+        notify_parent(ch['parent_username'], f"{ch['name']} {word}", f"<b>{_h(full)}</b> {word}.", photo)
+    return jsonify({'status': 'success', 'student_name': full, 'attendance_status': status})
+
+@app.route('/api/principal/school_out', methods=['POST', 'OPTIONS'])
+@require_auth
+@require_role('principal')
+def school_out_all():
+    codes = _my_codes()
+    if not codes: return jsonify({'status': 'success', 'notified': 0})
+    kids = get_db().table("children").select("*").in_("school_code", codes).execute().data or []
+    rows = [{"child_id": c['id'], "parent_username": c['parent_username'], "school_code": c['school_code'],
+             "child_name": f"{c['name']} {c['surname']}", "status": "DISMISSED", "station_username": g.current_user} for c in kids]
+    if rows: get_db().table("arrivals").insert(rows).execute()
+    for c in kids:
+        if c.get('notify_school', True):
+            notify_parent(c['parent_username'], "School is out", f"School is out. <b>{_h(c['name'])}</b> has been dismissed.")
+    return jsonify({'status': 'success', 'notified': len(kids)})
+
+# ---------------- tracker ingest + zones ----------------
+@app.route('/api/gps/ingest', methods=['POST', 'OPTIONS'])
+def gps_ingest():
+    if request.method == 'OPTIONS': return jsonify({'status': 'ok'}), 200
+    try:
+        secret = os.getenv("TRACCAR_INGEST_SECRET")
+        if not secret or request.args.get('secret') != secret:
+            return jsonify({'status': 'error', 'message': 'Unauthorized'}), 401
+        d = request.json or {}; dev = d.get('device') or {}
+        lid = str(dev.get('uniqueId') or d.get('uniqueId') or dev.get('id') or d.get('deviceId') or '').strip()
+        lat = d.get('latitude', d.get('lat')); lng = d.get('longitude', d.get('lon', d.get('lng')))
+        if not lid or lat is None or lng is None: return jsonify({'status': 'error', 'message': 'Missing data'}), 400
+        lat, lng = float(lat), float(lng)
+        c = get_db().table("children").select("*").eq("tracker_device_id", lid).execute()
+        if not c.data: return jsonify({'status': 'ignored'}), 200
+        ch = c.data[0]
+        get_db().table("child_locations").upsert({"child_id": ch['id'], "tracker_device_id": lid, "latitude": lat,
+            "longitude": lng, "speed": d.get('speed'), "updated_at": current_sa_time()}).execute()
+        state = dict(ch.get('zone_state') or {}); rad = ch.get('zone_radius') or 150; changed = False
+        for zone, flag in (('school', 'notify_school'), ('home', 'notify_home')):
+            zl, zg = ch.get(f'{zone}_lat'), ch.get(f'{zone}_lng')
+            if zl is None or zg is None: continue
+            inside = _haversine(lat, lng, zl, zg) <= rad; was = state.get(zone)
+            if was is not None and inside != was:
+                if ch.get(flag, True):
+                    verb = 'arrived at' if inside else 'left'
+                    notify_parent(ch['parent_username'], f"{ch['name']} {verb} {zone}", f"<b>{_h(ch['name'])}</b> {verb} the {zone} zone.")
+                if not inside and ch.get('call_confirm'):
+                    print(f"[STAFF CALL TASK] confirm child {ch['id']} left {zone}")  # TODO: staff queue
+            if was != inside: state[zone] = inside; changed = True
+        if changed:
+            if state and not any(state.values()) and ch.get('notify_zone', True):
+                notify_parent(ch['parent_username'], f"{ch['name']} is outside the safe zones",
+                              f"<b>{_h(ch['name'])}</b> is outside every zone you set.")
+            get_db().table("children").update({"zone_state": state}).eq("id", ch['id']).execute()
+        return jsonify({'status': 'success'})
+    except Exception as e:
+        print("GPS:", e); return jsonify({'status': 'error', 'message': str(e)}), 500
+
+# ---------------- community groups ----------------
+def _is_member(cid, u):
+    return bool(get_db().table("community_members").select("username").eq("community_id", cid).eq("username", u).execute().data)
+
+@app.route('/api/groups/create', methods=['POST', 'OPTIONS'])
+@require_auth
+def groups_create():
+    d = request.json or {}
+    name = re.sub(r'\s+', ' ', d.get('name', '').strip())
+    if len(name) < 3: return jsonify({'status': 'error', 'message': 'Group name is too short.'}), 400
+    if get_db().table("communities").select("id").eq("name_key", _name_key(name)).execute().data:
+        return jsonify({'status': 'error', 'message': 'A group with this exact name exists. Add a section or suburb to the name.'}), 409
+    try:
+        r = get_db().table("communities").insert({"name": name, "name_key": _name_key(name), "suburb": d.get('suburb', '').strip(),
+            "town": d.get('town', '').strip(), "province": d.get('province', '').strip(), "rules": d.get('rules', '').strip()[:1000],
+            "created_by": g.current_user}).execute()
+    except Exception:
+        return jsonify({'status': 'error', 'message': 'A group with this name already exists.'}), 409
+    return jsonify({'status': 'success', 'group': r.data[0]})
+
+@app.route('/api/groups/search', methods=['POST', 'OPTIONS'])
+@require_auth
+def groups_search():
+    q = _clean((request.json or {}).get('q'))
+    qry = get_db().table("communities").select("*")
+    if q: qry = qry.or_(f"name.ilike.%{q}%,suburb.ilike.%{q}%,town.ilike.%{q}%,province.ilike.%{q}%")
+    return jsonify({'status': 'success', 'groups': qry.order("name").limit(30).execute().data or []})
+
+@app.route('/api/groups/join', methods=['POST', 'OPTIONS'])
+@require_auth
+def groups_join():
+    d = request.json or {}
+    if not d.get('agreed_terms'): return jsonify({'status': 'error', 'message': 'You must agree to the group terms.'}), 400
+    get_db().table("community_members").upsert({"community_id": d.get('group_id'), "username": g.current_user, "agreed_terms": True,
+        "share_location": bool(d.get('share_location')), "share_child_photo": bool(d.get('share_child_photo'))}).execute()
+    return jsonify({'status': 'success'})
+
+@app.route('/api/groups/leave', methods=['POST', 'OPTIONS'])
+@require_auth
+def groups_leave():
+    get_db().table("community_members").delete().eq("community_id", (request.json or {}).get('group_id')).eq("username", g.current_user).execute()
+    return jsonify({'status': 'success'})
+
+@app.route('/api/groups/mine', methods=['POST', 'OPTIONS'])
+@require_auth
+def groups_mine():
+    m = get_db().table("community_members").select("community_id, share_location, share_child_photo").eq("username", g.current_user).execute().data or []
+    if not m: return jsonify({'status': 'success', 'groups': []})
+    gs = get_db().table("communities").select("*").in_("id", [x['community_id'] for x in m]).execute().data or []
+    opt = {x['community_id']: x for x in m}
+    for x in gs: x['my_opts'] = opt.get(x['id'])
+    return jsonify({'status': 'success', 'groups': gs})
+
+@app.route('/api/groups/messages', methods=['POST', 'OPTIONS'])
+@require_auth
+def groups_messages():
+    cid = (request.json or {}).get('group_id')
+    if not _is_member(cid, g.current_user): return jsonify({'status': 'error', 'messages': []}), 403
+    r = get_db().table("community_messages").select("*").eq("community_id", cid).order("created_at").limit(200).execute()
+    return jsonify({'status': 'success', 'messages': r.data or []})
+
+@app.route('/api/groups/send', methods=['POST', 'OPTIONS'])
+@require_auth
+def groups_send():
+    d = request.json or {}; cid = d.get('group_id'); body = (d.get('body') or '').strip()
+    if not body or not _is_member(cid, g.current_user): return jsonify({'status': 'error'}), 403
+    nm = get_db().table("users").select("name").eq("username", g.current_user).execute()
+    get_db().table("community_messages").insert({"community_id": cid, "sender_username": g.current_user,
+        "sender_name": (nm.data[0]['name'] if nm.data else g.current_user), "body": body[:1000]}).execute()
+    return jsonify({'status': 'success'})
+
+@app.route('/api/groups/emergency', methods=['POST', 'OPTIONS'])
+@require_auth
+def groups_emergency():
+    d = request.json or {}; cid = d.get('group_id')
+    mem = get_db().table("community_members").select("*").eq("community_id", cid).eq("username", g.current_user).execute()
+    if not mem.data: return jsonify({'status': 'error'}), 403
+    opts = mem.data[0]; lat = lng = photo = None
+    if opts.get('share_location'): lat, lng = d.get('lat'), d.get('lng')
+    if opts.get('share_child_photo') and d.get('child_id'):
+        ch = get_db().table("children").select("photo").eq("id", d['child_id']).eq("parent_username", g.current_user).execute()
+        photo = ch.data[0].get('photo') if ch.data else None
+    note = (d.get('note') or 'Emergency, please help.')[:300]
+    nm = get_db().table("users").select("name").eq("username", g.current_user).execute()
+    get_db().table("community_messages").insert({"community_id": cid, "sender_username": g.current_user,
+        "sender_name": (nm.data[0]['name'] if nm.data else g.current_user), "body": "🚨 EMERGENCY: " + note,
+        "kind": "emergency", "lat": lat, "lng": lng, "photo_url": photo}).execute()
+    send_whatsapp(cid, f"EMERGENCY: {note} " + (f"https://maps.google.com/?q={lat},{lng}" if lat else ""))
+    # TODO: police / roadblock integration once you have a contact
+    return jsonify({'status': 'success'})
+
+# ---------------- admin ----------------
+@app.route('/api/admin/users', methods=['GET', 'POST', 'OPTIONS'])
 @require_auth
 @require_role('admin')
-def admin_reject_license():
+def admin_get_users():
     try:
-        username = request.json.get('username')
-        if not username:
-            return jsonify({'status': 'error', 'message': 'Missing username'}), 400
-
-        get_db().table("users").update({"license_image": None}).eq("username", username).execute()
-        return jsonify({'status': 'success'}), 200
+        users = get_db().table("users").select("username, name, email, role, school_code, photo, created_at").execute().data or []
+        schools = get_db().table("schools").select("school_code, school_name, principal_username").execute().data or []
+        by_p = {s['principal_username']: s for s in schools}
+        stations = []
+        for p in [u for u in users if u['role'] == 'principal']:
+            p = dict(p); p['school_name'] = by_p.get(p['username'], {}).get('school_name', 'N/A'); stations.append(p)
+        kids = get_db().table("children").select("id, name, surname, grade, school_name, parent_username, tracker_device_id, created_at").execute().data or []
+        return jsonify({'status': 'success', 'principals': stations,
+                        'general_users': [u for u in users if u['role'] == 'general'], 'children': kids,
+                        'communities': get_db().table("communities").select("id, name, town, province, created_by, created_at").execute().data or []})
     except Exception as e:
         return jsonify({'status': 'error', 'message': str(e)}), 500
 
@@ -419,3336 +652,32 @@ def admin_reject_license():
 @require_auth
 @require_role('admin')
 def admin_delete_user():
-    try:
-        username = request.json.get('username')
-        if not username:
-            return jsonify({'status': 'error', 'message': 'Missing username'}), 400
-
-        user_check = get_db().table("users").select("role").eq("username", username).execute()
-        if not user_check.data:
-            return jsonify({'status': 'error', 'message': 'User not found'}), 404
-        user_role = user_check.data[0].get('role')
-
-        if user_role == 'driver':
-            get_db().table("parent_driver_rooms").delete().eq("driver_username", username).execute()
-            get_db().table("posts").delete().eq("username", username).execute()
-        elif user_role == 'general':
-            get_db().table("parent_driver_rooms").delete().eq("parent_username", username).execute()
-            get_db().table("parent_principal_rooms").delete().eq("parent_username", username).execute()
-        elif user_role == 'student':
-            get_db().table("bookings").delete().eq("student_username", username).execute()
-            get_db().table("attendance_logs").delete().eq("student_username", username).execute()
-            get_db().table("parent_driver_rooms").delete().eq("child_username", username).execute()
-            get_db().table("parent_principal_rooms").delete().eq("child_username", username).execute()
-
-        get_db().table("users").delete().eq("username", username).execute()
-        return jsonify({'status': 'success'}), 200
-    except Exception as e:
-        return jsonify({'status': 'error', 'message': str(e)}), 500
-
-@app.route('/api/login', methods=['POST', 'OPTIONS'])
-def login():
-    if request.method == 'OPTIONS':
-        return jsonify({'status': 'ok'}), 200
-
-    try:
-        data = request.json
-        u = data.get('username', '').lower().strip()
-        p = data.get('password', '')
-
-        res = get_db().table("users").select("*").eq("username", u).execute()
-        user = res.data[0] if res.data else None
-        source_table = "users"
-
-        if not user:
-            admin_res = get_db().table("admins").select("*").eq("username", u).execute()
-            if admin_res.data:
-                user = admin_res.data[0]
-                source_table = "admins"
-
-        if not user:
-            return jsonify({'status': 'error', 'msg': 'Identity Verification Failed: Invalid User Credentials'}), 401
-
-        stored_password = user.get('password', '')
-        password_valid = False
-
-        try:
-            password_valid = bcrypt.checkpw(
-                p.encode('utf-8'),
-                stored_password.encode('utf-8')
-            )
-        except:
-            if str(stored_password) == str(p):
-                password_valid = True
-                hashed_pw = bcrypt.hashpw(
-                    p.encode('utf-8'),
-                    bcrypt.gensalt()
-                ).decode('utf-8')
-                get_db().table(source_table).update(
-                    {"password": hashed_pw}
-                ).eq("username", u).execute()
-
-        if password_valid:
-            role = user.get('role') or ('admin' if source_table == 'admins' else None)
-            token = issue_token(username=u, role=role)
-            return jsonify({
-                'status': 'success',
-                'token': token,
-                'role': role,
-                'name': user.get('name') or user.get('username'),
-                'username': u,
-                'school_code': str(user['school_code']).upper() if user.get('school_code') else None,
-                'driver_mode': user.get('driver_mode'),
-                'moderator_type': user.get('moderator_type'),
-                'moderated_grade': user.get('moderated_grade'),
-                'theme': user.get('theme', 'dark')
-            }), 200
-
-        return jsonify({'status': 'error', 'msg': 'Identity Verification Failed: Invalid User Credentials'}), 401
-
-    except Exception as e:
-        return jsonify({'status': 'error', 'msg': f'Database processing failure: {str(e)}'}), 500
-
-# =====================================================================
-# SIGNUP — NOW PERSISTED IN SUPABASE
-# =====================================================================
-
-@app.route('/api/<role>/signup', methods=['POST', 'OPTIONS'])
-def signup(role):
-    if request.method == 'OPTIONS':
-        return jsonify({'status': 'ok'}), 200
-
-    try:
-        data = request.json or {}
-        u = data.get('username', '').lower().strip()
-        sc = str(data.get('school_code', '')).strip().upper()
-        school_name = str(data.get("school_name", "")).strip()
-
-        if not u:
-            return jsonify({'status': 'error', 'message': 'Missing username'}), 400
-
-        if not data.get('terms_accepted'):
-            return jsonify({
-                'status': 'error',
-                'message': 'You must accept the Terms & Conditions and Privacy Policy to register.'
-            }), 400
-
-        existing = get_db().table("users").select("username").eq("username", u).execute()
-        if existing.data:
-            return jsonify({
-                'status': 'error',
-                'message': 'Username already registered to an active profile.'
-            }), 400
-
-        if sc and role == "principal":
-            school_check = get_db().table("schools").select("school_code").eq("school_code", sc).execute()
-            if not school_check.data:
-                get_db().table("schools").insert({
-                    "school_code": sc,
-                    "school_name": school_name,
-                    "principal_username": u
-                }).execute()
-                print("AUTO-CREATED SCHOOL:", sc)
-
-        face_b64 = data.get('face_image')
-        if face_b64:
-            try:
-                if "," in face_b64:
-                    face_b64 = face_b64.split(",", 1)[1]
-
-                img_data = base64.b64decode(face_b64)
-                img_path = os.path.join(
-                    app.config['UPLOAD_FOLDER'],
-                    f"temp_{u}.jpg"
-                )
-
-                with open(img_path, "wb") as f:
-                    f.write(img_data)
-
-                is_valid, msg = check_face_proximity(img_path)
-
-                if os.path.exists(img_path):
-                    os.remove(img_path)
-
-                if not is_valid:
-                    return jsonify({
-                        'status': 'error',
-                        'message': msg
-                    }), 400
-
-            except Exception:
-                return jsonify({
-                    'status': 'error',
-                    'message': 'Facial biometric data could not be verified. Check lighting parameters.'
-                }), 400
-
-        otp = str(random.randint(1111, 9999))
-
-        payload = {
-            **data,
-            "role": role,
-            "school_code": sc,
-            "verification_image": face_b64,
-            "parent_number": data.get("parent_number") or data.get("parent_phone") or "",
-            "terms_accepted_at": current_sa_time(),
-            "terms_version": "2026-08"
-        }
-
-        get_db().table("pending_signups").upsert({
-            "username": u,
-            "payload": payload,
-            "v_code": otp,
-            "created_at": current_sa_time(),
-            "expires_at": _expiry()
-        }).execute()
-
-        print("PENDING STORED:", u)
-
-        email_content = f"""
-        <p style="font-size: 18px;">Your account registration requires final verification.</p>
-        <div style="background: #161b22; padding: 25px; border-radius: 10px; margin: 25px 0; border-left: 4px solid #10b981; text-align: center;">
-            <p style="margin: 0; color: #8b949e; font-size: 12px; text-transform: uppercase;">Unique Security PIN</p>
-            <h2 style="margin: 10px 0 0; font-size: 32px; color: #10b981; letter-spacing: 8px;">{otp}</h2>
-        </div>
-        """
-
-        threading.Thread(
-            target=send_mail,
-            args=(data.get('email'), "Safe Drive Registration Code", email_content, "Account Verification")
-        ).start()
-
-        return jsonify({
-            'status': 'pending',
-            'username': u
-        }), 200
-
-    except Exception as e:
-        return jsonify({
-            'status': 'error',
-            'message': str(e)
-        }), 500
-
-# =====================================================================
-# VERIFY SIGNUP — NOW READS FROM SUPABASE
-# =====================================================================
-
-@app.route('/api/verify-and-save', methods=['POST', 'OPTIONS'])
-def verify_and_save():
-    if request.method == 'OPTIONS':
-        return jsonify({'status': 'ok'}), 200
-
-    try:
-        import uuid
-
-        data = request.get_json(silent=True) or {}
-        u = str(data.get('username', '')).lower().strip()
-        code = str(data.get('code', '')).strip()
-
-        if not u or not code:
-            return jsonify({
-                'status': 'error',
-                'message': 'Missing data'
-            }), 400
-
-        pending_res = get_db().table("pending_signups").select("*").eq("username", u).execute()
-
-        if not pending_res.data:
-            return jsonify({
-                'status': 'error',
-                'message': 'Session expired'
-            }), 400
-
-        pending_row = pending_res.data[0]
-
-        if _is_expired(pending_row.get('expires_at')):
-            get_db().table("pending_signups").delete().eq("username", u).execute()
-            return jsonify({
-                'status': 'error',
-                'message': 'Session expired'
-            }), 400
-
-        p_u = pending_row.get('payload') or {}
-        stored = str(pending_row.get('v_code', '')).strip()
-
-        if stored != code:
-            return jsonify({
-                'status': 'error',
-                'message': 'Invalid code'
-            }), 400
-
-        face_image = p_u.get('verification_image', None)
-        verification_image_url = None
-
-        if face_image:
-            try:
-                if isinstance(face_image, str) and "," in face_image:
-                    face_image = face_image.split(",", 1)[1]
-
-                image_bytes = base64.b64decode(face_image)
-                filename = f"{uuid.uuid4()}.jpg"
-
-                get_db().storage.from_("verification_images").upload(
-                    path=filename,
-                    file=image_bytes,
-                    file_options={"content-type": "image/jpeg"}
-                )
-
-                verification_image_url = get_db().storage.from_(
-                    "verification_images"
-                ).get_public_url(filename)
-
-            except Exception as e:
-                print("IMAGE UPLOAD FAILED:", str(e))
-
-        raw_password = p_u.get('password', '')
-
-        hashed_password = bcrypt.hashpw(
-            raw_password.encode('utf-8'),
-            bcrypt.gensalt()
-        ).decode('utf-8')
-
-        get_db().table("users").insert({
-            "username": u,
-            "password": hashed_password,
-            "name": p_u.get('name'),
-            "email": p_u.get('email'),
-            "role": p_u.get('role'),
-            "school_code": p_u.get('school_code'),
-            "verification_image": verification_image_url,
-            "parent_email": p_u.get('parent_email'),
-            "parent_number": p_u.get('parent_number'),
-            "grade": p_u.get('grade'),
-            "driver_mode": p_u.get('driver_mode'),
-            "moderator_type": p_u.get('moderator_type'),
-            "moderated_grade": p_u.get('moderated_grade'),
-            "vehicle_type": p_u.get('vehicle_type'),
-            "terms_accepted_at": p_u.get('terms_accepted_at'),
-            "terms_version": p_u.get('terms_version')
-        }).execute()
-
-        get_db().table("pending_signups").delete().eq("username", u).execute()
-
-        print("USER CREATED:", u)
-
-        return jsonify({
-            'status': 'success',
-            'message': 'Account verified successfully'
-        }), 200
-
-    except Exception as e:
-        import traceback
-        traceback.print_exc()
-        return jsonify({
-            'status': 'error',
-            'message': 'Server error'
-        }), 500
-
-# =====================================================================
-# MODERATOR SIGNUP — NOW PERSISTED IN SUPABASE
-# =====================================================================
-
-@app.route('/api/moderator/signup', methods=['POST', 'OPTIONS'])
-def moderator_signup():
-    if request.method == 'OPTIONS':
-        return jsonify({'status': 'ok'}), 200
-
-    try:
-        data = request.json or {}
-        u = data.get('username', '').lower().strip()
-        face_b64 = data.get('face_image')
-
-        if not data.get('terms_accepted'):
-            return jsonify({
-                'status': 'error',
-                'message': 'You must accept the Terms & Conditions and Privacy Policy to register.'
-            }), 400
-
-        existing = get_db().table("users").select("username").eq("username", u).execute()
-        if existing.data:
-            return jsonify({
-                'status': 'error',
-                'message': 'Username already registered to an active profile.'
-            }), 400
-
-        if face_b64:
-            if "," in face_b64:
-                face_b64 = face_b64.split(",", 1)[1]
-
-            img_data = base64.b64decode(face_b64)
-            img_path = os.path.join(
-                app.config['UPLOAD_FOLDER'],
-                f"temp_mod_{u}.jpg"
-            )
-
-            with open(img_path, "wb") as f:
-                f.write(img_data)
-
-            is_valid, msg = check_face_proximity(img_path)
-
-            if os.path.exists(img_path):
-                os.remove(img_path)
-
-            if not is_valid:
-                return jsonify({
-                    'status': 'error',
-                    'message': msg
-                }), 400
-
-        otp = str(random.randint(1111, 9999))
-
-        payload = dict(data)
-        payload.update({
-            'role': 'moderator',
-            'terms_accepted_at': current_sa_time(),
-            'terms_version': '2026-08'
-        })
-
-        get_db().table("pending_signups").upsert({
-            "username": u,
-            "payload": payload,
-            "v_code": otp,
-            "created_at": current_sa_time(),
-            "expires_at": _expiry()
-        }).execute()
-
-        email_content = f"""
-        <p style="font-size: 18px;">Your Moderator account registration requires final PIN confirmation.</p>
-        <div style="background: #161b22; padding: 25px; border-radius: 10px; margin: 25px 0; border-left: 4px solid #10b981; text-align: center;">
-            <p style="margin: 0; color: #8b949e; font-size: 12px; text-transform: uppercase;">Moderator Security PIN</p>
-            <h2 style="margin: 10px 0 0; font-size: 32px; color: #10b981; letter-spacing: 8px;">{otp}</h2>
-        </div>
-        """
-
-        threading.Thread(
-            target=send_mail,
-            args=(data.get('email'), "Moderator Registration Code", email_content, "Moderator Overwatch Sec")
-        ).start()
-
-        return jsonify({
-            'status': 'pending',
-            'username': u
-        }), 200
-
-    except Exception as e:
-        return jsonify({
-            'status': 'error',
-            'message': str(e)
-        }), 500
-
-@app.route('/api/moderator/verify_boundaries', methods=['POST', 'OPTIONS'])
-def verify_moderator_boundaries():
-    if request.method == 'OPTIONS':
-        return jsonify({'status': 'ok'}), 200
-
-    try:
-        data = request.json or {}
-        sc = data.get('school_code', '').upper().strip()
-        grade = str(data.get('grade', '')).strip()
-        mod_type = data.get('moderator_type', '')
-        passcode = data.get('assistant_passcode', '').strip()
-
-        school_check = get_db().table("schools").select("school_name").eq(
-            "school_code", sc
-        ).execute()
-
-        if not school_check.data:
-            return jsonify({
-                'status': 'error',
-                'message': 'REGISTRATION BLOCKED: The specified School Code does not exist in the platform system.'
-            }), 404
-
-        if mod_type == 'teacher':
-            check = get_db().table("users").select("username") \
-                .eq("school_code", sc) \
-                .eq("moderated_grade", grade) \
-                .eq("moderator_type", "teacher") \
-                .execute()
-
-            if check.data:
-                return jsonify({
-                    'status': 'error',
-                    'message': f'CRITICAL PROTECTION WARNING: A verified Lead Teacher already exists for Grade {grade} at this institution.'
-                }), 400
-
-        else:
-            match = get_db().table("users").select("username") \
-                .eq("school_code", sc) \
-                .eq("moderated_grade", grade) \
-                .eq("assistant_passcode", passcode) \
-                .eq("moderator_type", "teacher") \
-                .execute()
-
-            if not match.data:
-                return jsonify({
-                    'status': 'error',
-                    'message': 'SECURITY GAP FAILURE: Invalid Assistant Passcode provided.'
-                }), 400
-
-        return jsonify({'status': 'success'}), 200
-
-    except Exception as e:
-        return jsonify({
-            'status': 'error',
-            'message': f'Boundary validation pipeline exception: {str(e)}'
-        }), 500
-
-# =====================================================================
-# PASSWORD RESET — NOW PERSISTED IN SUPABASE
-# =====================================================================
-
-@app.route('/api/forgot-password', methods=['POST', 'OPTIONS'])
-def forgot_password():
-    if request.method == 'OPTIONS':
-        return jsonify({'status': 'ok'}), 200
-
-    try:
-        data = request.json or {}
-        u = data.get('username', '').lower().strip()
-
-        res = get_db().table("users").select("email").eq(
-            "username", u
-        ).execute()
-
-        if not res.data:
-            return jsonify({
-                'status': 'error',
-                'message': 'Username not found in the system.'
-            }), 404
-
-        user_email = res.data[0]['email']
-        otp = str(random.randint(100000, 999999))
-
-        get_db().table("password_reset_codes").upsert({
-            "username": u,
-            "code": otp,
-            "created_at": current_sa_time(),
-            "expires_at": _expiry()
-        }).execute()
-
-        email_body = f"""
-        <p style="font-size: 18px;">A password reset was requested for your account: <b>{u}</b>.</p>
-        <div style="background: #161b22; padding: 25px; border-radius: 10px; margin: 25px 0; border-left: 4px solid #f59e0b; text-align: center;">
-            <p style="margin: 0; color: #8b949e; font-size: 12px; text-transform: uppercase;">Secure Reset Code</p>
-            <h2 style="margin: 10px 0 0; font-size: 32px; color: #f59e0b; letter-spacing: 8px;">{otp}</h2>
-        </div>
-        """
-
-        threading.Thread(
-            target=send_mail,
-            args=(user_email, "Password Reset Code", email_body, "Account Recovery")
-        ).start()
-
-        return jsonify({
-            'status': 'success',
-            'message': 'Code sent to registered email.'
-        }), 200
-
-    except Exception as e:
-        return jsonify({
-            'status': 'error',
-            'msg': str(e)
-        }), 500
-
-@app.route('/api/reset-password', methods=['POST', 'OPTIONS'])
-def reset_password():
-    if request.method == 'OPTIONS':
-        return jsonify({'status': 'ok'}), 200
-
-    try:
-        data = request.json or {}
-        u = data.get('username', '').lower().strip()
-        code = data.get('code', '').strip()
-        new_password = data.get('newPassword', '')
-
-        reset_res = get_db().table("password_reset_codes").select("*").eq(
-            "username", u
-        ).execute()
-
-        reset_row = reset_res.data[0] if reset_res.data else None
-
-        if (
-            reset_row
-            and str(reset_row.get('code', '')) == code
-            and not _is_expired(reset_row.get('expires_at'))
-        ):
-            hashed_password = bcrypt.hashpw(
-                new_password.encode('utf-8'),
-                bcrypt.gensalt()
-            ).decode('utf-8')
-
-            get_db().table("users").update({
-                "password": hashed_password
-            }).eq("username", u).execute()
-
-            get_db().table("password_reset_codes").delete().eq(
-                "username", u
-            ).execute()
-
-            return jsonify({'status': 'success'}), 200
-
-        return jsonify({
-            'status': 'error',
-            'message': 'Invalid or expired recovery code reference.'
-        }), 400
-
-    except Exception as e:
-        return jsonify({
-            'status': 'error',
-            'msg': str(e)
-        }), 500
-
-# =====================================================================
-# PARENT OTP — NOW PERSISTED IN SUPABASE
-# =====================================================================
-
-@app.route('/api/verify-parent-otp', methods=['POST', 'OPTIONS'])
-def verify_parent_otp():
-    if request.method == 'OPTIONS':
-        return jsonify({'status': 'ok'}), 200
-
-    try:
-        data = request.json or {}
-        cu = data.get('child_username', '').lower()
-        code = str(data.get('code', '')).strip()
-
-        link_res = get_db().table("pending_parent_links").select("*").eq(
-            "child_username", cu
-        ).execute()
-
-        link_row = link_res.data[0] if link_res.data else None
-
-        if (
-            link_row
-            and str(link_row.get('v_code', '')) == code
-            and not _is_expired(link_row.get('expires_at'))
-        ):
-            child_info = link_row.get('child_data')
-
-            get_db().table("pending_parent_links").delete().eq(
-                "child_username", cu
-            ).execute()
-
-            return jsonify({
-                'status': 'success',
-                'child_data': child_info
-            }), 200
-
-        return jsonify({
-            'status': 'error',
-            'msg': 'Invalid security authorization credentials.'
-        }), 401
-
-    except Exception as e:
-        return jsonify({
-            'status': 'error',
-            'msg': str(e)
-        }), 500
-
-# =====================================================================
-# PROTECTED ROUTES
-# =====================================================================
-
-@app.route('/api/get_my_bookings', methods=['POST', 'OPTIONS'])
+    u = (request.json or {}).get('username')
+    if not u: return jsonify({'status': 'error', 'message': 'Missing username'}), 400
+    r = get_db().table("users").select("role").eq("username", u).execute()
+    if not r.data: return jsonify({'status': 'error', 'message': 'User not found'}), 404
+    if r.data[0]['role'] == 'principal':
+        get_db().table("schools").delete().eq("principal_username", u).execute()
+    get_db().table("users").delete().eq("username", u).execute()
+    return jsonify({'status': 'success'})
+
+@app.route('/api/admin/delete_group', methods=['POST', 'OPTIONS'])
 @require_auth
-def get_my_bookings():
-    try:
-        u = g.current_user
-        role = g.current_role
-        col = "driver_username" if role == "driver" else "student_username"
-
-        res = get_db().table("bookings").select("*").eq(
-            col, u
-        ).execute()
-
-        return jsonify({
-            'status': 'success',
-            'bookings': res.data if res.data else []
-        }), 200
-
-    except Exception as e:
-        print(f"[RECOVERABLE] /api/get_my_bookings stalled: {e}")
-        return jsonify({
-            'status': 'success',
-            'bookings': []
-        }), 200
-
-@app.route('/api/student/book', methods=['POST', 'OPTIONS'])
-@require_auth
-@require_role('student', 'general')
-def student_book():
-    try:
-        data = request.json or {}
-        booking_id = f"BK-{random.randint(1000,9999)}"
-        student_u = g.current_user
-
-        requested_code = data.get('school_code')
-
-        if requested_code == "D2D_GLOBAL":
-            db_school_code = "D2D_GLOBAL"
-        else:
-            user_res = get_db().table("users").select("school_code").eq(
-                "username", student_u
-            ).execute()
-
-            db_school_code = (
-                user_res.data[0]['school_code']
-                if user_res.data and user_res.data[0].get('school_code')
-                else requested_code
-            )
-
-        booking_data = {
-            "booking_id": booking_id,
-            "student_username": student_u,
-            "student_name": data.get('student_name'),
-            "driver_username": data.get('driver_username'),
-            "driver_name": data.get('driver_name'),
-            "school_code": db_school_code,
-            "status": "Pending",
-            "created_at": current_sa_time(),
-            "last_updated": current_sa_time(),
-            "last_status_time": current_sa_time(),
-            "initial_msg": data.get(
-                'message',
-                'New booking request tracking line initiated.'
-            ),
-            "chat": []
-        }
-
-        get_db().table("bookings").insert(booking_data).execute()
-
-        if db_school_code == "D2D_GLOBAL":
-            room_data = {
-                "booking_id": booking_id,
-                "parent_username": student_u,
-                "parent_name": data.get("student_name"),
-                "driver_username": data.get("driver_username"),
-                "driver_name": data.get("driver_name"),
-                "transport_type": data.get(
-                    "transport_type",
-                    "Door to Door"
-                ),
-                "status": "Pending"
-            }
-
-            get_db().table("general_driver_rooms").insert(room_data).execute()
-
-        return jsonify({
-            "status": "success",
-            "booking_id": booking_id
-        }), 200
-
-    except Exception as e:
-        return jsonify({
-            "status": "error",
-            "msg": f"Booking injection halted: {str(e)}"
-        }), 500
-
-@app.route('/api/driver/respond_booking', methods=['POST', 'OPTIONS'])
-@require_auth
-@require_role('driver')
-def respond_booking():
-    try:
-        data = request.json or {}
-        bid = data.get('booking_id')
-        status = data.get('status')
-        now = current_sa_time()
-
-        booking_check = get_db().table("bookings").select("*").eq(
-            "booking_id", bid
-        ).execute()
-
-        if (
-            not booking_check.data
-            or booking_check.data[0].get('driver_username') != g.current_user
-        ):
-            return jsonify({
-                'status': 'error',
-                'msg': 'Not authorized to modify this booking'
-            }), 403
-
-        booking = booking_check.data[0]
-
-        if status in ["Rejected", "Declined"]:
-            get_db().table("bookings").delete().eq(
-                "booking_id", bid
-            ).execute()
-
-            return jsonify({
-                "status": "success",
-                "message": "Booking rejected and removed."
-            }), 200
-
-        if status == "Finished":
-            student_u = booking.get('student_username')
-
-            get_db().table("parent_driver_rooms") \
-                .delete() \
-                .eq("child_username", student_u) \
-                .eq("driver_username", g.current_user) \
-                .execute()
-
-            get_db().table("bookings").update({
-                "status": "Finished",
-                "tracking_status": "Trip Completed",
-                "last_status_time": now,
-                "last_updated": now
-            }).eq("booking_id", bid).execute()
-
-            get_db().table("bookings").delete().eq(
-                "booking_id", bid
-            ).execute()
-
-            return jsonify({
-                "status": "success",
-                "message": "Trip completed and booking removed."
-            }), 200
-
-        update_payload = {
-            "status": status,
-            "last_status_time": now,
-            "last_updated": now
-        }
-
-        if status == "Accepted":
-            update_payload["tracking_status"] = "APPROVED"
-
-            get_db().table("bookings").update(
-                update_payload
-            ).eq("booking_id", bid).execute()
-
-            school_code = booking.get('school_code') or ""
-            student_u = booking.get('student_username')
-            student_name = booking.get('student_name')
-
-            if school_code != "D2D_GLOBAL" and student_u:
-                monitor_check = get_db().table(
-                    "parent_principal_rooms"
-                ).select("parent_username") \
-                    .eq("child_username", student_u) \
-                    .limit(1) \
-                    .execute()
-
-                verified_parent = (
-                    monitor_check.data[0]['parent_username']
-                    if monitor_check.data
-                    else None
-                )
-
-                existing_room = get_db().table(
-                    "parent_driver_rooms"
-                ).select("id") \
-                    .eq("child_username", student_u) \
-                    .eq("driver_username", g.current_user) \
-                    .execute()
-
-                if not existing_room.data:
-                    get_db().table("parent_driver_rooms").insert({
-                        "child_name": student_name,
-                        "child_username": student_u,
-                        "parent_username": verified_parent,
-                        "driver_username": g.current_user,
-                        "school_code": school_code
-                    }).execute()
-
-            return jsonify({
-                "status": "success",
-                "new_status": status
-            }), 200
-
-        get_db().table("bookings").update(
-            update_payload
-        ).eq("booking_id", bid).execute()
-
-        return jsonify({
-            "status": "success",
-            "new_status": status
-        }), 200
-
-    except Exception as e:
-        print(e)
-        return jsonify({
-            "status": "error",
-            "msg": str(e)
-        }), 500
-
-@app.route('/api/driver/get_parent_rooms', methods=['POST', 'OPTIONS'])
-@require_auth
-@require_role('driver')
-def get_driver_parent_rooms():
-    try:
-        res = get_db().table("parent_driver_rooms") \
-            .select("child_username, parent_username") \
-            .eq("driver_username", g.current_user) \
-            .execute()
-
-        return jsonify({
-            'status': 'success',
-            'rooms': res.data or []
-        }), 200
-
-    except Exception:
-        return jsonify({
-            'status': 'success',
-            'rooms': []
-        }), 200
-
-# =====================================================================
-# TRANSPORT LEDGERS
-# =====================================================================
-
-@app.route('/api/parent/get_logs', methods=['POST', 'OPTIONS'])
-@require_auth
-def get_parent_logs():
-    try:
-        data = request.json or {}
-        s_u = data.get('student_name', '').strip()
-
-        if g.current_role == 'student':
-            res = get_db().table("student_ledger").select("*") \
-                .eq("owner_username", g.current_user) \
-                .order("timestamp", desc=True).limit(50).execute()
-
-            return jsonify({
-                'status': 'success',
-                'logs': res.data or []
-            }), 200
-
-        elif g.current_role == 'general':
-            if s_u:
-                link_check = get_db().table(
-                    "parent_principal_rooms"
-                ).select("child_username") \
-                    .eq("parent_username", g.current_user) \
-                    .execute()
-
-                linked_children = [
-                    r['child_username']
-                    for r in (link_check.data or [])
-                ]
-
-                if s_u not in linked_children:
-                    return jsonify({
-                        'status': 'error',
-                        'logs': []
-                    }), 403
-
-                query = get_db().table("parent_ledger").select("*") \
-                    .eq("owner_username", g.current_user) \
-                    .ilike("student_name", s_u)
-            else:
-                query = get_db().table("parent_ledger").select("*") \
-                    .eq("owner_username", g.current_user)
-
-            res = query.order(
-                "timestamp",
-                desc=True
-            ).limit(200).execute()
-
-            return jsonify({
-                'status': 'success',
-                'logs': res.data or []
-            }), 200
-
-    except Exception as e:
-        return jsonify({
-            'status': 'error',
-            'msg': str(e)
-        }), 500
-
-@app.route('/api/parent/ledger/delete_single', methods=['POST', 'OPTIONS'])
-@require_auth
-@require_role('general')
-def delete_parent_ledger_entry():
-    try:
-        log_id = request.json.get('log_id')
-
-        check = get_db().table("parent_ledger").select(
-            "owner_username"
-        ).eq("id", log_id).execute()
-
-        if (
-            not check.data
-            or check.data[0].get('owner_username') != g.current_user
-        ):
-            return jsonify({
-                'status': 'error',
-                'msg': 'Not authorized for this log'
-            }), 403
-
-        get_db().table("parent_ledger").delete().eq(
-            "id", log_id
-        ).execute()
-
-        return jsonify({'status': 'success'}), 200
-
-    except Exception as e:
-        return jsonify({
-            'status': 'error',
-            'msg': str(e)
-        }), 500
-
-@app.route('/api/parent/ledger/clear', methods=['POST', 'OPTIONS'])
-@require_auth
-@require_role('general')
-def clear_parent_ledger():
-    try:
-        get_db().table("parent_ledger").delete().eq(
-            "owner_username", g.current_user
-        ).execute()
-
-        return jsonify({'status': 'success'}), 200
-
-    except Exception as e:
-        return jsonify({
-            'status': 'error',
-            'msg': str(e)
-        }), 500
-
-@app.route('/api/student/ledger/delete_single', methods=['POST', 'OPTIONS'])
-@require_auth
-@require_role('student')
-def delete_student_ledger_entry():
-    try:
-        log_id = request.json.get('log_id')
-
-        check = get_db().table("student_ledger").select(
-            "owner_username"
-        ).eq("id", log_id).execute()
-
-        if (
-            not check.data
-            or check.data[0].get('owner_username') != g.current_user
-        ):
-            return jsonify({
-                'status': 'error',
-                'msg': 'Not authorized for this log'
-            }), 403
-
-        get_db().table("student_ledger").delete().eq(
-            "id", log_id
-        ).execute()
-
-        return jsonify({'status': 'success'}), 200
-
-    except Exception as e:
-        return jsonify({
-            'status': 'error',
-            'msg': str(e)
-        }), 500
-
-@app.route('/api/student/ledger/clear', methods=['POST', 'OPTIONS'])
-@require_auth
-@require_role('student')
-def clear_student_ledger():
-    try:
-        get_db().table("student_ledger").delete().eq(
-            "owner_username", g.current_user
-        ).execute()
-
-        return jsonify({'status': 'success'}), 200
-
-    except Exception as e:
-        return jsonify({
-            'status': 'error',
-            'msg': str(e)
-        }), 500
-
-@app.route('/api/driver/get_ledger', methods=['POST', 'OPTIONS'])
-@require_auth
-@require_role('driver')
-def get_driver_ledger():
-    try:
-        res = get_db().table("driver_ledger").select("*") \
-            .eq("owner_username", g.current_user) \
-            .order("timestamp", desc=True).limit(200).execute()
-
-        return jsonify({
-            'status': 'success',
-            'logs': res.data or []
-        }), 200
-
-    except Exception:
-        return jsonify({
-            'status': 'success',
-            'logs': []
-        }), 200
-
-@app.route('/api/driver/ledger/delete_single', methods=['POST', 'OPTIONS'])
-@require_auth
-@require_role('driver')
-def delete_driver_ledger_entry():
-    try:
-        log_id = request.json.get('log_id')
-
-        check = get_db().table("driver_ledger").select(
-            "owner_username"
-        ).eq("id", log_id).execute()
-
-        if (
-            not check.data
-            or check.data[0].get('owner_username') != g.current_user
-        ):
-            return jsonify({
-                'status': 'error',
-                'msg': 'Not authorized for this log'
-            }), 403
-
-        get_db().table("driver_ledger").delete().eq(
-            "id", log_id
-        ).execute()
-
-        return jsonify({'status': 'success'}), 200
-
-    except Exception as e:
-        return jsonify({
-            'status': 'error',
-            'msg': str(e)
-        }), 500
-
-@app.route('/api/driver/ledger/clear', methods=['POST', 'OPTIONS'])
-@require_auth
-@require_role('driver')
-def clear_driver_ledger():
-    try:
-        get_db().table("driver_ledger").delete().eq(
-            "owner_username", g.current_user
-        ).execute()
-
-        return jsonify({'status': 'success'}), 200
-
-    except Exception as e:
-        return jsonify({
-            'status': 'error',
-            'msg': str(e)
-        }), 500
-
-@app.route('/api/booking/chat', methods=['POST', 'OPTIONS'])
-@require_auth
-def booking_chat():
-    try:
-        data = request.json or {}
-        bid = data.get('booking_id')
-        msg_text = data.get('message_obj', {}).get('text', '')
-
-        msg_obj = {
-            "sender": g.current_user,
-            "text": msg_text,
-            "time": current_sa_time()
-        }
-
-        res = get_db().table("bookings").select(
-            "chat, student_username, driver_username"
-        ).eq("booking_id", bid).execute()
-
-        if not res.data:
-            return jsonify({
-                'status': 'error',
-                'msg': 'Booking not found'
-            }), 404
-
-        booking = res.data[0]
-
-        if g.current_user not in (
-            booking.get('student_username'),
-            booking.get('driver_username')
-        ):
-            return jsonify({
-                'status': 'error',
-                'msg': 'Not part of this conversation'
-            }), 403
-
-        current_chat = booking.get('chat') or []
-        current_chat.append(msg_obj)
-
-        get_db().table("bookings").update({
-            "chat": current_chat
-        }).eq("booking_id", bid).execute()
-
-        return jsonify({
-            'status': 'success',
-            'chat': current_chat
-        }), 200
-
-    except Exception as e:
-        return jsonify({
-            'status': 'error',
-            'msg': f'Matrix messaging write fault: {str(e)}'
-        }), 500
-
-@app.route('/api/transport/track', methods=['POST', 'OPTIONS'])
-@require_auth
-@require_role('driver')
-def track_transport():
-    try:
-        data = request.json or {}
-        bid = data.get('booking_id')
-        action = data.get('action')
-
-        forced_time = current_sa_time()
-        status_msg = "PICKED UP" if action == 'pickup' else "DROPPED OFF"
-
-        owner_check = get_db().table("bookings").select(
-            "driver_username"
-        ).eq("booking_id", bid).execute()
-
-        if (
-            not owner_check.data
-            or owner_check.data[0].get('driver_username') != g.current_user
-        ):
-            return jsonify({
-                'status': 'error',
-                'msg': 'Not authorized to update this booking'
-            }), 403
-
-        get_db().table("bookings").update({
-            "tracking_status": status_msg,
-            "last_updated": forced_time
-        }).eq("booking_id", bid).execute()
-
-        b_res = get_db().table("bookings").select("*").eq(
-            "booking_id", bid
-        ).execute()
-
-        if b_res.data:
-            b = b_res.data[0]
-
-            student_u = b.get('student_username')
-            student_name = b.get('student_name')
-            driver_name = b.get('driver_name')
-            school_code = b.get('school_code')
-
-            base_entry = {
-                "booking_id": bid,
-                "student_username": student_u,
-                "student_name": student_name,
-                "driver_username": g.current_user,
-                "driver_name": driver_name,
-                "school_code": school_code,
-                "status": status_msg,
-                "timestamp": forced_time,
-            }
-
-            get_db().table("driver_ledger").insert({
-                **base_entry,
-                "owner_username": g.current_user
-            }).execute()
-
-            if student_u:
-                get_db().table("student_ledger").insert({
-                    **base_entry,
-                    "owner_username": student_u
-                }).execute()
-
-            if student_u:
-                parent_rooms = get_db().table(
-                    "parent_principal_rooms"
-                ).select("parent_username") \
-                    .eq("child_username", student_u) \
-                    .execute()
-
-                seen_parents = set()
-
-                for room in (parent_rooms.data or []):
-                    p_u = room.get("parent_username")
-
-                    if p_u and p_u not in seen_parents:
-                        seen_parents.add(p_u)
-
-                        get_db().table("parent_ledger").insert({
-                            **base_entry,
-                            "owner_username": p_u
-                        }).execute()
-
-            if school_code and school_code != "D2D_GLOBAL":
-                get_db().table("principal_ledger").insert(
-                    base_entry
-                ).execute()
-
-        return jsonify({'status': 'success'}), 200
-
-    except Exception as e:
-        return jsonify({
-            'status': 'error',
-            'msg': f'Tracking coordinate drop: {str(e)}'
-        }), 500
-
-@app.route('/api/driver/update_role', methods=['POST', 'OPTIONS'])
-@require_auth
-@require_role('driver')
-def driver_update_role():
-    try:
-        role = request.json.get('role')
-
-        get_db().table("users").update({
-            "driver_mode": role
-        }).eq("username", g.current_user).execute()
-
-        return jsonify({'status': 'success'}), 200
-
-    except Exception as e:
-        return jsonify({
-            'status': 'error',
-            'msg': str(e)
-        }), 500
-
-@app.route('/api/posts/create', methods=['POST', 'OPTIONS'])
-@require_auth
-@require_role('driver')
-def create_post():
-    try:
-        data = request.form
-        post_id = f"POST-{random.randint(10000, 99999)}"
-
-        post_data = {
-            "post_id": post_id,
-            "username": g.current_user,
-            "name": data.get('name'),
-            "content": data.get('content'),
-            "timestamp": current_sa_time(),
-            "expiry": data.get('expiry', None)
-        }
-
-        get_db().table("posts").insert(post_data).execute()
-
-        return jsonify({
-            'status': 'success',
-            'post_id': post_id
-        }), 200
-
-    except Exception as e:
-        return jsonify({
-            'status': 'error',
-            'msg': str(e)
-        }), 500
-
-@app.route('/api/posts/delete', methods=['POST', 'OPTIONS'])
-@require_auth
-@require_role('driver')
-def delete_post():
-    try:
-        pid = request.json.get('post_id')
-
-        owner_check = get_db().table("posts").select(
-            "username"
-        ).eq("post_id", pid).execute()
-
-        if (
-            not owner_check.data
-            or owner_check.data[0].get('username') != g.current_user
-        ):
-            return jsonify({
-                'status': 'error',
-                'msg': 'Not authorized to delete this post'
-            }), 403
-
-        get_db().table("posts").delete().eq(
-            "post_id", pid
-        ).execute()
-
-        return jsonify({'status': 'success'}), 200
-
-    except Exception as e:
-        return jsonify({
-            'status': 'error',
-            'msg': str(e)
-        }), 500
-
-@app.route('/api/posts/get_all', methods=['GET', 'POST', 'OPTIONS'])
-def get_all_posts():
-    if request.method == 'OPTIONS':
-        return jsonify({'status': 'ok'}), 200
-
-    try:
-        res = get_db().table("posts").select("*").order(
-            "timestamp",
-            desc=True
-        ).execute()
-
-        return jsonify({
-            'status': 'success',
-            'posts': res.data if res.data else []
-        }), 200
-
-    except Exception:
-        return jsonify({
-            'status': 'success',
-            'posts': []
-        }), 200
-
-@app.route('/api/support/get_all_counts', methods=['POST', 'OPTIONS'])
-@require_auth
-def get_support_counts():
-    try:
-        receiver = g.current_user
-
-        res = get_db().table(
-            "direct_support_messages"
-        ).select("child_name").or_(
-            f"receiver_username.eq.{receiver},sender_username.eq.{receiver}"
-        ).execute()
-
-        counts = {}
-
-        for m in (res.data if res.data else []):
-            if m.get('child_name'):
-                room = m['child_name']
-                counts[room] = counts.get(room, 0) + 1
-
-        return jsonify({
-            'status': 'success',
-            'counts': counts
-        }), 200
-
-    except Exception:
-        return jsonify({
-            'status': 'success',
-            'counts': {}
-        }), 200
-
-@app.route('/api/support/get_history', methods=['POST', 'OPTIONS'])
-@require_auth
-def get_support_history():
-    try:
-        data = request.json or {}
-        child = str(data.get('child_username', '')).strip()
-        room_type = data.get('room_type', 'triple_party_matrix')
-
-        if not child:
-            return jsonify({
-                'status': 'error',
-                'messages': []
-            }), 400
-
-        if room_type == "general_driver_room":
-            room_check = get_db().table(
-                "general_driver_rooms"
-            ).select(
-                "driver_username,parent_username"
-            ).eq("booking_id", child).limit(1).execute()
-
-            if room_check.data:
-                room = room_check.data[0]
-                driver_u = room["driver_username"]
-                parent_u = room["parent_username"]
-
-                if g.current_user not in (driver_u, parent_u):
-                    return jsonify({
-                        'status': 'error',
-                        'messages': []
-                    }), 403
-
-                res = get_db().table(
-                    "direct_support_messages"
-                ).select("*").eq("room_id", child).or_(
-                    f"and(sender_username.eq.{parent_u},receiver_username.eq.{driver_u}),"
-                    f"and(sender_username.eq.{driver_u},receiver_username.eq.{parent_u})"
-                ).order("timestamp", desc=False).execute()
-
-                return jsonify({
-                    "status": "success",
-                    "messages": res.data or []
-                }), 200
-
-        if room_type == "parent_driver_matrix":
-            room_check = get_db().table(
-                "parent_driver_rooms"
-            ).select(
-                "driver_username, parent_username"
-            ).eq("child_username", child).limit(1).execute()
-
-            if room_check.data:
-                room_info = room_check.data[0]
-                driver_u = room_info.get('driver_username')
-                parent_u = room_info.get('parent_username')
-
-                if g.current_user not in (driver_u, parent_u):
-                    return jsonify({
-                        'status': 'error',
-                        'messages': []
-                    }), 403
-
-                res = get_db().table(
-                    "direct_support_messages"
-                ).select("*").eq("child_name", child).or_(
-                    f"and(sender_username.eq.{parent_u},receiver_username.eq.{driver_u}),"
-                    f"and(sender_username.eq.{driver_u},receiver_username.eq.{parent_u})"
-                ).order("timestamp", desc=False).execute()
-
-                return jsonify({
-                    'status': 'success',
-                    'messages': res.data if res.data else []
-                }), 200
-
-        room_check = get_db().table(
-            "parent_principal_rooms"
-        ).select(
-            "principal_username, parent_username"
-        ).eq("child_username", child).limit(1).execute()
-
-        if room_check.data:
-            room_info = room_check.data[0]
-            principal_u = room_info.get('principal_username')
-            parent_u = room_info.get('parent_username')
-
-            if g.current_user not in (principal_u, parent_u):
-                return jsonify({
-                    'status': 'error',
-                    'messages': []
-                }), 403
-
-            res = get_db().table(
-                "direct_support_messages"
-            ).select("*").eq("child_name", child).or_(
-                f"and(sender_username.eq.{parent_u},receiver_username.eq.{principal_u}),"
-                f"and(sender_username.eq.{principal_u},receiver_username.eq.{parent_u})"
-            ).order("timestamp", desc=False).execute()
-
-            return jsonify({
-                'status': 'success',
-                'messages': res.data if res.data else []
-            }), 200
-
-        return jsonify({
-            'status': 'success',
-            'messages': []
-        }), 200
-
-    except Exception as e:
-        print(f"❌ [CHAT LOG FETCH EXCEPTION]: {str(e)}")
-        return jsonify({
-            'status': 'success',
-            'messages': []
-        }), 200
-
-@app.route('/api/support/get_history_batch', methods=['POST', 'OPTIONS'])
-@require_auth
-def get_support_history_batch():
-    if request.method == 'OPTIONS':
-        return jsonify({'status': 'ok'}), 200
-
-    try:
-        data = request.json or {}
-        rooms = data.get('rooms', [])
-        results = {}
-
-        for r in rooms:
-            child = str(r.get('child_username', '')).strip()
-            room_type = r.get('room_type', 'triple_party_matrix')
-            key = f"{room_type}:{child}"
-
-            if not child:
-                results[key] = []
-                continue
-
-            messages = []
-
-            try:
-                if room_type == "general_driver_room":
-                    room_check = get_db().table(
-                        "general_driver_rooms"
-                    ).select(
-                        "driver_username, parent_username"
-                    ).eq("booking_id", child).limit(1).execute()
-
-                    if room_check.data:
-                        room = room_check.data[0]
-                        driver_u = room.get("driver_username")
-                        parent_u = room.get("parent_username")
-
-                        if g.current_user in (driver_u, parent_u):
-                            res = get_db().table(
-                                "direct_support_messages"
-                            ).select("*").eq(
-                                "room_id", child
-                            ).or_(
-                                f"and(sender_username.eq.{parent_u},receiver_username.eq.{driver_u}),"
-                                f"and(sender_username.eq.{driver_u},receiver_username.eq.{parent_u})"
-                            ).order(
-                                "timestamp",
-                                desc=False
-                            ).execute()
-
-                            messages = res.data or []
-
-                elif room_type == "parent_driver_matrix":
-                    room_check = get_db().table(
-                        "parent_driver_rooms"
-                    ).select(
-                        "driver_username, parent_username"
-                    ).eq(
-                        "child_username",
-                        child
-                    ).limit(1).execute()
-
-                    if room_check.data:
-                        room_info = room_check.data[0]
-                        driver_u = room_info.get('driver_username')
-                        parent_u = room_info.get('parent_username')
-
-                        if g.current_user in (driver_u, parent_u):
-                            res = get_db().table(
-                                "direct_support_messages"
-                            ).select("*").eq(
-                                "child_name", child
-                            ).or_(
-                                f"and(sender_username.eq.{parent_u},receiver_username.eq.{driver_u}),"
-                                f"and(sender_username.eq.{driver_u},receiver_username.eq.{parent_u})"
-                            ).order(
-                                "timestamp",
-                                desc=False
-                            ).execute()
-
-                            messages = res.data or []
-
-                else:
-                    room_check = get_db().table(
-                        "parent_principal_rooms"
-                    ).select(
-                        "principal_username, parent_username"
-                    ).eq(
-                        "child_username",
-                        child
-                    ).limit(1).execute()
-
-                    if room_check.data:
-                        room_info = room_check.data[0]
-                        principal_u = room_info.get('principal_username')
-                        parent_u = room_info.get('parent_username')
-
-                        if g.current_user in (principal_u, parent_u):
-                            res = get_db().table(
-                                "direct_support_messages"
-                            ).select("*").eq(
-                                "child_name", child
-                            ).or_(
-                                f"and(sender_username.eq.{parent_u},receiver_username.eq.{principal_u}),"
-                                f"and(sender_username.eq.{principal_u},receiver_username.eq.{parent_u})"
-                            ).order(
-                                "timestamp",
-                                desc=False
-                            ).execute()
-
-                            messages = res.data or []
-
-            except Exception as inner_e:
-                print(
-                    f"[BATCH HISTORY] lookup failed for {key}: {inner_e}"
-                )
-                messages = []
-
-            results[key] = messages
-
-        return jsonify({
-            'status': 'success',
-            'results': results
-        }), 200
-
-    except Exception as e:
-        return jsonify({
-            'status': 'error',
-            'message': str(e)
-        }), 500
-
-@app.route('/api/principal/get_data', methods=['POST', 'OPTIONS'])
-@require_auth
-@require_role('principal')
-def principal_get_data():
-    try:
-        data = request.get_json(silent=True) or {}
-        sc = str(data.get('school_code', '')).strip().upper()
-
-        if not sc:
-            return jsonify({
-                'status': 'error',
-                'message': 'Missing school code'
-            }), 400
-
-        my_school = get_db().table("schools").select(
-            "school_code"
-        ).eq(
-            "principal_username",
-            g.current_user
-        ).execute()
-
-        allowed_codes = [
-            s['school_code']
-            for s in (my_school.data or [])
-        ]
-
-        if sc not in allowed_codes:
-            return jsonify({
-                'status': 'error',
-                'message': 'Not authorized for this school code'
-            }), 403
-
-        school_check = get_db().table("schools").select(
-            "school_name"
-        ).eq("school_code", sc).execute()
-
-        if not school_check.data:
-            return jsonify({
-                'status': 'error',
-                'message': 'This School Code does not exist.'
-            }), 404
-
-        s_name = school_check.data[0].get('school_name') or "Unknown School"
-
-        res = get_db().table("users").select(
-            "username, name, role, school_code, photo, moderated_grade"
-        ).eq("school_code", sc).execute()
-
-        users = res.data or []
-        drivers = [u for u in users if u.get('role') == 'driver']
-        students = [u for u in users if u.get('role') == 'student']
-
-        log_res = get_db().table("principal_ledger").select(
-            "student_name, status, school_code, timestamp, driver_name"
-        ).eq(
-            "school_code", sc
-        ).order(
-            "timestamp",
-            desc=True
-        ).limit(50).execute()
-
-        logs = log_res.data or []
-        combined_logs = [
-            log for log in logs
-            if isinstance(log, dict)
-        ]
-
-        parent_rooms_res = get_db().table(
-            "parent_principal_rooms"
-        ).select(
-            "parent_username, child_username"
-        ).eq(
-            "school_code", sc
-        ).execute()
-
-        parent_rooms = parent_rooms_res.data or []
-
-        return jsonify({
-            'status': 'success',
-            'school_name': s_name,
-            'drivers': drivers,
-            'students': students,
-            'logs': combined_logs,
-            'parent_rooms': parent_rooms
-        }), 200
-
-    except Exception as e:
-        print("DASHBOARD ERROR:", str(e))
-        return jsonify({
-            'status': 'error',
-            'message': f'Internal server error: {str(e)}'
-        }), 500
-
-@app.route('/api/get_all_school_bookings', methods=['POST', 'OPTIONS'])
-@require_auth
-@require_role('principal')
-def get_all_school_bookings():
-    try:
-        sc = request.json.get('school_code', '').strip().upper()
-
-        my_school = get_db().table("schools").select(
-            "school_code"
-        ).eq(
-            "principal_username",
-            g.current_user
-        ).execute()
-
-        allowed_codes = [
-            s['school_code']
-            for s in (my_school.data or [])
-        ]
-
-        if sc not in allowed_codes:
-            return jsonify({
-                'status': 'success',
-                'bookings': []
-            }), 200
-
-        res = get_db().table("bookings").select("*").eq(
-            "school_code", sc
-        ).execute()
-
-        return jsonify({
-            'status': 'success',
-            'bookings': res.data if res.data else []
-        }), 200
-
-    except Exception:
-        return jsonify({
-            'status': 'success',
-            'bookings': []
-        }), 200
-
-@app.route('/api/principal/school_out', methods=['POST', 'OPTIONS'])
-@require_auth
-@require_role('principal')
-def school_out():
-    try:
-        data = request.json or {}
-        sc = data.get('school_code')
-
-        my_school = get_db().table("schools").select(
-            "school_code, school_name"
-        ).eq(
-            "principal_username",
-            g.current_user
-        ).execute()
-
-        allowed = {
-            s['school_code']: s.get('school_name')
-            for s in (my_school.data or [])
-        }
-
-        if sc not in allowed:
-            return jsonify({
-                'status': 'error',
-                'msg': 'Not authorized for this school'
-            }), 403
-
-        school_name = allowed.get(sc) or sc
-
-        broadcast_msg = (
-            f"⚠️ URGENT ALERT: Students at {school_name} have been officially "
-            "released. Please proceed to the pickup point immediately!"
-        )
-
-        timestamp = current_sa_time()
-
-        rooms = get_db().table(
-            "parent_principal_rooms"
-        ).select(
-            "parent_username, child_username"
-        ).eq(
-            "school_code",
-            sc
-        ).execute()
-
-        for room in (rooms.data or []):
-            get_db().table(
-                "direct_support_messages"
-            ).insert({
-                "sender_username": "PRINCIPAL",
-                "receiver_username": room["parent_username"],
-                "child_name": room["child_username"],
-                "school_name": school_name,
-                "school_code": sc,
-                "message": broadcast_msg,
-                "is_alarm": True,
-                "timestamp": timestamp
-            }).execute()
-
-            student = get_db().table("users").select(
-                "name"
-            ).eq(
-                "username",
-                room["child_username"]
-            ).limit(1).execute()
-
-            student_name = (
-                student.data[0]["name"]
-                if student.data
-                else room["child_username"]
-            )
-
-            existing = get_db().table("safety_logs").select(
-                "id"
-            ).eq(
-                "student_name",
-                student_name
-            ).eq(
-                "school_code",
-                sc
-            ).eq(
-                "status",
-                "SCHOOL DISMISSED - URGENT"
-            ).limit(1).execute()
-
-            if not existing.data:
-                get_db().table("safety_logs").insert({
-                    "student_name": student_name,
-                    "driver_name": "PRINCIPAL (SYSTEM)",
-                    "school_code": sc,
-                    "status": "SCHOOL DISMISSED - URGENT",
-                    "timestamp": timestamp,
-                    "log_type": "transport",
-                    "additional_info": "Mass dismissal broadcast initiated by Principal."
-                }).execute()
-
-        driver_res = get_db().table("users").select(
-            "username, school_codes"
-        ).eq(
-            "role",
-            "driver"
-        ).execute()
-
-        for d in (driver_res.data or []):
-            codes = d.get("school_codes") or []
-
-            if sc in codes:
-                get_db().table(
-                    "direct_support_messages"
-                ).insert({
-                    "sender_username": "PRINCIPAL",
-                    "receiver_username": d["username"],
-                    "child_name": sc,
-                    "school_name": school_name,
-                    "school_code": sc,
-                    "message": broadcast_msg,
-                    "is_alarm": True,
-                    "timestamp": timestamp
-                }).execute()
-
-        return jsonify({'status': 'success'}), 200
-
-    except Exception as e:
-        return jsonify({
-            'status': 'error',
-            'msg': str(e)
-        }), 500
-
-@app.route('/api/driver/get_alarms', methods=['POST', 'OPTIONS'])
-@require_auth
-@require_role('driver')
-def get_driver_alarms():
-    try:
-        driver_u = g.current_user
-
-        user_res = get_db().table("users").select(
-            "school_codes"
-        ).eq(
-            "username",
-            driver_u
-        ).execute()
-
-        if not user_res.data:
-            return jsonify({
-                'status': 'error',
-                'message': 'Driver not found'
-            }), 404
-
-        school_codes = user_res.data[0].get(
-            'school_codes',
-            []
-        )
-
-        alarms = get_db().table(
-            "direct_support_messages"
-        ).select("*").eq(
-            "is_alarm",
-            True
-        ).in_(
-            "child_name",
-            school_codes
-        ).order(
-            "timestamp",
-            desc=True
-        ).limit(10).execute()
-
-        return jsonify({
-            'status': 'success',
-            'alarms': alarms.data
-        }), 200
-
-    except Exception as e:
-        print(f"❌ Driver Alarm fetch error: {e}")
-        return jsonify({
-            'status': 'error',
-            'alarms': []
-        }), 500
-
-@app.route('/api/support/get_all_alarms', methods=['POST', 'OPTIONS'])
-@require_auth
-def get_all_alarms():
-    try:
-        receiver_u = g.current_user
-
-        alarms = get_db().table(
-            "direct_support_messages"
-        ).select("*").eq(
-            "receiver_username",
-            receiver_u
-        ).eq(
-            "is_alarm",
-            True
-        ).order(
-            "timestamp",
-            desc=True
-        ).execute()
-
-        return jsonify({
-            'status': 'success',
-            'alarms': alarms.data if alarms.data else []
-        }), 200
-
-    except Exception as e:
-        print(f"❌ Alarm fetch error: {e}")
-        return jsonify({
-            'status': 'error',
-            'alarms': []
-        }), 500
-
-@app.route('/api/support/send_msg', methods=['POST', 'OPTIONS'])
-@require_auth
-def send_support_msg():
-    try:
-        data = request.json or {}
-
-        sender = g.current_user
-        receiver = str(data.get('receiver', ''))
-        child = str(data.get('child_name', ''))
-        room_id = str(data.get("room_id", ""))
-        room_type = data.get('room_type', '')
-        school_name = str(data.get('school_name', ''))
-        school_code = str(
-            data.get('school_code', '')
-        ).strip().upper()
-        msg_payload = data.get('message')
-
-        lookup_key = room_id or child
-
-        if (
-            not receiver
-            and room_type == "general_driver_room"
-            and lookup_key
-        ):
-            room = get_db().table(
-                "general_driver_rooms"
-            ).select(
-                "driver_username, parent_username"
-            ).eq(
-                "booking_id",
-                lookup_key
-            ).limit(1).execute()
-
-            if room.data:
-                driver_u = room.data[0].get("driver_username")
-                parent_u = room.data[0].get("parent_username")
-
-                if sender not in (driver_u, parent_u):
-                    return jsonify({
-                        'status': 'error',
-                        'msg': 'Not part of this conversation'
-                    }), 403
-
-                receiver = (
-                    parent_u
-                    if sender == driver_u
-                    else driver_u
-                )
-                child = lookup_key
-
-        elif (
-            not receiver
-            and room_type == "parent_driver_matrix"
-            and lookup_key
-        ):
-            room = get_db().table(
-                "parent_driver_rooms"
-            ).select(
-                "driver_username, parent_username"
-            ).eq(
-                "child_username",
-                lookup_key
-            ).limit(1).execute()
-
-            if room.data:
-                driver_u = room.data[0].get("driver_username")
-                parent_u = room.data[0].get("parent_username")
-
-                if sender not in (driver_u, parent_u):
-                    return jsonify({
-                        'status': 'error',
-                        'msg': 'Not part of this conversation'
-                    }), 403
-
-                receiver = (
-                    parent_u
-                    if sender == driver_u
-                    else driver_u
-                )
-                child = lookup_key
-
-        elif (
-            not receiver
-            and room_type == "triple_party_matrix"
-            and lookup_key
-        ):
-            room = get_db().table(
-                "parent_principal_rooms"
-            ).select(
-                "principal_username, parent_username"
-            ).eq(
-                "child_username",
-                lookup_key
-            ).limit(1).execute()
-
-            if room.data:
-                principal_u = room.data[0].get("principal_username")
-                parent_u = room.data[0].get("parent_username")
-
-                if sender not in (principal_u, parent_u):
-                    return jsonify({
-                        'status': 'error',
-                        'msg': 'Not part of this conversation'
-                    }), 403
-
-                receiver = (
-                    parent_u
-                    if sender == principal_u
-                    else principal_u
-                )
-                child = lookup_key
-
-        if not receiver:
-            return jsonify({
-                'status': 'error',
-                'msg': 'Could not resolve message recipient'
-            }), 400
-
-        is_alarm = data.get('is_alarm', False)
-
-        if is_alarm and g.current_role != 'principal':
-            is_alarm = False
-
-        chat_entry = {
-            "room_id": room_id,
-            "sender_username": sender,
-            "receiver_username": receiver,
-            "child_name": child,
-            "school_name": school_name,
-            "school_code": school_code,
-            "message": msg_payload,
-            "is_alarm": is_alarm,
-            "timestamp": current_sa_time()
-        }
-
-        get_db().table(
-            "direct_support_messages"
-        ).insert(chat_entry).execute()
-
-        if is_alarm:
-            get_db().table("safety_logs").insert({
-                "student_name": child,
-                "driver_name": sender,
-                "school_code": school_code,
-                "status": "SCHOOL DISMISSED",
-                "timestamp": current_sa_time(),
-                "log_type": "SCHOOL OUT ALERT",
-                "additional_info": msg_payload
-            }).execute()
-
-        return jsonify({'status': 'success'}), 200
-
-    except Exception as e:
-        print(
-            f"[CRITICAL CHAT DROP RECOVERED] Insertion blocked: {e}"
-        )
-
-        return jsonify({
-            'status': 'error',
-            'msg': 'Communication channel delay.'
-        }), 200
-
-# =====================================================================
-# PARENT LINK — NOW PERSISTED IN SUPABASE
-# =====================================================================
-
-@app.route('/api/parent/request_link', methods=['POST', 'OPTIONS'])
-@require_auth
-@require_role('general')
-def request_parent_link():
-    try:
-        data = request.json or {}
-
-        sc = data.get('school_code', '').upper()
-        cu = data.get('child_username', '').lower()
-
-        res = get_db().table("users").select("*").eq(
-            "username",
-            cu
-        ).eq(
-            "school_code",
-            sc
-        ).execute()
-
-        if not res.data:
-            return jsonify({
-                'status': 'error',
-                'message': 'Verification Check: Student data not found in records.'
-            }), 404
-
-        student = res.data[0]
-        otp = str(random.randint(1111, 9999))
-
-        get_db().table("pending_parent_links").upsert({
-            "child_username": cu,
-            "v_code": otp,
-            "child_data": student,
-            "requested_by": g.current_user,
-            "created_at": current_sa_time(),
-            "expires_at": _expiry()
-        }).execute()
-
-        email_body = f"""
-        <p style="font-size: 18px;">A Guardian Tracking request has been initiated.</p>
-        <div style="background: #161b22; padding: 20px; border-radius: 10px; margin: 20px 0; border-left: 4px solid #10b981;">
-            <p style="margin: 5px 0;">Student Linked: <b style="color: #ffffff;">{student['name']}</b></p>
-            <p style="margin: 5px 0;">Security Pin: <b style="font-size: 24px; color: #10b981; letter-spacing: 4px;">{otp}</b></p>
-        </div>
-        <p>Enter this pin in your Safe Drive app to confirm parental access.</p>
-        """
-
-        send_mail(
-            student['parent_email'],
-            "Safe Drive Link",
-            email_body,
-            "Parent Verification"
-        )
-
-        return jsonify({'status': 'success'}), 200
-
-    except Exception as e:
-        print(
-            f"[NETWORK LINK CRASH RECOVERED] Parent request line failure: {e}"
-        )
-
-        return jsonify({
-            'status': 'error',
-            'msg': 'Database connection drop. Please retry execution.'
-        }), 200
-
-@app.route('/api/parent/verify_link', methods=['POST', 'OPTIONS'])
-@require_auth
-@require_role('general')
-def verify_parent_link():
-    try:
-        data = request.json or {}
-
-        cu = data.get('child_username', '').lower()
-        code = str(data.get('code', '')).strip()
-
-        link_res = get_db().table(
-            "pending_parent_links"
-        ).select("*").eq(
-            "child_username",
-            cu
-        ).execute()
-
-        pending = (
-            link_res.data[0]
-            if link_res.data
-            else None
-        )
-
-        if (
-            not pending
-            or _is_expired(pending.get('expires_at'))
-            or str(pending.get('v_code', '')) != code
-            or pending.get('requested_by') != g.current_user
-        ):
-            return jsonify({
-                'status': 'error',
-                'message': 'Invalid security authorization credentials.'
-            }), 401
-
-        child_info = pending['child_data']
-
-        get_db().table(
-            "pending_parent_links"
-        ).delete().eq(
-            "child_username",
-            cu
-        ).execute()
-
-        parent_u = g.current_user
-        school_code = child_info.get('school_code')
-
-        school_res = get_db().table("schools").select(
-            "principal_username"
-        ).eq(
-            "school_code",
-            school_code
-        ).limit(1).execute()
-
-        if school_res.data:
-            principal_u = school_res.data[0].get(
-                'principal_username'
-            )
-
-            if principal_u:
-                existing = get_db().table(
-                    "parent_principal_rooms"
-                ).select("id").eq(
-                    "child_username",
-                    cu
-                ).eq(
-                    "parent_username",
-                    parent_u
-                ).eq(
-                    "principal_username",
-                    principal_u
-                ).execute()
-
-                if not existing.data:
-                    get_db().table(
-                        "parent_principal_rooms"
-                    ).insert({
-                        "child_name": child_info.get('name'),
-                        "child_username": cu,
-                        "parent_username": parent_u,
-                        "principal_username": principal_u,
-                        "school_code": school_code
-                    }).execute()
-
-        bookings_res = get_db().table(
-            "bookings"
-        ).select("*").eq(
-            "student_username",
-            cu
-        ).execute()
-
-        for booking in (bookings_res.data or []):
-            if booking.get('school_code') == "D2D_GLOBAL":
-                continue
-
-            if booking.get('status') != "Accepted":
-                continue
-
-            driver_u = booking.get('driver_username')
-
-            existing_room = get_db().table(
-                "parent_driver_rooms"
-            ).select("id").eq(
-                "child_username",
-                cu
-            ).eq(
-                "parent_username",
-                parent_u
-            ).eq(
-                "driver_username",
-                driver_u
-            ).execute()
-
-            if not existing_room.data:
-                get_db().table(
-                    "parent_driver_rooms"
-                ).insert({
-                    "child_name": child_info.get('name'),
-                    "child_username": cu,
-                    "parent_username": parent_u,
-                    "driver_username": driver_u,
-                    "school_code": booking.get('school_code')
-                }).execute()
-
-        return jsonify({
-            'status': 'success',
-            'child_data': child_info
-        }), 200
-
-    except Exception as e:
-        print(f"❌ [VERIFY LINK EXCEPTION]: {str(e)}")
-
-        return jsonify({
-            'status': 'error',
-            'message': str(e)
-        }), 500
-
-@app.route('/api/parent/remove_monitor', methods=['POST', 'OPTIONS'])
-@require_auth
-@require_role('general')
-def remove_monitor():
-    try:
-        child = request.json.get('child_username', '')
-
-        get_db().table(
-            'parent_principal_rooms'
-        ).delete().eq(
-            'child_username',
-            child
-        ).eq(
-            'parent_username',
-            g.current_user
-        ).execute()
-
-        get_db().table(
-            'parent_driver_rooms'
-        ).delete().eq(
-            'child_username',
-            child
-        ).eq(
-            'parent_username',
-            g.current_user
-        ).execute()
-
-        return jsonify({'status': 'success'}), 200
-
-    except Exception as e:
-        return jsonify({
-            'status': 'error',
-            'msg': str(e)
-        }), 500
-
-@app.route('/api/parent/get_child_room', methods=['POST', 'OPTIONS'])
-@require_auth
-@require_role('general')
-def get_child_room():
-    try:
-        data = request.json or {}
-        child = data.get('child_username', '')
-        room_type = data.get('room_type', '')
-
-        if room_type == 'principal':
-            table, field = (
-                'parent_principal_rooms',
-                'principal_username'
-            )
-        else:
-            table, field = (
-                'parent_driver_rooms',
-                'driver_username'
-            )
-
-        res = get_db().table(table).select(field) \
-            .eq('child_username', child) \
-            .eq('parent_username', g.current_user) \
-            .limit(1).execute()
-
-        if not res.data:
-            return jsonify({
-                'status': 'success',
-                'room': None
-            }), 200
-
-        return jsonify({
-            'status': 'success',
-            'room': {
-                'partner_username': res.data[0].get(field)
-            }
-        }), 200
-
-    except Exception:
-        return jsonify({
-            'status': 'success',
-            'room': None
-        }), 200
-
-@app.route('/api/attendance/get_for_student', methods=['POST', 'OPTIONS'])
-@require_auth
-def get_attendance_for_student():
-    try:
-        data = request.json or {}
-        student_u = data.get(
-            'student_username',
-            ''
-        ).strip()
-
-        if g.current_role == 'student':
-            if student_u.lower() != g.current_user.lower():
-                return jsonify({
-                    'status': 'error',
-                    'logs': []
-                }), 403
-
-        elif g.current_role == 'general':
-            link_check = get_db().table(
-                "parent_principal_rooms"
-            ).select("child_username").eq(
-                "parent_username",
-                g.current_user
-            ).eq(
-                "child_username",
-                student_u
-            ).execute()
-
-            if not link_check.data:
-                return jsonify({
-                    'status': 'error',
-                    'logs': []
-                }), 403
-
-        elif g.current_role not in (
-            'principal',
-            'moderator'
-        ):
-            return jsonify({
-                'status': 'error',
-                'logs': []
-            }), 403
-
-        res = get_db().table(
-            "attendance_logs"
-        ).select("*").eq(
-            "student_username",
-            student_u
-        ).order(
-            "timestamp",
-            desc=True
-        ).execute()
-
-        return jsonify({
-            'status': 'success',
-            'logs': res.data or []
-        }), 200
-
-    except Exception:
-        return jsonify({
-            'status': 'success',
-            'logs': []
-        }), 200
-
-@app.route('/api/verify_license', methods=['POST', 'OPTIONS'])
-@require_auth
-@require_role('driver')
-def verify_license():
-    data = request.json or {}
-    username = g.current_user
-    img_b64 = data.get('license_image')
-
-    try:
-        license_url = None
-
-        if img_b64:
-            if "," in img_b64:
-                img_b64 = img_b64.split(",", 1)[1]
-
-            img_data = base64.b64decode(img_b64)
-            file_name = (
-                f"license_{username}_{int(time.time())}.jpg"
-            )
-
-            get_db().storage.from_(
-                "profile pictures"
-            ).upload(
-                file=img_data,
-                path=file_name,
-                file_options={
-                    "content-type": "image/jpeg"
-                }
-            )
-
-            license_url = get_db().storage.from_(
-                "profile pictures"
-            ).get_public_url(file_name)
-
-        get_db().table("users").update({
-            "license_image": license_url
-        }).eq(
-            "username",
-            username
-        ).execute()
-
-        return jsonify({
-            'status': 'success',
-            'msg': 'License verified and securely vaulted.'
-        }), 200
-
-    except Exception as e:
-        return jsonify({
-            'status': 'error',
-            'msg': str(e)
-        }), 500
-
-@app.route('/api/search_drivers', methods=['POST', 'OPTIONS'])
-@require_auth
-def search_drivers():
-    data = request.json or {}
-    sc = data.get(
-        'school_code',
-        ''
-    ).strip().upper()
-
-    try:
-        if sc == "ALL_SYSTEM_DRIVERS":
-            res = get_db().table("users").select(
-                "name, username, school_code, driver_mode, vehicle_type, email"
-            ).eq(
-                "role",
-                "driver"
-            ).execute()
-        else:
-            res = get_db().table("users").select(
-                "name, username, school_code, driver_mode, vehicle_type, email"
-            ).eq(
-                "role",
-                "driver"
-            ).eq(
-                "school_code",
-                sc
-            ).execute()
-
-        return jsonify({
-            'status': 'success',
-            'drivers': res.data if res.data else []
-        }), 200
-
-    except Exception as e:
-        return jsonify({
-            'status': 'error',
-            'msg': str(e)
-        }), 500
-
-@app.route('/api/moderator/log_attendance', methods=['POST', 'OPTIONS'])
-@require_auth
-@require_role('moderator')
-def log_attendance():
-    try:
-        data = request.json or {}
-
-        s_u = data.get('student_username')
-        s_n = data.get('student_name')
-        mod_u = g.current_user
-        grade = str(data.get('grade')).strip()
-        status = data.get(
-            'status',
-            ''
-        ).upper().strip()
-
-        log_payload = {
-            "student_username": s_u,
-            "student_name": s_n,
-            "moderator_username": mod_u,
-            "grade": grade,
-            "status": status,
-            "timestamp": current_sa_time()
-        }
-
-        get_db().table(
-            "attendance_logs"
-        ).insert(log_payload).execute()
-
-        return jsonify({'status': 'success'}), 200
-
-    except Exception as e:
-        return jsonify({
-            'status': 'error',
-            'msg': f'Attendance ledger push aborted: {str(e)}'
-        }), 500
-
-@app.route('/api/delete_account', methods=['POST', 'OPTIONS'])
-@require_auth
-def delete_account():
-    try:
-        username = g.current_user
-
-        print(
-            f"⚠️ PURGE INITIALIZED: Attempting database wipe for user -> [{username}]"
-        )
-
-        user_check = get_db().table("users").select(
-            "role"
-        ).eq(
-            "username",
-            username
-        ).execute()
-
-        if not user_check.data:
-            return jsonify({
-                'status': 'error',
-                'message': 'Account purge failed: profile does not exist.'
-            }), 404
-
-        user_role = user_check.data[0].get('role')
-
-        if user_role == 'driver':
-            get_db().table(
-                "parent_driver_rooms"
-            ).delete().eq(
-                "driver_username",
-                username
-            ).execute()
-
-            get_db().table("posts").delete().eq(
-                "username",
-                username
-            ).execute()
-
-            get_db().table(
-                "driver_ledger"
-            ).delete().eq(
-                "owner_username",
-                username
-            ).execute()
-
-        elif user_role == 'general':
-            get_db().table(
-                "parent_driver_rooms"
-            ).delete().eq(
-                "parent_username",
-                username
-            ).execute()
-
-            get_db().table(
-                "parent_principal_rooms"
-            ).delete().eq(
-                "parent_username",
-                username
-            ).execute()
-
-            get_db().table(
-                "parent_ledger"
-            ).delete().eq(
-                "owner_username",
-                username
-            ).execute()
-
-        elif user_role == 'student':
-            get_db().table(
-                "bookings"
-            ).delete().eq(
-                "student_username",
-                username
-            ).execute()
-
-            get_db().table(
-                "attendance_logs"
-            ).delete().eq(
-                "student_username",
-                username
-            ).execute()
-
-            get_db().table(
-                "parent_driver_rooms"
-            ).delete().eq(
-                "child_username",
-                username
-            ).execute()
-
-            get_db().table(
-                "parent_principal_rooms"
-            ).delete().eq(
-                "child_username",
-                username
-            ).execute()
-
-            get_db().table(
-                "student_ledger"
-            ).delete().eq(
-                "owner_username",
-                username
-            ).execute()
-
-        get_db().table("users").delete().eq(
-            "username",
-            username
-        ).execute()
-
-        print(
-            f"✅ PURGE COMPLETED: [{username}] removed."
-        )
-
-        return jsonify({
-            'status': 'success',
-            'message': 'Profile data clusters successfully wiped.'
-        }), 200
-
-    except Exception as e:
-        print(
-            f"❌ [CRITICAL PURGE EXCEPTION]: {str(e)}"
-        )
-
-        return jsonify({
-            'status': 'error',
-            'message': f'Cloud database engine transaction failed: {str(e)}'
-        }), 500
-
-# =====================================================================
-# PROFILE ROUTES
-# =====================================================================
-
-@app.route('/api/profile/get_self', methods=['POST', 'OPTIONS'])
-@require_auth
-def get_self_profile():
-    try:
-        res = get_db().table("users").select("*").eq(
-            "username",
-            g.current_user
-        ).execute()
-
-        if not res.data:
-            return jsonify({
-                'status': 'error',
-                'message': 'Profile not found'
-            }), 404
-
-        return jsonify({
-            'status': 'success',
-            'profile': res.data[0]
-        }), 200
-
-    except Exception as e:
-        return jsonify({
-            'status': 'error',
-            'msg': str(e)
-        }), 500
-
-ALLOWED_SELF_UPDATE_FIELDS = {
-    'photo',
-    'wallpaper',
-    'town',
-    'location',
-    'current_town',
-    'grade',
-    'transport_type',
-    'driver_mode',
-    'moderated_grade',
-    'school_codes',
-    'theme',
-    'last_seen_chats'
-}
-
-@app.route('/api/profile/update_self', methods=['POST', 'OPTIONS'])
-@require_auth
-def update_self_profile():
-    try:
-        data = request.json or {}
-
-        updates = {
-            k: v
-            for k, v in data.items()
-            if k in ALLOWED_SELF_UPDATE_FIELDS
-        }
-
-        if not updates:
-            return jsonify({
-                'status': 'error',
-                'message': 'No valid fields to update'
-            }), 400
-
-        get_db().table("users").update(
-            updates
-        ).eq(
-            "username",
-            g.current_user
-        ).execute()
-
-        return jsonify({'status': 'success'}), 200
-
-    except Exception as e:
-        return jsonify({
-            'status': 'error',
-            'msg': str(e)
-        }), 500
-
-@app.route('/api/profile/upload_wallpaper', methods=['POST', 'OPTIONS'])
-@require_auth
-def upload_wallpaper():
-    try:
-        if 'wallpaper' not in request.files:
-            return jsonify({
-                'status': 'error',
-                'message': 'No file provided'
-            }), 400
-
-        file = request.files['wallpaper']
-        username = g.current_user
-
-        old_res = get_db().table("users").select(
-            "wallpaper"
-        ).eq(
-            "username",
-            username
-        ).execute()
-
-        old_photo = (
-            old_res.data[0].get('wallpaper')
-            if old_res.data
-            else None
-        )
-
-        if old_photo and 'supabase.co' in old_photo:
-            try:
-                old_filename = old_photo.split('/')[-1]
-
-                get_db().storage.from_(
-                    "profile pictures"
-                ).remove([old_filename])
-
-            except Exception as cleanup_err:
-                print(
-                    f"Old wallpaper cleanup warning: {cleanup_err}"
-                )
-
-        file_ext = (
-            file.filename.rsplit('.', 1)[-1]
-            if '.' in file.filename
-            else 'jpg'
-        )
-
-        file_bytes = file.read()
-
-        new_filename = (
-            f"wallpaper_{username}_{int(time.time())}.{file_ext}"
-        )
-
-        get_db().storage.from_(
-            "profile pictures"
-        ).upload(
-            path=new_filename,
-            file=file_bytes,
-            file_options={
-                "content-type": file.content_type or "image/jpeg"
-            }
-        )
-
-        public_url = get_db().storage.from_(
-            "profile pictures"
-        ).get_public_url(new_filename)
-
-        get_db().table("users").update({
-            "wallpaper": public_url
-        }).eq(
-            "username",
-            username
-        ).execute()
-
-        return jsonify({
-            'status': 'success',
-            'wallpaper_url': public_url
-        }), 200
-
-    except Exception as e:
-        print(f"Wallpaper upload error: {e}")
-
-        return jsonify({
-            'status': 'error',
-            'message': str(e)
-        }), 500
-
-@app.route('/api/profile/delete_wallpaper', methods=['POST', 'OPTIONS'])
-@require_auth
-def delete_wallpaper():
-    try:
-        username = g.current_user
-
-        old_res = get_db().table("users").select(
-            "wallpaper"
-        ).eq(
-            "username",
-            username
-        ).execute()
-
-        old_photo = (
-            old_res.data[0].get('wallpaper')
-            if old_res.data
-            else None
-        )
-
-        if old_photo and 'supabase.co' in old_photo:
-            try:
-                old_filename = old_photo.split('/')[-1]
-
-                get_db().storage.from_(
-                    "profile pictures"
-                ).remove([old_filename])
-
-            except Exception as cleanup_err:
-                print(
-                    f"Wallpaper cleanup warning: {cleanup_err}"
-                )
-
-        get_db().table("users").update({
-            "wallpaper": None
-        }).eq(
-            "username",
-            username
-        ).execute()
-
-        return jsonify({'status': 'success'}), 200
-
-    except Exception as e:
-        return jsonify({
-            'status': 'error',
-            'message': str(e)
-        }), 500
-
-@app.route('/api/profile/upload_photo', methods=['POST', 'OPTIONS'])
-@require_auth
-def upload_profile_photo():
-    try:
-        if 'photo' not in request.files:
-            return jsonify({
-                'status': 'error',
-                'message': 'No file provided'
-            }), 400
-
-        file = request.files['photo']
-        username = g.current_user
-
-        old_res = get_db().table("users").select(
-            "photo"
-        ).eq(
-            "username",
-            username
-        ).execute()
-
-        old_photo = (
-            old_res.data[0].get('photo')
-            if old_res.data
-            else None
-        )
-
-        if old_photo and 'supabase.co' in old_photo:
-            try:
-                old_filename = old_photo.split('/')[-1]
-
-                get_db().storage.from_(
-                    "profile pictures"
-                ).remove([old_filename])
-
-            except Exception as cleanup_err:
-                print(
-                    f"Old photo cleanup warning: {cleanup_err}"
-                )
-
-        file_ext = (
-            file.filename.rsplit('.', 1)[-1]
-            if '.' in file.filename
-            else 'jpg'
-        )
-
-        file_bytes = file.read()
-        new_filename = (
-            f"{username}_{int(time.time())}.{file_ext}"
-        )
-
-        get_db().storage.from_(
-            "profile pictures"
-        ).upload(
-            path=new_filename,
-            file=file_bytes,
-            file_options={
-                "content-type": file.content_type or "image/jpeg"
-            }
-        )
-
-        public_url = get_db().storage.from_(
-            "profile pictures"
-        ).get_public_url(new_filename)
-
-        get_db().table("users").update({
-            "photo": public_url
-        }).eq(
-            "username",
-            username
-        ).execute()
-
-        return jsonify({
-            'status': 'success',
-            'photo_url': public_url
-        }), 200
-
-    except Exception as e:
-        print(f"Photo upload error: {e}")
-
-        return jsonify({
-            'status': 'error',
-            'message': str(e)
-        }), 500
-
-@app.route('/api/profile/delete_photo', methods=['POST', 'OPTIONS'])
-@require_auth
-def delete_profile_photo():
-    try:
-        username = g.current_user
-
-        old_res = get_db().table("users").select(
-            "photo"
-        ).eq(
-            "username",
-            username
-        ).execute()
-
-        old_photo = (
-            old_res.data[0].get('photo')
-            if old_res.data
-            else None
-        )
-
-        if old_photo and 'supabase.co' in old_photo:
-            try:
-                old_filename = old_photo.split('/')[-1]
-
-                get_db().storage.from_(
-                    "profile pictures"
-                ).remove([old_filename])
-
-            except Exception as cleanup_err:
-                print(
-                    f"Old photo cleanup warning: {cleanup_err}"
-                )
-
-        get_db().table("users").update({
-            "photo": None
-        }).eq(
-            "username",
-            username
-        ).execute()
-
-        return jsonify({'status': 'success'}), 200
-
-    except Exception as e:
-        return jsonify({
-            'status': 'error',
-            'message': str(e)
-        }), 500
-
-# =====================================================================
-# PRINCIPAL HISTORY
-# =====================================================================
-
-@app.route('/api/history/clear', methods=['POST', 'OPTIONS'])
-@require_auth
-@require_role('principal')
-def clear_history():
-    try:
-        sc = request.json.get(
-            'school_code',
-            ''
-        ).strip().upper()
-
-        my_school = get_db().table("schools").select(
-            "school_code"
-        ).eq(
-            "principal_username",
-            g.current_user
-        ).execute()
-
-        allowed_codes = [
-            s['school_code']
-            for s in (my_school.data or [])
-        ]
-
-        if sc not in allowed_codes:
-            return jsonify({
-                'status': 'error',
-                'msg': 'Not authorized for this school'
-            }), 403
-
-        get_db().table("principal_ledger").delete().eq(
-            "school_code",
-            sc
-        ).execute()
-
-        return jsonify({'status': 'success'}), 200
-
-    except Exception as e:
-        return jsonify({
-            'status': 'error',
-            'msg': str(e)
-        }), 500
-
-@app.route('/api/history/delete_single', methods=['POST', 'OPTIONS'])
-@require_auth
-@require_role('principal')
-def delete_single_log():
-    try:
-        log_id = request.json.get('log_id')
-
-        log_check = get_db().table(
-            "principal_ledger"
-        ).select(
-            "school_code"
-        ).eq(
-            "id",
-            log_id
-        ).execute()
-
-        if not log_check.data:
-            return jsonify({
-                'status': 'error',
-                'msg': 'Log not found'
-            }), 404
-
-        my_school = get_db().table(
-            "schools"
-        ).select(
-            "school_code"
-        ).eq(
-            "principal_username",
-            g.current_user
-        ).execute()
-
-        allowed_codes = [
-            s['school_code']
-            for s in (my_school.data or [])
-        ]
-
-        if log_check.data[0].get(
-            'school_code'
-        ) not in allowed_codes:
-            return jsonify({
-                'status': 'error',
-                'msg': 'Not authorized for this log'
-            }), 403
-
-        get_db().table(
-            "principal_ledger"
-        ).delete().eq(
-            "id",
-            log_id
-        ).execute()
-
-        return jsonify({'status': 'success'}), 200
-
-    except Exception as e:
-        return jsonify({
-            'status': 'error',
-            'msg': str(e)
-        }), 500
-
-@app.route('/api/users/lookup', methods=['POST', 'OPTIONS'])
-@require_auth
-def users_lookup():
-    try:
-        data = request.json or {}
-
-        usernames = data.get('usernames')
-        role = data.get('role')
-        school_code = data.get('school_code')
-        grade = data.get('grade')
-        moderated_grade = data.get('moderated_grade')
-
-        if role in ('student', 'moderator') and school_code:
-            if g.current_role not in (
-                'principal',
-                'moderator'
-            ):
-                my_code = get_db().table("users").select(
-                    "school_code"
-                ).eq(
-                    "username",
-                    g.current_user
-                ).execute()
-
-                caller_code = (
-                    my_code.data[0].get('school_code')
-                    if my_code.data
-                    else None
-                )
-
-                if (
-                    not caller_code
-                    or caller_code.upper()
-                    != str(school_code).upper()
-                ):
-                    return jsonify({
-                        'status': 'error',
-                        'msg': 'Not authorized for this school roster'
-                    }), 403
-
-        select_fields = (
-            "username, name, photo, role, school_code, school_codes, "
-            "moderated_grade, grade, driver_mode, transport_type, "
-            "vehicle_type, town, location, current_town, last_seen_chats"
-        )
-
-        if g.current_role in (
-            'moderator',
-            'principal'
-        ):
-            select_fields += ", email"
-
-        query = get_db().table("users").select(select_fields)
-
-        if usernames:
-            query = query.in_("username", usernames)
-
-        if role:
-            query = query.eq("role", role)
-
-        if school_code:
-            query = query.eq(
-                "school_code",
-                str(school_code).upper()
-            )
-
-        if grade:
-            query = query.eq("grade", grade)
-
-        if moderated_grade:
-            query = query.eq(
-                "moderated_grade",
-                moderated_grade
-            )
-
-        res = query.execute()
-
-        return jsonify({
-            'status': 'success',
-            'users': res.data or []
-        }), 200
-
-    except Exception as e:
-        return jsonify({
-            'status': 'error',
-            'msg': str(e)
-        }), 500
-
-# =====================================================================
-# OPTIONAL ADMIN CLEANUP
-# =====================================================================
+@require_role('admin')
+def admin_delete_group():
+    get_db().table("communities").delete().eq("id", (request.json or {}).get('id')).execute()
+    return jsonify({'status': 'success'})
 
 @app.route('/api/admin/cleanup_expired', methods=['POST', 'OPTIONS'])
 @require_auth
 @require_role('admin')
-def cleanup_expired_pending_records():
-    if request.method == 'OPTIONS':
-        return jsonify({'status': 'ok'}), 200
-
-    try:
-        now = datetime.now(
-            SA_TIMEZONE
-        ).isoformat()
-
-        get_db().table(
-            "pending_signups"
-        ).delete().lt(
-            "expires_at",
-            now
-        ).execute()
-
-        get_db().table(
-            "pending_parent_links"
-        ).delete().lt(
-            "expires_at",
-            now
-        ).execute()
-
-        get_db().table(
-            "password_reset_codes"
-        ).delete().lt(
-            "expires_at",
-            now
-        ).execute()
-
-        return jsonify({
-            'status': 'success'
-        }), 200
-
-    except Exception as e:
-        return jsonify({
-            'status': 'error',
-            'message': str(e)
-        }), 500
+def cleanup_expired():
+    now = datetime.now(SA_TIMEZONE).isoformat()
+    for t in ("pending_signups", "password_reset_codes"):
+        get_db().table(t).delete().lt("expires_at", now).execute()
+    return jsonify({'status': 'success'})
 
 if __name__ == '__main__':
-    port = int(
-        os.environ.get(
-            "PORT",
-            5000
-        )
-    )
-
-    print(
-        f"🚀 Starting Safe Drive backend on port {port}..."
-    )
-
-    serve(
-        app,
-        host='0.0.0.0',
-        port=port,
-        threads=8
-    )
+    port = int(os.environ.get("PORT", 5000))
+    print(f"Safe Drive backend on port {port}")
+    serve(app, host='0.0.0.0', port=port, threads=8)
