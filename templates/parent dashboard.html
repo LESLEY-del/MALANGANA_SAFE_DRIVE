@@ -1,0 +1,174 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>Parent | Safe Drive</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<script>if(localStorage.getItem('theme')==='light')document.documentElement.classList.add('light')</script>
+<style>
+:root{--bg:#0b141a;--card:#111b21;--nav:#202c33;--tx:#e9edef;--mut:#8696a0;--ac:#25D366;--dg:#ef4444;--in:#2a3942;--bd:rgba(255,255,255,.08)}
+html.light{--bg:#efeae2;--card:#fff;--nav:#008069;--tx:#111b21;--mut:#667781;--in:#f0f2f5;--bd:rgba(0,0,0,.08)}
+*{box-sizing:border-box;margin:0;padding:0}body{background:var(--bg);color:var(--tx);font-family:Inter,sans-serif;min-height:100vh}
+.hd{background:var(--nav);color:#fff;padding:12px 15px;display:flex;align-items:center;gap:12px;position:sticky;top:0;z-index:50}
+.hd h1{font-size:17px;flex:1}.ham{background:none;border:0;color:#fff;font-size:24px;cursor:pointer}
+.av{width:38px;height:38px;border-radius:50%;background:var(--ac);display:flex;align-items:center;justify-content:center;font-weight:800}
+.ov{position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:90;display:none}.ov.on{display:block}
+.dr{position:fixed;top:0;left:-300px;width:80vw;max-width:300px;height:100%;background:var(--card);z-index:100;transition:left .25s;display:flex;flex-direction:column}.dr.on{left:0}
+.dh{background:var(--nav);color:#fff;padding:28px 20px 18px;font-weight:800}.dh small{display:block;font-weight:500;opacity:.75;margin-top:4px}
+.di{display:flex;gap:16px;width:100%;padding:14px 20px;background:none;border:0;color:var(--tx);font:600 15px Inter;cursor:pointer;text-align:left}
+.di.on{color:var(--ac);background:rgba(37,211,102,.08)}.dr .sp{flex:1}
+.vw{display:none;padding-bottom:40px}.vw.on{display:block}
+.row{background:var(--card);border-bottom:1px solid var(--bd);padding:15px 20px}
+.ttl{padding:16px 20px 8px;font-size:13px;color:var(--mut);font-weight:700;text-transform:uppercase;letter-spacing:.5px;display:flex;justify-content:space-between;align-items:center}
+.b{border:0;border-radius:10px;padding:12px 14px;font:700 13px Inter;cursor:pointer;background:var(--ac);color:#fff}.b.g{background:var(--in);color:var(--tx)}.b.d{background:none;border:1px solid var(--dg);color:var(--dg)}.b:disabled{opacity:.5}
+.g2{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px}
+input,select,textarea{width:100%;background:var(--in);border:0;border-bottom:2px solid var(--bd);color:var(--tx);padding:13px;border-radius:8px 8px 0 0;font:15px Inter;outline:0;margin-bottom:12px}
+input:focus,textarea:focus{border-color:var(--ac)}label{font-size:12px;font-weight:600;color:var(--mut);display:block;margin-bottom:5px}
+.mut{color:var(--mut);font-size:13px}.tag{font-size:11px;font-weight:700;color:var(--ac)}
+.md{position:fixed;inset:0;background:rgba(0,0,0,.8);z-index:200;display:none;align-items:center;justify-content:center;padding:16px}.md.on{display:flex}
+.mb{background:var(--card);border-radius:16px;padding:22px;width:100%;max-width:400px;max-height:92vh;overflow:auto}.mb h3{margin-bottom:14px}
+.ck{display:flex;gap:10px;font-size:13px;color:var(--mut);margin:10px 0;align-items:flex-start}.ck input{width:auto;margin:3px 0 0}
+.sr{padding:12px;border-radius:10px;background:var(--in);margin-bottom:6px;cursor:pointer;font-size:14px}.sr:hover{outline:1px solid var(--ac)}
+#mapV{position:fixed;inset:0;z-index:150;background:var(--bg);display:none}#mapV.on{display:block}#map{position:absolute;inset:0}
+.mt{position:absolute;top:12px;left:12px;right:12px;z-index:1000;display:flex;gap:8px}.mt select{margin:0;border-radius:10px;border:0;flex:1}.mt .b{flex:none}
+#mst{position:absolute;bottom:18px;left:12px;right:12px;z-index:1000;background:var(--card);padding:12px;border-radius:12px;text-align:center;font-size:13px}
+#chat{position:fixed;inset:0;z-index:160;background:var(--bg);display:none;flex-direction:column}#chat.on{display:flex}
+#msgs{flex:1;overflow:auto;padding:14px;display:flex;flex-direction:column;gap:8px}
+.m{max-width:85%;padding:8px 12px;border-radius:12px;font-size:14px;background:var(--card)}.m.me{align-self:flex-end;background:#005c4b;color:#e9edef}.m.em{border:2px solid var(--dg)}
+.m small{display:block;font-size:10px;opacity:.65;margin-bottom:3px}.m img{max-width:100%;border-radius:8px;margin-top:6px}
+.cb{display:flex;gap:8px;padding:10px;background:var(--card)}.cb input{margin:0;border-radius:22px;border:0}
+.card{background:linear-gradient(135deg,#052e16,#0f172a);color:#fff;border-radius:16px;padding:18px;text-align:center}
+.card img{width:70px;height:70px;border-radius:50%;object-fit:cover;margin-bottom:8px}.card #qr{background:#fff;padding:10px;display:inline-block;border-radius:10px;margin-top:10px}
+@media print{body *{visibility:hidden}.card,.card *{visibility:visible}.card{position:fixed;top:20px;left:20px}}
+</style></head><body>
+<div class="hd"><button class="ham" onclick="drawer(1)">☰</button><h1 id="ttl">Home</h1><div class="av" id="av">P</div></div>
+<div class="ov" id="ov" onclick="drawer(0)"></div>
+<div class="dr" id="dr"><div class="dh">PARENT PORTAL<small id="nm"></small></div>
+<button class="di on" data-v="home">🏠 Home</button><button class="di" data-v="kids">👧 My children</button>
+<button class="di" data-v="map">🗺️ View map</button><button class="di" data-v="grp">👥 Community groups</button>
+<button class="di" data-v="log">🧾 Arrivals log</button><div class="sp"></div>
+<button class="di" onclick="theme()">🌓 Light / dark</button><button class="di" onclick="logout()" style="color:var(--mut)">🚪 Log out</button></div>
+
+<div class="vw on" id="v-home"><div class="row"><h2 id="hi" style="margin-bottom:6px"></h2><p class="mut">Add a child to start getting arrival alerts, or join your community group.</p>
+<div class="g2"><button class="b" onclick="openAdd()">+ Add a child</button><button class="b g" onclick="go('grp')">Community groups</button></div></div>
+<div class="ttl">Latest</div><div id="hl"></div></div>
+
+<div class="vw" id="v-kids"><div class="ttl">My children <button class="b" onclick="openAdd()">+ Add child</button></div><div id="kl"></div></div>
+
+<div class="vw" id="v-grp"><div class="ttl">Find a group</div><div class="row">
+<input id="gq" placeholder="Community, suburb, town or province" oninput="gsearch()"><div id="gres"></div>
+<button class="b g" style="width:100%" onclick="show('mCreate')">+ Create a group</button></div>
+<div class="ttl">My groups</div><div id="gmine"></div></div>
+
+<div class="vw" id="v-log"><div class="ttl">Arrivals log</div><div id="lg"></div></div>
+
+<div id="mapV"><div class="mt"><button class="b g" onclick="go('home')">←</button><select id="msel" onchange="locate()"></select></div><div id="map"></div><div id="mst">Pick a child.</div></div>
+
+<div id="chat"><div class="hd"><button class="ham" onclick="closeChat()">←</button><h1 id="ct"></h1><button class="b d" style="background:var(--dg);color:#fff" onclick="sos()">SOS</button></div>
+<div id="msgs"></div><div class="cb"><input id="ci" placeholder="Message" onkeydown="if(event.key==='Enter')sendMsg()"><button class="b" onclick="sendMsg()">➤</button></div></div>
+
+<div class="md" id="mAdd"><div class="mb"><h3>Add a child</h3>
+<label>School (name or code)</label><input id="aSch" placeholder="Start typing..." oninput="schSearch()"><div id="aRes"></div>
+<label>Name</label><input id="aN"><label>Surname</label><input id="aS"><label>ID number</label><input id="aI" inputmode="numeric"><label>Grade</label><input id="aG" placeholder="e.g. 10A">
+<p class="mut" style="margin-bottom:10px">Only the last 4 digits of the ID are stored.</p>
+<div class="g2"><button class="b g" onclick="hide('mAdd')">Cancel</button><button class="b" onclick="addKid()">Save child</button></div></div></div>
+
+<div class="md" id="mEdit"><div class="mb"><h3 id="eT"></h3>
+<label>Grade</label><input id="eG"><label>Tracker ID (printed on the tracker)</label><input id="eT2">
+<label>Photo (used in emergencies if you allow it)</label><input type="file" id="eP" accept="image/*">
+<div class="ck"><input type="checkbox" id="eNs"><span>Alert me when my child arrives at / leaves school</span></div>
+<div class="ck"><input type="checkbox" id="eNh"><span>Alert me when my child arrives home</span></div>
+<div class="ck"><input type="checkbox" id="eNz"><span>Alert me when my child is outside every zone</span></div>
+<div class="ck"><input type="checkbox" id="eCc"><span>Have a staff member call me to confirm</span></div>
+<label>Zone size (metres)</label><input id="eR" type="number" min="50" max="2000">
+<div class="g2"><button class="b g" onclick="setZone('home')">Set home here</button><button class="b g" onclick="setZone('school')">Set school here</button></div>
+<p class="mut" id="eZ" style="margin:8px 0"></p>
+<div class="g2"><button class="b g" onclick="hide('mEdit')">Close</button><button class="b" onclick="saveKid()">Save</button></div>
+<button class="b d" style="width:100%;margin-top:10px" onclick="delKid()">Remove child</button></div></div>
+
+<div class="md" id="mCard"><div class="mb"><div class="card"><img id="cI"><h3 id="cN"></h3><div id="cS" style="font-size:12px;opacity:.8"></div><div id="qr"></div></div>
+<div class="g2"><button class="b g" onclick="hide('mCard')">Close</button><button class="b" onclick="print()">Print card</button></div></div></div>
+
+<div class="md" id="mJoin"><div class="mb"><h3 id="jT"></h3><p class="mut" id="jR" style="margin-bottom:10px;white-space:pre-line"></p>
+<div class="ck"><input type="checkbox" id="jA"><span>I agree to the group terms and will not share this group's information with criminals or outsiders.</span></div>
+<div class="ck"><input type="checkbox" id="jL"><span>In an emergency with my child, send my live location to this group.</span></div>
+<div class="ck"><input type="checkbox" id="jP"><span>In an emergency, allow my child's picture to be shared and saved in this group.</span></div>
+<div class="g2"><button class="b g" onclick="hide('mJoin')">Cancel</button><button class="b" onclick="join()">Join group</button></div></div></div>
+
+<div class="md" id="mCreate"><div class="mb"><h3>Create a group</h3><label>Group name</label><input id="nN" placeholder="e.g. University of Limpopo Section D">
+<label>Suburb</label><input id="nS"><label>Town</label><input id="nT"><label>Province</label><input id="nP"><label>Group rules</label><textarea id="nR" rows="3"></textarea>
+<p class="mut" style="margin-bottom:10px">Names must be unique. Add a section or suburb if the name exists.</p>
+<div class="g2"><button class="b g" onclick="hide('mCreate')">Cancel</button><button class="b" onclick="mkGroup()">Create</button></div></div></div>
+
+<script>
+const $=i=>document.getElementById(i),tok=sessionStorage.getItem('authToken'),ME=sessionStorage.getItem('username'),NAME=sessionStorage.getItem('userName')||'Parent';
+if(!tok||sessionStorage.getItem('userRole')!=='general')location.replace('login.html');
+const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+async function api(p,b){const r=await fetch(p,{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+tok},body:JSON.stringify(b||{})});if(r.status===401){logout();return{}}return r.json().catch(()=>({}))}
+const show=i=>$(i).classList.add('on'),hide=i=>$(i).classList.remove('on');
+$('nm').textContent=NAME.toUpperCase();$('hi').textContent='Welcome, '+NAME;$('av').textContent=NAME[0].toUpperCase();
+function drawer(o){$('dr').classList.toggle('on',!!o);$('ov').classList.toggle('on',!!o)}
+const T={home:'Home',kids:'My children',grp:'Community groups',log:'Arrivals log'};let map,mk,poll;
+function go(v){drawer(0);document.querySelectorAll('.di[data-v]').forEach(b=>b.classList.toggle('on',b.dataset.v===v));
+ if(v==='map'){openMap();return}hide('mapV');clearInterval(poll);document.querySelectorAll('.vw').forEach(e=>e.classList.remove('on'));$('v-'+v).classList.add('on');$('ttl').textContent=T[v];
+ if(v==='kids')loadKids();if(v==='grp'){gmine();gsearch()}if(v==='log')loadLog();if(v==='home')loadLog(1)}
+document.querySelectorAll('.di[data-v]').forEach(b=>b.onclick=()=>go(b.dataset.v));
+function theme(){const l=document.documentElement.classList.toggle('light');localStorage.setItem('theme',l?'light':'dark');drawer(0)}
+function logout(){sessionStorage.clear();location.replace('login.html')}
+/* ---- children ---- */
+let kids=[],cur=null,school=null;
+async function loadKids(){const d=await api('/api/children/list');kids=d.children||[];
+ $('kl').innerHTML=kids.map(k=>`<div class="row"><b>${esc(k.name)} ${esc(k.surname)}</b><div class="mut">${esc(k.school_name)} · Grade ${esc(k.grade||'-')}</div>
+ <div class="tag">${k.tracker_device_id?'Tracker linked':'No tracker yet'}</div><div class="g2"><button class="b g" onclick="card('${k.id}')">Student card</button><button class="b g" onclick="edit('${k.id}')">Settings</button></div></div>`).join('')||'<div class="row mut">No children yet. Tap "Add child".</div>'}
+function openAdd(){school=null;['aSch','aN','aS','aI','aG'].forEach(i=>$(i).value='');$('aRes').innerHTML='';show('mAdd')}
+let st;function schSearch(){school=null;clearTimeout(st);st=setTimeout(async()=>{const q=$('aSch').value.trim();if(q.length<2){$('aRes').innerHTML='';return}
+ const d=await api('/api/schools/search',{q});$('aRes').innerHTML=(d.schools||[]).map(s=>`<div class="sr" onclick="pick('${esc(s.school_code)}','${esc(s.school_name)}')">${esc(s.school_name)} <span class="mut">(${esc(s.school_code)})</span></div>`).join('')||'<p class="mut">No school found. Ask the school to register as a station.</p>'},300)}
+function pick(c,n){school=c;$('aSch').value=n;$('aRes').innerHTML=''}
+async function addKid(){if(!school)return alert('Pick the school from the list.');
+ const d=await api('/api/children/add',{school_code:school,name:$('aN').value,surname:$('aS').value,id_number:$('aI').value,grade:$('aG').value});
+ if(d.status!=='success')return alert(d.message||'Could not save.');hide('mAdd');loadKids();card(d.child.id,d.child)}
+function card(id,k){k=k||kids.find(x=>x.id===id);$('cI').src=k.photo||'https://ui-avatars.com/api/?background=22c55e&color=fff&name='+encodeURIComponent(k.name);
+ $('cN').textContent=k.name+' '+k.surname;$('cS').textContent=(k.school_name||'')+' · Grade '+(k.grade||'-');$('qr').innerHTML='';new QRCode($('qr'),{text:k.qr_token,width:150,height:150});show('mCard')}
+function edit(id){cur=kids.find(x=>x.id===id);$('eT').textContent=cur.name+' '+cur.surname;$('eG').value=cur.grade||'';$('eT2').value=cur.tracker_device_id||'';
+ $('eNs').checked=cur.notify_school;$('eNh').checked=cur.notify_home;$('eNz').checked=cur.notify_zone;$('eCc').checked=cur.call_confirm;$('eR').value=cur.zone_radius||150;zt();show('mEdit')}
+function zt(){$('eZ').textContent=`Home: ${cur.home_lat?'set':'not set'} · School: ${cur.school_lat?'set':'not set'}`}
+function setZone(w){navigator.geolocation.getCurrentPosition(p=>{cur[w+'_lat']=p.coords.latitude;cur[w+'_lng']=p.coords.longitude;zt()},()=>alert('Allow location access, and stand at the place.'))}
+async function saveKid(){const b={id:cur.id,grade:$('eG').value,tracker_device_id:$('eT2').value,notify_school:$('eNs').checked,notify_home:$('eNh').checked,notify_zone:$('eNz').checked,
+ call_confirm:$('eCc').checked,zone_radius:+$('eR').value||150,home_lat:cur.home_lat,home_lng:cur.home_lng,school_lat:cur.school_lat,school_lng:cur.school_lng};
+ await api('/api/children/update',b);const f=$('eP').files[0];if(f){const fd=new FormData();fd.append('photo',f);fd.append('id',cur.id);await fetch('/api/children/photo',{method:'POST',headers:{Authorization:'Bearer '+tok},body:fd});$('eP').value=''}
+ hide('mEdit');loadKids()}
+async function delKid(){if(!confirm('Remove this child and their history?'))return;await api('/api/children/delete',{id:cur.id});hide('mEdit');loadKids()}
+/* ---- map (full screen) ---- */
+async function openMap(){document.querySelectorAll('.vw').forEach(e=>e.classList.remove('on'));if(!kids.length){const d=await api('/api/children/list');kids=d.children||[]}
+ $('msel').innerHTML=kids.map(k=>`<option value="${k.id}">${esc(k.name)}</option>`).join('');show('mapV');
+ if(!map){map=L.map('map').setView([-23.9,29.45],12);L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19,attribution:'© OpenStreetMap'}).addTo(map)}
+ setTimeout(()=>map.invalidateSize(),150);if(!kids.length){$('mst').textContent='Add a child first.';return}locate();clearInterval(poll);poll=setInterval(locate,15000)}
+async function locate(){const id=$('msel').value;if(!id)return;const d=await api('/api/parent/get_child_location',{child_id:id});
+ if(!d.location){$('mst').textContent='No location yet. Link a tracker in the child settings.';return}
+ const ll=[d.location.latitude,d.location.longitude];mk?mk.setLatLng(ll):mk=L.marker(ll).addTo(map);map.setView(ll,16);$('mst').textContent='Updated '+new Date(d.location.updated_at).toLocaleTimeString()}
+/* ---- arrivals ---- */
+async function loadLog(short){const d=await api('/api/parent/arrivals');let l=d.logs||[];if(short)l=l.slice(0,5);
+ const h=l.map(x=>`<div class="row" style="display:flex;gap:12px;align-items:center">${x.photo_url?`<img src="${esc(x.photo_url)}" style="width:52px;height:52px;border-radius:10px;object-fit:cover">`:''}
+ <div style="flex:1"><b>${esc(x.child_name)}</b><div class="mut">${new Date(x.timestamp).toLocaleString()}</div></div><span class="tag">${esc(x.status)}</span></div>`).join('')||'<div class="row mut">Nothing yet.</div>';
+ $(short?'hl':'lg').innerHTML=h}
+/* ---- groups ---- */
+let gcur=null,gpoll,gsel=null;
+async function gsearch(){const d=await api('/api/groups/search',{q:$('gq').value});$('gres').innerHTML=(d.groups||[]).map(g=>`<div class="sr" onclick='joinOpen(${JSON.stringify(g).replace(/'/g,"&#39;")})'><b>${esc(g.name)}</b><div class="mut">${esc([g.suburb,g.town,g.province].filter(Boolean).join(', '))}</div></div>`).join('')||'<p class="mut" style="margin-bottom:10px">No groups found. Create the first one.</p>'}
+function joinOpen(g){gsel=g;$('jT').textContent=g.name;$('jR').textContent=g.rules||'Be respectful. Do not share group information outside the group.';['jA','jL','jP'].forEach(i=>$(i).checked=false);show('mJoin')}
+async function join(){const d=await api('/api/groups/join',{group_id:gsel.id,agreed_terms:$('jA').checked,share_location:$('jL').checked,share_child_photo:$('jP').checked});
+ if(d.status!=='success')return alert(d.message||'Could not join.');hide('mJoin');gmine()}
+async function gmine(){const d=await api('/api/groups/mine');$('gmine').innerHTML=(d.groups||[]).map(g=>`<div class="row" onclick='openChat(${JSON.stringify(g).replace(/'/g,"&#39;")})' style="cursor:pointer"><b>${esc(g.name)}</b><div class="mut">${esc([g.suburb,g.town,g.province].filter(Boolean).join(', '))}</div></div>`).join('')||'<div class="row mut">You have not joined a group.</div>'}
+async function mkGroup(){const d=await api('/api/groups/create',{name:$('nN').value,suburb:$('nS').value,town:$('nT').value,province:$('nP').value,rules:$('nR').value});
+ if(d.status!=='success')return alert(d.message||'Could not create.');hide('mCreate');gmine()}
+function openChat(g){gcur=g;$('ct').textContent=g.name;$('chat').classList.add('on');loadMsgs();clearInterval(gpoll);gpoll=setInterval(loadMsgs,5000)}
+function closeChat(){$('chat').classList.remove('on');clearInterval(gpoll);gcur=null}
+async function loadMsgs(){if(!gcur)return;const d=await api('/api/groups/messages',{group_id:gcur.id});const a=$('msgs'),bot=a.scrollHeight-a.scrollTop-a.clientHeight<80;
+ a.innerHTML=(d.messages||[]).map(m=>`<div class="m ${m.sender_username===ME?'me':''} ${m.kind==='emergency'?'em':''}"><small>${esc(m.sender_name)} · ${new Date(m.created_at).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})}</small>${esc(m.body)}
+ ${m.lat?`<div><a style="color:#38bdf8" target="_blank" href="https://maps.google.com/?q=${m.lat},${m.lng}">📍 Live location</a></div>`:''}${m.photo_url?`<img src="${esc(m.photo_url)}">`:''}</div>`).join('');if(bot)a.scrollTop=a.scrollHeight}
+async function sendMsg(){const t=$('ci').value.trim();if(!t)return;$('ci').value='';await api('/api/groups/send',{group_id:gcur.id,body:t,sender_name:NAME});loadMsgs()}
+function sos(){if(!confirm('Send an emergency alert to this group?'))return;const cid=kids[0]?.id;
+ const send=(lat,lng)=>api('/api/groups/emergency',{group_id:gcur.id,lat,lng,child_id:cid,sender_name:NAME,note:'Emergency, please help.'}).then(loadMsgs);
+ navigator.geolocation.getCurrentPosition(p=>send(p.coords.latitude,p.coords.longitude),()=>send(null,null),{enableHighAccuracy:true,timeout:6000})}
+if(!kids.length)api('/api/children/list').then(d=>kids=d.children||[]);loadLog(1);
+</script></body></html>
