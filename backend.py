@@ -77,6 +77,9 @@ def _upload_data_url(data_url, prefix):
     raw = data_url.split(',', 1)[1] if ',' in data_url else data_url
     return _upload_bytes(base64.b64decode(raw), f"{prefix}_{int(time.time())}_{secrets.token_hex(4)}.jpg")
 
+def _img_ext(f):
+    return {'image/jpeg': 'jpg', 'image/jpg': 'jpg', 'image/png': 'png', 'image/webp': 'webp', 'image/gif': 'gif'}.get((f.content_type or '').lower())
+
 def _remove_file(url):
     if url and 'supabase.co' in url:
         try: get_db().storage.from_(BUCKET).remove([url.split('/')[-1]])
@@ -296,8 +299,14 @@ def reset_password():
 @app.route('/api/profile/get_self', methods=['POST', 'OPTIONS'])
 @require_auth
 def get_self_profile():
-    r = get_db().table("users").select("username, name, email, role, school_code, photo, wallpaper, chat_bg, theme, created_at").eq("username", g.current_user).execute()
-    if not r.data: return jsonify({'status': 'error', 'message': 'Not found'}), 404
+    r = None
+    for cols in ("username, name, email, role, school_code, photo, wallpaper, chat_bg, theme, created_at",
+                 "username, name, email, role, school_code, photo, theme, created_at", "username, name, email, role, school_code"):
+        try:
+            r = get_db().table("users").select(cols).eq("username", g.current_user).execute(); break
+        except Exception as e:
+            print("get_self fallback:", e)
+    if not r or not r.data: return jsonify({'status': 'error', 'message': 'Not found'}), 404
     return jsonify({'status': 'success', 'profile': r.data[0]})
 
 @app.route('/api/profile/update_self', methods=['POST', 'OPTIONS'])
@@ -316,8 +325,8 @@ def upload_profile_photo():
         if not f: return jsonify({'status': 'error', 'message': 'No file'}), 400
         old = get_db().table("users").select("photo").eq("username", g.current_user).execute()
         if old.data: _remove_file(old.data[0].get('photo'))
-        ext = f.filename.rsplit('.', 1)[-1].lower() if '.' in f.filename else 'jpg'
-        if ext not in ('jpg', 'jpeg', 'png', 'webp'): return jsonify({'status': 'error', 'message': 'Use a JPG, PNG or WEBP image.'}), 400
+        ext = _img_ext(f)
+        if not ext: return jsonify({'status': 'error', 'message': 'Use a JPG, PNG or WEBP image.'}), 400
         url = _upload_bytes(f.read(), f"{g.current_user}_{int(time.time())}.{ext}", f.content_type or "image/jpeg")
         get_db().table("users").update({"photo": url}).eq("username", g.current_user).execute()
         return jsonify({'status': 'success', 'photo_url': url})
@@ -331,8 +340,8 @@ def upload_wallpaper():
         col = {'home': 'wallpaper', 'chat': 'chat_bg'}.get(request.form.get('kind'))
         f = request.files.get('file')
         if not col or not f: return jsonify({'status': 'error', 'message': 'Missing file'}), 400
-        ext = f.filename.rsplit('.', 1)[-1].lower() if '.' in f.filename else 'jpg'
-        if ext not in ('jpg', 'jpeg', 'png', 'webp'): return jsonify({'status': 'error', 'message': 'Use a JPG, PNG or WEBP image.'}), 400
+        ext = _img_ext(f)
+        if not ext: return jsonify({'status': 'error', 'message': 'Use a JPG, PNG or WEBP image.'}), 400
         old = get_db().table("users").select(col).eq("username", g.current_user).execute()
         if old.data: _remove_file(old.data[0].get(col))
         url = _upload_bytes(f.read(), f"{col}_{g.current_user}_{int(time.time())}.{ext}", f.content_type or "image/jpeg")
@@ -574,8 +583,24 @@ def gps_ingest():
         print("GPS:", e); return jsonify({'status': 'error', 'message': str(e)}), 500
 
 # ---------------- community groups ----------------
-def _is_member(cid, u):
-    return bool(get_db().table("community_members").select("username").eq("community_id", cid).eq("username", u).execute().data)
+def _member(cid, u):
+    r = get_db().table("community_members").select("*").eq("community_id", cid).eq("username", u).execute().data
+    return r[0] if r else None
+
+def _is_admin(cid):
+    m = _member(cid, g.current_user)
+    return bool(m and m.get('role') == 'admin')
+
+def _fix_admins(cid):
+    ms = get_db().table("community_members").select("username, role").eq("community_id", cid).order("joined_at").execute().data or []
+    if not ms:
+        get_db().table("communities").delete().eq("id", cid).execute(); return
+    if not any(m['role'] == 'admin' for m in ms):
+        get_db().table("community_members").update({"role": "admin"}).eq("community_id", cid).eq("username", ms[0]['username']).execute()
+
+def _sender_name(u):
+    nm = get_db().table("users").select("name").eq("username", u).execute()
+    return nm.data[0]['name'] if nm.data else u
 
 @app.route('/api/groups/create', methods=['POST', 'OPTIONS'])
 @require_auth
@@ -591,15 +616,19 @@ def groups_create():
             "created_by": g.current_user}).execute()
     except Exception:
         return jsonify({'status': 'error', 'message': 'A group with this name already exists.'}), 409
+    get_db().table("community_members").insert({"community_id": r.data[0]['id'], "username": g.current_user,
+        "agreed_terms": True, "role": "admin"}).execute()
     return jsonify({'status': 'success', 'group': r.data[0]})
 
 @app.route('/api/groups/search', methods=['POST', 'OPTIONS'])
 @require_auth
 def groups_search():
     q = _clean((request.json or {}).get('q'))
+    mine = {m['community_id'] for m in (get_db().table("community_members").select("community_id").eq("username", g.current_user).execute().data or [])}
     qry = get_db().table("communities").select("*")
     if q: qry = qry.or_(f"name.ilike.%{q}%,suburb.ilike.%{q}%,town.ilike.%{q}%,province.ilike.%{q}%")
-    return jsonify({'status': 'success', 'groups': qry.order("name").limit(30).execute().data or []})
+    rows = [x for x in (qry.order("name").limit(100).execute().data or []) if x['id'] not in mine]   # hide groups I am already in
+    return jsonify({'status': 'success', 'groups': rows[:30]})
 
 @app.route('/api/groups/join', methods=['POST', 'OPTIONS'])
 @require_auth
@@ -613,57 +642,130 @@ def groups_join():
 @app.route('/api/groups/leave', methods=['POST', 'OPTIONS'])
 @require_auth
 def groups_leave():
-    get_db().table("community_members").delete().eq("community_id", (request.json or {}).get('group_id')).eq("username", g.current_user).execute()
+    cid = (request.json or {}).get('group_id')
+    get_db().table("community_members").delete().eq("community_id", cid).eq("username", g.current_user).execute()
+    _fix_admins(cid)      # promotes the longest-standing member if no admin is left; deletes an empty group
     return jsonify({'status': 'success'})
 
 @app.route('/api/groups/mine', methods=['POST', 'OPTIONS'])
 @require_auth
 def groups_mine():
-    m = get_db().table("community_members").select("community_id, share_location, share_child_photo").eq("username", g.current_user).execute().data or []
+    m = get_db().table("community_members").select("community_id, role, share_location, share_child_photo").eq("username", g.current_user).execute().data or []
     if not m: return jsonify({'status': 'success', 'groups': []})
     gs = get_db().table("communities").select("*").in_("id", [x['community_id'] for x in m]).execute().data or []
     opt = {x['community_id']: x for x in m}
-    for x in gs: x['my_opts'] = opt.get(x['id'])
+    for x in gs:
+        x['my_role'] = opt[x['id']].get('role') or 'member'; x['my_opts'] = opt[x['id']]
     return jsonify({'status': 'success', 'groups': gs})
 
 @app.route('/api/groups/messages', methods=['POST', 'OPTIONS'])
 @require_auth
 def groups_messages():
-    cid = (request.json or {}).get('group_id')
-    if not _is_member(cid, g.current_user): return jsonify({'status': 'error', 'messages': []}), 403
-    r = get_db().table("community_messages").select("*").eq("community_id", cid).order("created_at").limit(200).execute()
-    msgs = r.data or []
+    d = request.json or {}; cid = d.get('group_id')
+    mem = _member(cid, g.current_user)
+    if not mem: return jsonify({'status': 'error', 'messages': []}), 403
+    lim = 50
+    q = get_db().table("community_messages").select("*").eq("community_id", cid).gte("created_at", mem['joined_at'])  # history from the day you joined
+    if d.get('before'): q = q.lt("created_at", d['before'])
+    rows = q.order("created_at", desc=True).limit(lim + 1).execute().data or []
+    more = len(rows) > lim; msgs = rows[:lim][::-1]
     names = list({m['sender_username'] for m in msgs})
     photos = {u['username']: u.get('photo') for u in (get_db().table("users").select("username, photo").in_("username", names).execute().data or [])} if names else {}
     for m in msgs: m['sender_photo'] = photos.get(m['sender_username'])
-    return jsonify({'status': 'success', 'messages': msgs})
+    return jsonify({'status': 'success', 'messages': msgs, 'has_more': more})
 
 @app.route('/api/groups/send', methods=['POST', 'OPTIONS'])
 @require_auth
 def groups_send():
     d = request.json or {}; cid = d.get('group_id'); body = (d.get('body') or '').strip()
-    if not body or not _is_member(cid, g.current_user): return jsonify({'status': 'error'}), 403
-    nm = get_db().table("users").select("name").eq("username", g.current_user).execute()
+    mem = _member(cid, g.current_user)
+    if not body or not mem: return jsonify({'status': 'error', 'message': 'Not allowed.'}), 403
+    grp = get_db().table("communities").select("locked").eq("id", cid).execute().data
+    if grp and grp[0].get('locked') and mem.get('role') != 'admin':
+        return jsonify({'status': 'error', 'message': 'Only admins can send messages in this group.'}), 403
     get_db().table("community_messages").insert({"community_id": cid, "sender_username": g.current_user,
-        "sender_name": (nm.data[0]['name'] if nm.data else g.current_user), "body": body[:1000]}).execute()
+        "sender_name": _sender_name(g.current_user), "body": body[:1000]}).execute()
     return jsonify({'status': 'success'})
+
+@app.route('/api/groups/call', methods=['POST', 'OPTIONS'])
+@require_auth
+def groups_call():
+    cid = (request.json or {}).get('group_id')
+    mem = _member(cid, g.current_user)
+    if not mem: return jsonify({'status': 'error'}), 403
+    grp = get_db().table("communities").select("locked").eq("id", cid).execute().data
+    if grp and grp[0].get('locked') and mem.get('role') != 'admin':
+        return jsonify({'status': 'error', 'message': 'Only admins can start calls in a locked group.'}), 403
+    url = f"https://meet.jit.si/SafeDrive-{secrets.token_hex(8)}#config.startWithVideoMuted=true&config.startAudioOnly=true&config.prejoinPageEnabled=false"
+    get_db().table("community_messages").insert({"community_id": cid, "sender_username": g.current_user,
+        "sender_name": _sender_name(g.current_user), "body": "📞 Voice call started", "kind": "call", "link": url}).execute()
+    return jsonify({'status': 'success', 'url': url})
+
+@app.route('/api/groups/members', methods=['POST', 'OPTIONS'])
+@require_auth
+def groups_members():
+    cid = (request.json or {}).get('group_id')
+    if not _member(cid, g.current_user): return jsonify({'status': 'error', 'members': []}), 403
+    ms = get_db().table("community_members").select("username, role, joined_at").eq("community_id", cid).order("joined_at").execute().data or []
+    us = {u['username']: u for u in (get_db().table("users").select("username, name, photo").in_("username", [m['username'] for m in ms]).execute().data or [])} if ms else {}
+    return jsonify({'status': 'success', 'members': [{"username": m['username'], "role": m.get('role') or 'member',
+        "name": us.get(m['username'], {}).get('name') or m['username'], "photo": us.get(m['username'], {}).get('photo')} for m in ms]})
+
+@app.route('/api/groups/set_role', methods=['POST', 'OPTIONS'])
+@require_auth
+def groups_set_role():
+    d = request.json or {}; cid = d.get('group_id')
+    if not _is_admin(cid) or d.get('role') not in ('admin', 'member'): return jsonify({'status': 'error', 'message': 'Admins only.'}), 403
+    get_db().table("community_members").update({"role": d['role']}).eq("community_id", cid).eq("username", d.get('username')).execute()
+    _fix_admins(cid)
+    return jsonify({'status': 'success'})
+
+@app.route('/api/groups/remove_member', methods=['POST', 'OPTIONS'])
+@require_auth
+def groups_remove_member():
+    d = request.json or {}; cid = d.get('group_id')
+    if not _is_admin(cid) or d.get('username') == g.current_user: return jsonify({'status': 'error', 'message': 'Admins only.'}), 403
+    get_db().table("community_members").delete().eq("community_id", cid).eq("username", d.get('username')).execute()
+    return jsonify({'status': 'success'})
+
+@app.route('/api/groups/settings', methods=['POST', 'OPTIONS'])
+@require_auth
+def groups_settings():
+    d = request.json or {}; cid = d.get('group_id')
+    if not _is_admin(cid): return jsonify({'status': 'error', 'message': 'Admins only.'}), 403
+    upd = {}
+    if 'locked' in d: upd['locked'] = bool(d['locked'])
+    if 'rules' in d: upd['rules'] = str(d['rules'])[:1000]
+    if upd: get_db().table("communities").update(upd).eq("id", cid).execute()
+    return jsonify({'status': 'success'})
+
+@app.route('/api/groups/photo', methods=['POST', 'OPTIONS'])
+@require_auth
+def groups_photo():
+    cid = request.form.get('group_id'); f = request.files.get('photo')
+    if not f or not cid or not _is_admin(cid): return jsonify({'status': 'error', 'message': 'Admins only.'}), 403
+    ext = _img_ext(f)
+    if not ext: return jsonify({'status': 'error', 'message': 'Use a JPG, PNG or WEBP image.'}), 400
+    old = get_db().table("communities").select("photo").eq("id", cid).execute()
+    if old.data: _remove_file(old.data[0].get('photo'))
+    url = _upload_bytes(f.read(), f"group_{cid}_{int(time.time())}.{ext}", f.content_type)
+    get_db().table("communities").update({"photo": url}).eq("id", cid).execute()
+    return jsonify({'status': 'success', 'photo_url': url})
 
 @app.route('/api/groups/emergency', methods=['POST', 'OPTIONS'])
 @require_auth
 def groups_emergency():
     d = request.json or {}; cid = d.get('group_id')
-    mem = get_db().table("community_members").select("*").eq("community_id", cid).eq("username", g.current_user).execute()
-    if not mem.data: return jsonify({'status': 'error'}), 403
-    opts = mem.data[0]; lat = lng = photo = None
+    opts = _member(cid, g.current_user)
+    if not opts: return jsonify({'status': 'error'}), 403
+    lat = lng = photo = None
     if opts.get('share_location'): lat, lng = d.get('lat'), d.get('lng')
     if opts.get('share_child_photo') and d.get('child_id'):
         ch = get_db().table("children").select("photo").eq("id", d['child_id']).eq("parent_username", g.current_user).execute()
         photo = ch.data[0].get('photo') if ch.data else None
     note = (d.get('note') or 'Emergency, please help.')[:300]
-    nm = get_db().table("users").select("name").eq("username", g.current_user).execute()
-    get_db().table("community_messages").insert({"community_id": cid, "sender_username": g.current_user,
-        "sender_name": (nm.data[0]['name'] if nm.data else g.current_user), "body": "🚨 EMERGENCY: " + note,
-        "kind": "emergency", "lat": lat, "lng": lng, "photo_url": photo}).execute()
+    get_db().table("community_messages").insert({"community_id": cid, "sender_username": g.current_user, "sender_name": _sender_name(g.current_user),
+        "body": "🚨 EMERGENCY: " + note, "kind": "emergency", "lat": lat, "lng": lng, "photo_url": photo}).execute()
     send_whatsapp(cid, f"EMERGENCY: {note} " + (f"https://maps.google.com/?q={lat},{lng}" if lat else ""))
     # TODO: police / roadblock integration once you have a contact
     return jsonify({'status': 'success'})
