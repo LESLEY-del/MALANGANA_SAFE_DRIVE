@@ -30,27 +30,47 @@ input:focus,textarea:focus{border-color:var(--ac)}label{font-size:12px;font-weig
 .mb{background:var(--card);border-radius:16px;padding:22px;width:100%;max-width:400px;max-height:92vh;overflow:auto}.mb h3{margin-bottom:14px}
 .ck{display:flex;gap:10px;font-size:13px;color:var(--mut);margin:10px 0;align-items:flex-start}.ck input{width:auto;margin:3px 0 0}
 .sr{padding:12px;border-radius:10px;background:var(--in);margin-bottom:6px;cursor:pointer;font-size:14px}.sr:hover{outline:1px solid var(--ac)}
-#mapV{position:fixed;inset:0;z-index:150;background:var(--bg);display:none}#mapV.on{display:block}#map{position:absolute;inset:0}
-.mt{position:absolute;top:12px;left:12px;right:12px;z-index:1000;display:flex;gap:8px}.mt select{margin:0;border-radius:10px;border:0;flex:1}.mt .b{flex:none}
-#mst{position:absolute;bottom:18px;left:12px;right:12px;z-index:1000;background:var(--card);padding:12px;border-radius:12px;text-align:center;font-size:13px}
-#chat{position:fixed;inset:0;z-index:160;background:var(--bg);display:none;flex-direction:column}#chat.on{display:flex}
-#msgs{flex:1;overflow:auto;padding:14px;display:flex;flex-direction:column;gap:8px}
-.m{max-width:85%;padding:8px 12px;border-radius:12px;font-size:14px;background:var(--card)}.m.me{align-self:flex-end;background:#005c4b;color:#e9edef}.m.em{border:2px solid var(--dg)}
-.m small{display:block;font-size:10px;opacity:.65;margin-bottom:3px}.m img{max-width:100%;border-radius:8px;margin-top:6px}
-.cb{display:flex;gap:8px;padding:10px;background:var(--card)}.cb input{margin:0;border-radius:22px;border:0}
+:root{--wa:#0b141a}html.light{--wa:#efeae2}
+.hero{height:38vh;min-height:220px;background-size:cover;background-position:center;display:flex;align-items:flex-end;padding:20px;color:#fff}.hero h2{text-shadow:0 2px 6px rgba(0,0,0,.6)}
+#mapV{position:fixed;inset:0;z-index:150;background:#000;display:none}#mapV.on{display:block}#map{position:absolute;inset:0;z-index:0}
+.fl{background:#fff;color:#1f2937;border:0;border-radius:50%;width:46px;height:46px;font-size:19px;box-shadow:0 2px 10px rgba(0,0,0,.4);cursor:pointer}
+#mBack{position:absolute;z-index:1300;top:calc(env(safe-area-inset-top,0px) + 14px);left:14px;font-weight:800}
+#mPill{position:absolute;z-index:1300;top:calc(env(safe-area-inset-top,0px) + 14px);left:70px;right:14px}
+#mPill select{margin:0;border:0;border-radius:24px;background:#fff;color:#1f2937;font-weight:700;padding:13px 16px;box-shadow:0 2px 10px rgba(0,0,0,.4)}
+#mBot{position:absolute;z-index:1300;left:0;right:0;bottom:0}.fls{display:flex;flex-direction:column;align-items:flex-end;gap:10px;padding:0 14px 12px}
+#sheet{background:var(--card);border-radius:22px 22px 0 0;padding:10px 16px calc(env(safe-area-inset-bottom,0px) + 16px);max-height:42vh;overflow:auto;box-shadow:0 -4px 20px rgba(0,0,0,.35)}
+#sheet:before{content:'';display:block;width:44px;height:4px;border-radius:2px;background:#9ca3af66;margin:0 auto 10px}#sheet h3{margin-bottom:10px}
+.kc{display:flex;gap:14px;align-items:center;padding:10px;border-radius:16px;border:1px solid var(--bd);margin-bottom:8px;cursor:pointer}
+.kp{position:relative}.kp img{width:58px;height:58px;border-radius:14px;object-fit:cover;display:block}
+.bt{position:absolute;left:4px;bottom:-8px;background:#fff;color:#111;font-size:11px;font-weight:700;border-radius:10px;padding:2px 6px;box-shadow:0 1px 4px rgba(0,0,0,.3)}
+.pin{position:relative;width:60px;height:60px}.pin img{width:60px;height:60px;border-radius:50%;border:3px solid #fff;object-fit:cover;box-shadow:0 2px 8px rgba(0,0,0,.5)}
+.bub{position:absolute;left:48px;top:-16px;background:#fff;color:#222;border-radius:12px;padding:6px 10px;font:600 12px Inter;white-space:nowrap;box-shadow:0 2px 8px rgba(0,0,0,.4)}
+#chat{position:fixed;inset:0;z-index:160;background:var(--wa);display:none;flex-direction:column}#chat.on{display:flex}
+.gav{width:40px;height:40px;border-radius:50%;background:#128c7e;display:flex;align-items:center;justify-content:center;font-weight:800;flex:none}
+.ct{font-weight:700;font-size:16px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.cs{font-size:11px;opacity:.75;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#msgs{flex:1;overflow:auto;padding:10px 12px;display:flex;flex-direction:column;gap:3px;background:var(--wa)}
+.mr{display:flex;gap:6px;align-items:flex-end;max-width:88%}.mr.me{align-self:flex-end}.ava{width:28px;height:28px;border-radius:50%;object-fit:cover;flex:none}
+.m{padding:6px 9px 4px;border-radius:0 9px 9px 9px;font-size:14.5px;background:#202c33;color:#e9edef;box-shadow:0 1px 1px rgba(0,0,0,.25);word-break:break-word}
+.m.me{background:#005c4b;border-radius:9px 0 9px 9px}.m.em{outline:2px solid var(--dg)}
+html.light .m{background:#fff;color:#111b21}html.light .m.me{background:#d9fdd3}
+.nm{font-size:12.5px;font-weight:700;margin-bottom:1px}.tm{float:right;font-size:10px;opacity:.6;margin:6px 0 0 10px}.m img{max-width:100%;border-radius:8px;margin-top:6px;display:block}
+.cb{display:flex;gap:8px;padding:8px}.cb input{margin:0;border-radius:24px;border:0;background:var(--card)}
+.send{flex:none;width:46px;height:46px;border-radius:50%;border:0;background:#00a884;color:#fff;font-size:18px;cursor:pointer}
+.pa{display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid var(--bd)}.pa span{flex:1;font-size:14px}.pa .b{padding:9px 12px}
 .card{background:linear-gradient(135deg,#052e16,#0f172a);color:#fff;border-radius:16px;padding:18px;text-align:center}
 .card img{width:70px;height:70px;border-radius:50%;object-fit:cover;margin-bottom:8px}.card #qr{background:#fff;padding:10px;display:inline-block;border-radius:10px;margin-top:10px}
 @media print{body *{visibility:hidden}.card,.card *{visibility:visible}.card{position:fixed;top:20px;left:20px}}
 </style></head><body>
-<div class="hd"><button class="ham" onclick="drawer(1)">☰</button><h1 id="ttl">Home</h1><div class="av" id="av">P</div></div>
+<div class="hd"><button class="ham" onclick="drawer(1)">☰</button><h1 id="ttl">Home</h1><div class="av" id="av" onclick="show('mProf')" style="cursor:pointer">P</div></div>
 <div class="ov" id="ov" onclick="drawer(0)"></div>
-<div class="dr" id="dr"><div class="dh">PARENT PORTAL<small id="nm"></small></div>
+<div class="dr" id="dr"><div class="dh" style="display:flex;gap:12px;align-items:center"><div class="av" id="dav" style="width:48px;height:48px" onclick="drawer(0);show('mProf')"></div><div>PARENT PORTAL<small id="nm"></small></div></div>
 <button class="di on" data-v="home">🏠 Home</button><button class="di" data-v="kids">👧 My children</button>
 <button class="di" data-v="map">🗺️ View map</button><button class="di" data-v="grp">👥 Community groups</button>
 <button class="di" data-v="log">🧾 Arrivals log</button><div class="sp"></div>
 <button class="di" onclick="theme()">🌓 Light / dark</button><button class="di" onclick="logout()" style="color:var(--mut)">🚪 Log out</button></div>
 
-<div class="vw on" id="v-home"><div class="row"><h2 id="hi" style="margin-bottom:6px"></h2><p class="mut">Add a child to start getting arrival alerts, or join your community group.</p>
+<div class="vw on" id="v-home"><div class="hero" id="hero"><div><h2 id="hi"></h2><div style="opacity:.9;font-size:14px">Your family, safe and in view.</div></div></div>
+<div class="row"><p class="mut">Add a child to get arrival alerts, or join your community group.</p>
 <div class="g2"><button class="b" onclick="openAdd()">+ Add a child</button><button class="b g" onclick="go('grp')">Community groups</button></div></div>
 <div class="ttl">Latest</div><div id="hl"></div></div>
 
@@ -63,10 +83,15 @@ input:focus,textarea:focus{border-color:var(--ac)}label{font-size:12px;font-weig
 
 <div class="vw" id="v-log"><div class="ttl">Arrivals log</div><div id="lg"></div></div>
 
-<div id="mapV"><div class="mt"><button class="b g" onclick="go('home')">←</button><select id="msel" onchange="locate()"></select></div><div id="map"></div><div id="mst">Pick a child.</div></div>
+<div id="mapV"><button class="fl" id="mBack" onclick="go('home')">←</button>
+<div id="mPill"><select id="msel" onchange="pickKid()"></select></div><div id="map"></div>
+<div id="mBot"><div class="fls"><button class="fl" onclick="fitAll()">◎</button><button class="fl" onclick="layerToggle()">🗺</button></div>
+<div id="sheet"><h3>My family</h3><div id="sheetList"></div></div></div></div>
 
-<div id="chat"><div class="hd"><button class="ham" onclick="closeChat()">←</button><h1 id="ct"></h1><button class="b d" style="background:var(--dg);color:#fff" onclick="sos()">SOS</button></div>
-<div id="msgs"></div><div class="cb"><input id="ci" placeholder="Message" onkeydown="if(event.key==='Enter')sendMsg()"><button class="b" onclick="sendMsg()">➤</button></div></div>
+<div id="chat"><div class="hd" style="padding:8px 12px"><button class="ham" onclick="closeChat()">←</button><div class="gav" id="cav"></div>
+<div style="flex:1;min-width:0"><div id="ct" class="ct"></div><div id="cs" class="cs"></div></div>
+<button class="b" style="background:var(--dg)" onclick="sos()">SOS</button><button class="ham" onclick="show('mProf')">⋮</button></div>
+<div id="msgs"></div><div class="cb"><input id="ci" placeholder="Message" onkeydown="if(event.key==='Enter')sendMsg()"><button class="send" onclick="sendMsg()">➤</button></div></div>
 
 <div class="md" id="mAdd"><div class="mb"><h3>Add a child</h3>
 <label>School (name or code)</label><input id="aSch" placeholder="Start typing..." oninput="schSearch()"><div id="aRes"></div>
@@ -100,6 +125,13 @@ input:focus,textarea:focus{border-color:var(--ac)}label{font-size:12px;font-weig
 <label>Suburb</label><input id="nS"><label>Town</label><input id="nT"><label>Province</label><input id="nP"><label>Group rules</label><textarea id="nR" rows="3"></textarea>
 <p class="mut" style="margin-bottom:10px">Names must be unique. Add a section or suburb if the name exists.</p>
 <div class="g2"><button class="b g" onclick="hide('mCreate')">Cancel</button><button class="b" onclick="mkGroup()">Create</button></div></div></div>
+
+<div class="md" id="mProf"><div class="mb"><h3>My profile</h3><div style="text-align:center;margin-bottom:10px"><img id="pvav" style="width:84px;height:84px;border-radius:50%;object-fit:cover"></div>
+<div class="pa"><span>Profile picture</span><button class="b g" onclick="$('fP').click()">Change</button></div>
+<div class="pa"><span>Home background</span><button class="b g" onclick="$('fH').click()">Change</button><button class="b d" onclick="resetBg('home')">Reset</button></div>
+<div class="pa"><span>Chat background</span><button class="b g" onclick="$('fC').click()">Change</button><button class="b d" onclick="resetBg('chat')">Reset</button></div>
+<input type="file" id="fP" accept="image/*" hidden onchange="upl(this,'/api/profile/upload_photo')"><input type="file" id="fH" accept="image/*" hidden onchange="upl(this,'/api/profile/upload_wallpaper','home')"><input type="file" id="fC" accept="image/*" hidden onchange="upl(this,'/api/profile/upload_wallpaper','chat')">
+<button class="b g" style="width:100%;margin-top:14px" onclick="hide('mProf')">Close</button></div></div>
 
 <script>
 const $=i=>document.getElementById(i),tok=sessionStorage.getItem('authToken'),ME=sessionStorage.getItem('username'),NAME=sessionStorage.getItem('userName')||'Parent';
@@ -139,14 +171,34 @@ async function saveKid(){const b={id:cur.id,grade:$('eG').value,tracker_device_i
  await api('/api/children/update',b);const f=$('eP').files[0];if(f){const fd=new FormData();fd.append('photo',f);fd.append('id',cur.id);await fetch('/api/children/photo',{method:'POST',headers:{Authorization:'Bearer '+tok},body:fd});$('eP').value=''}
  hide('mEdit');loadKids()}
 async function delKid(){if(!confirm('Remove this child and their history?'))return;await api('/api/children/delete',{id:cur.id});hide('mEdit');loadKids()}
-/* ---- map (full screen) ---- */
-async function openMap(){document.querySelectorAll('.vw').forEach(e=>e.classList.remove('on'));if(!kids.length){const d=await api('/api/children/list');kids=d.children||[]}
- $('msel').innerHTML=kids.map(k=>`<option value="${k.id}">${esc(k.name)}</option>`).join('');show('mapV');
- if(!map){map=L.map('map').setView([-23.9,29.45],12);L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19,attribution:'© OpenStreetMap'}).addTo(map)}
- setTimeout(()=>map.invalidateSize(),150);if(!kids.length){$('mst').textContent='Add a child first.';return}locate();clearInterval(poll);poll=setInterval(locate,15000)}
-async function locate(){const id=$('msel').value;if(!id)return;const d=await api('/api/parent/get_child_location',{child_id:id});
- if(!d.location){$('mst').textContent='No location yet. Link a tracker in the child settings.';return}
- const ll=[d.location.latitude,d.location.longitude];mk?mk.setLatLng(ll):mk=L.marker(ll).addTo(map);map.setView(ll,16);$('mst').textContent='Updated '+new Date(d.location.updated_at).toLocaleTimeString()}
+/* ---- map (full screen, satellite) ---- */
+let sat,street,fitted=false,pins={},locs={},geo={};
+const kp=k=>esc(k.photo||'https://ui-avatars.com/api/?background=22c55e&color=fff&size=128&name='+encodeURIComponent(k.name));
+function hereFor(t){if(!t)return'Live';const m=Math.max(0,Math.floor((Date.now()-new Date(t))/60000)),h=Math.floor(m/60);return 'here for '+(h?h+' hrs, '+(m%60)+' min':m+' min')}
+async function openMap(){document.querySelectorAll('.vw').forEach(e=>e.classList.remove('on'));
+ if(!kids.length){const d=await api('/api/children/list');kids=d.children||[]}
+ show('mapV');fitted=false;
+ if(!map){map=L.map('map',{zoomControl:false,attributionControl:false}).setView([-23.9,29.45],13);
+  sat=L.layerGroup([L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',{maxZoom:19}),
+   L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}',{maxZoom:19})]).addTo(map);
+  street=L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19})}
+ $('msel').innerHTML='<option value="">My family</option>'+kids.map(k=>`<option value="${k.id}">${esc(k.name)}</option>`).join('');
+ setTimeout(()=>map.invalidateSize(),150);refresh();clearInterval(poll);poll=setInterval(refresh,15000)}
+async function refresh(){await Promise.all(kids.map(async k=>{const d=await api('/api/parent/get_child_location',{child_id:k.id});locs[k.id]=d.location||null}));
+ const pts=[];kids.forEach(k=>{const l=locs[k.id];if(!l)return;const ll=[l.latitude,l.longitude];pts.push(ll);
+  const ic=L.divIcon({html:`<div class="pin"><img src="${kp(k)}"><div class="bub">${hereFor(l.stay_since)}</div></div>`,className:'',iconSize:[60,60],iconAnchor:[30,30]});
+  if(pins[k.id])pins[k.id].setLatLng(ll).setIcon(ic);else pins[k.id]=L.marker(ll,{icon:ic}).addTo(map)});
+ if(!fitted&&pts.length){fitAll();fitted=true}renderSheet()}
+function fitAll(){const p=kids.map(k=>locs[k.id]).filter(Boolean).map(l=>[l.latitude,l.longitude]);if(!p.length)return;p.length>1?map.fitBounds(p,{padding:[90,90],maxZoom:16}):map.setView(p[0],16)}
+function layerToggle(){if(map.hasLayer(sat)){map.removeLayer(sat);street.addTo(map)}else{map.removeLayer(street);sat.addTo(map)}}
+function focusKid(id){const l=locs[id];if(l)map.setView([l.latitude,l.longitude],17);$('msel').value=id}
+function pickKid(){const v=$('msel').value;v?focusKid(v):fitAll()}
+async function place(l){const key=l.latitude.toFixed(3)+','+l.longitude.toFixed(3);if(geo[key])return geo[key];
+ try{const a=(await(await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&zoom=17&lat=${l.latitude}&lon=${l.longitude}`)).json()).address||{};geo[key]=a.road||a.neighbourhood||a.suburb||a.village||a.town||'this area'}catch(e){geo[key]='this area'}return geo[key]}
+function renderSheet(){$('sheetList').innerHTML=kids.map(k=>{const l=locs[k.id];
+ return `<div class="kc" onclick="focusKid('${k.id}')"><div class="kp"><img src="${kp(k)}">${l&&l.battery!=null?`<span class="bt">🔋 ${l.battery}%</span>`:''}</div>
+ <div><b>${esc(k.name)}</b><div class="mut" id="pl-${k.id}">${l?'Locating...':'No location yet'}</div><div class="mut">${l?'Since '+new Date(l.stay_since||l.updated_at).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'}):'Link a tracker in the child settings'}</div></div></div>`}).join('')||'<p class="mut">Add a child first.</p>';
+ kids.forEach(async k=>{const l=locs[k.id];if(l){const p=await place(l),e=$('pl-'+k.id);if(e)e.textContent='Near '+p}})}
 /* ---- arrivals ---- */
 async function loadLog(short){const d=await api('/api/parent/arrivals');let l=d.logs||[];if(short)l=l.slice(0,5);
  const h=l.map(x=>`<div class="row" style="display:flex;gap:12px;align-items:center">${x.photo_url?`<img src="${esc(x.photo_url)}" style="width:52px;height:52px;border-radius:10px;object-fit:cover">`:''}
@@ -161,14 +213,31 @@ async function join(){const d=await api('/api/groups/join',{group_id:gsel.id,agr
 async function gmine(){const d=await api('/api/groups/mine');$('gmine').innerHTML=(d.groups||[]).map(g=>`<div class="row" onclick='openChat(${JSON.stringify(g).replace(/'/g,"&#39;")})' style="cursor:pointer"><b>${esc(g.name)}</b><div class="mut">${esc([g.suburb,g.town,g.province].filter(Boolean).join(', '))}</div></div>`).join('')||'<div class="row mut">You have not joined a group.</div>'}
 async function mkGroup(){const d=await api('/api/groups/create',{name:$('nN').value,suburb:$('nS').value,town:$('nT').value,province:$('nP').value,rules:$('nR').value});
  if(d.status!=='success')return alert(d.message||'Could not create.');hide('mCreate');gmine()}
-function openChat(g){gcur=g;$('ct').textContent=g.name;$('chat').classList.add('on');loadMsgs();clearInterval(gpoll);gpoll=setInterval(loadMsgs,5000)}
+function openChat(g){gcur=g;$('ct').textContent=g.name;$('cs').textContent=[g.suburb,g.town,g.province].filter(Boolean).join(', ')||'Community group';$('cav').textContent=g.name[0].toUpperCase();
+ applyChatBg();$('msgs').innerHTML='';$('chat').classList.add('on');loadMsgs();clearInterval(gpoll);gpoll=setInterval(loadMsgs,5000)}
 function closeChat(){$('chat').classList.remove('on');clearInterval(gpoll);gcur=null}
-async function loadMsgs(){if(!gcur)return;const d=await api('/api/groups/messages',{group_id:gcur.id});const a=$('msgs'),bot=a.scrollHeight-a.scrollTop-a.clientHeight<80;
- a.innerHTML=(d.messages||[]).map(m=>`<div class="m ${m.sender_username===ME?'me':''} ${m.kind==='emergency'?'em':''}"><small>${esc(m.sender_name)} · ${new Date(m.created_at).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})}</small>${esc(m.body)}
- ${m.lat?`<div><a style="color:#38bdf8" target="_blank" href="https://maps.google.com/?q=${m.lat},${m.lng}">📍 Live location</a></div>`:''}${m.photo_url?`<img src="${esc(m.photo_url)}">`:''}</div>`).join('');if(bot)a.scrollTop=a.scrollHeight}
+const COLS=['#53bdeb','#e9a23b','#f0709a','#a78bfa','#34d399','#fb923c'],colr=s=>COLS[[...String(s)].reduce((a,c)=>a+c.charCodeAt(0),0)%COLS.length];
+async function loadMsgs(){if(!gcur)return;const d=await api('/api/groups/messages',{group_id:gcur.id}),a=$('msgs'),bot=a.scrollHeight-a.scrollTop-a.clientHeight<90;
+ a.innerHTML=(d.messages||[]).map(m=>{const me=m.sender_username===ME,t=new Date(m.created_at).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});
+  const av=me?'':`<img class="ava" src="${esc(m.sender_photo||'https://ui-avatars.com/api/?background=334155&color=fff&name='+encodeURIComponent(m.sender_name||'?'))}">`;
+  return `<div class="mr ${me?'me':''}">${av}<div class="m ${me?'me':''} ${m.kind==='emergency'?'em':''}">${me?'':`<div class="nm" style="color:${colr(m.sender_username)}">${esc(m.sender_name)}</div>`}${esc(m.body)}
+  ${m.lat?`<div><a style="color:#53bdeb" target="_blank" href="https://maps.google.com/?q=${m.lat},${m.lng}">📍 Live location</a></div>`:''}${m.photo_url?`<img src="${esc(m.photo_url)}">`:''}<span class="tm">${t}</span></div></div>`}).join('');
+ if(bot)a.scrollTop=a.scrollHeight}
 async function sendMsg(){const t=$('ci').value.trim();if(!t)return;$('ci').value='';await api('/api/groups/send',{group_id:gcur.id,body:t,sender_name:NAME});loadMsgs()}
 function sos(){if(!confirm('Send an emergency alert to this group?'))return;const cid=kids[0]?.id;
  const send=(lat,lng)=>api('/api/groups/emergency',{group_id:gcur.id,lat,lng,child_id:cid,sender_name:NAME,note:'Emergency, please help.'}).then(loadMsgs);
  navigator.geolocation.getCurrentPosition(p=>send(p.coords.latitude,p.coords.longitude),()=>send(null,null),{enableHighAccuracy:true,timeout:6000})}
+/* ---- profile, home + chat backgrounds ---- */
+let PROF={};
+async function loadProf(){const d=await api('/api/profile/get_self');PROF=d.profile||{};applyProf()}
+function avUrl(){return PROF.photo||'https://ui-avatars.com/api/?background=22c55e&color=fff&name='+encodeURIComponent(NAME)}
+function applyChatBg(){const l=document.documentElement.classList.contains('light'),o=l?'rgba(239,234,226,.3)':'rgba(11,20,26,.55)',m=$('msgs');
+ m.style.backgroundImage=PROF.chat_bg?`linear-gradient(${o},${o}),url('${PROF.chat_bg}')`:'none';m.style.backgroundSize='cover';m.style.backgroundPosition='center'}
+function applyProf(){const im=`<img src="${esc(avUrl())}" style="width:100%;height:100%;border-radius:50%;object-fit:cover">`;$('av').innerHTML=im;$('dav').innerHTML=im;$('pvav').src=avUrl();
+ $('hero').style.backgroundImage=PROF.wallpaper?`linear-gradient(transparent 35%,rgba(0,0,0,.65)),url('${PROF.wallpaper}')`:'linear-gradient(135deg,#052e16,#0f172a)';applyChatBg()}
+async function upl(inp,url,kind){const f=inp.files[0];if(!f)return;const fd=new FormData();fd.append(kind?'file':'photo',f);if(kind)fd.append('kind',kind);
+ const r=await fetch(url,{method:'POST',headers:{Authorization:'Bearer '+tok},body:fd}),d=await r.json().catch(()=>({}));inp.value='';if(d.status!=='success')return alert(d.message||'Upload failed.');loadProf()}
+async function resetBg(kind){await api('/api/profile/delete_wallpaper',{kind});loadProf()}
+loadProf();
 if(!kids.length)api('/api/children/list').then(d=>kids=d.children||[]);loadLog(1);
 </script></body></html>
