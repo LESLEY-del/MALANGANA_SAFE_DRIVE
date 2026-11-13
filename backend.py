@@ -296,7 +296,7 @@ def reset_password():
 @app.route('/api/profile/get_self', methods=['POST', 'OPTIONS'])
 @require_auth
 def get_self_profile():
-    r = get_db().table("users").select("username, name, email, role, school_code, photo, theme, created_at").eq("username", g.current_user).execute()
+    r = get_db().table("users").select("username, name, email, role, school_code, photo, wallpaper, chat_bg, theme, created_at").eq("username", g.current_user).execute()
     if not r.data: return jsonify({'status': 'error', 'message': 'Not found'}), 404
     return jsonify({'status': 'success', 'profile': r.data[0]})
 
@@ -323,6 +323,33 @@ def upload_profile_photo():
         return jsonify({'status': 'success', 'photo_url': url})
     except Exception as e:
         return jsonify({'status': 'error', 'message': str(e)}), 500
+
+@app.route('/api/profile/upload_wallpaper', methods=['POST', 'OPTIONS'])
+@require_auth
+def upload_wallpaper():
+    try:
+        col = {'home': 'wallpaper', 'chat': 'chat_bg'}.get(request.form.get('kind'))
+        f = request.files.get('file')
+        if not col or not f: return jsonify({'status': 'error', 'message': 'Missing file'}), 400
+        ext = f.filename.rsplit('.', 1)[-1].lower() if '.' in f.filename else 'jpg'
+        if ext not in ('jpg', 'jpeg', 'png', 'webp'): return jsonify({'status': 'error', 'message': 'Use a JPG, PNG or WEBP image.'}), 400
+        old = get_db().table("users").select(col).eq("username", g.current_user).execute()
+        if old.data: _remove_file(old.data[0].get(col))
+        url = _upload_bytes(f.read(), f"{col}_{g.current_user}_{int(time.time())}.{ext}", f.content_type or "image/jpeg")
+        get_db().table("users").update({col: url}).eq("username", g.current_user).execute()
+        return jsonify({'status': 'success', 'url': url})
+    except Exception as e:
+        return jsonify({'status': 'error', 'message': str(e)}), 500
+
+@app.route('/api/profile/delete_wallpaper', methods=['POST', 'OPTIONS'])
+@require_auth
+def delete_wallpaper():
+    col = {'home': 'wallpaper', 'chat': 'chat_bg'}.get((request.json or {}).get('kind'))
+    if not col: return jsonify({'status': 'error'}), 400
+    old = get_db().table("users").select(col).eq("username", g.current_user).execute()
+    if old.data: _remove_file(old.data[0].get(col))
+    get_db().table("users").update({col: None}).eq("username", g.current_user).execute()
+    return jsonify({'status': 'success'})
 
 @app.route('/api/profile/delete_photo', methods=['POST', 'OPTIONS'])
 @require_auth
@@ -436,7 +463,7 @@ def get_child_location():
     cid = (request.json or {}).get('child_id')
     own = get_db().table("children").select("id").eq("id", cid).eq("parent_username", g.current_user).execute()
     if not own.data: return jsonify({'status': 'error', 'message': 'Not authorized'}), 403
-    r = get_db().table("child_locations").select("latitude, longitude, updated_at").eq("child_id", cid).execute()
+    r = get_db().table("child_locations").select("latitude, longitude, updated_at, battery, stay_since").eq("child_id", cid).execute()
     return jsonify({'status': 'success', 'location': r.data[0] if r.data else None})
 
 # ---------------- school station ----------------
@@ -515,8 +542,16 @@ def gps_ingest():
         c = get_db().table("children").select("*").eq("tracker_device_id", lid).execute()
         if not c.data: return jsonify({'status': 'ignored'}), 200
         ch = c.data[0]
+        bat = (d.get('attributes') or {}).get('batteryLevel', d.get('batteryLevel'))
+        now = current_sa_time()
+        prev = get_db().table("child_locations").select("stay_lat, stay_lng, stay_since").eq("child_id", ch['id']).execute()
+        if prev.data and prev.data[0].get('stay_lat') is not None and _haversine(lat, lng, prev.data[0]['stay_lat'], prev.data[0]['stay_lng']) < 100:
+            sl, sg, ss = prev.data[0]['stay_lat'], prev.data[0]['stay_lng'], prev.data[0]['stay_since']
+        else:
+            sl, sg, ss = lat, lng, now
         get_db().table("child_locations").upsert({"child_id": ch['id'], "tracker_device_id": lid, "latitude": lat,
-            "longitude": lng, "speed": d.get('speed'), "updated_at": current_sa_time()}).execute()
+            "longitude": lng, "speed": d.get('speed'), "updated_at": now,
+            "battery": int(float(bat)) if bat is not None else None, "stay_lat": sl, "stay_lng": sg, "stay_since": ss}).execute()
         state = dict(ch.get('zone_state') or {}); rad = ch.get('zone_radius') or 150; changed = False
         for zone, flag in (('school', 'notify_school'), ('home', 'notify_home')):
             zl, zg = ch.get(f'{zone}_lat'), ch.get(f'{zone}_lng')
@@ -597,7 +632,11 @@ def groups_messages():
     cid = (request.json or {}).get('group_id')
     if not _is_member(cid, g.current_user): return jsonify({'status': 'error', 'messages': []}), 403
     r = get_db().table("community_messages").select("*").eq("community_id", cid).order("created_at").limit(200).execute()
-    return jsonify({'status': 'success', 'messages': r.data or []})
+    msgs = r.data or []
+    names = list({m['sender_username'] for m in msgs})
+    photos = {u['username']: u.get('photo') for u in (get_db().table("users").select("username, photo").in_("username", names).execute().data or [])} if names else {}
+    for m in msgs: m['sender_photo'] = photos.get(m['sender_username'])
+    return jsonify({'status': 'success', 'messages': msgs})
 
 @app.route('/api/groups/send', methods=['POST', 'OPTIONS'])
 @require_auth
