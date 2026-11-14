@@ -105,7 +105,7 @@ html.light .m{background:#fff;color:#111b21}html.light .m.me{background:#d9fdd3}
 <div class="g2"><button class="b g" onclick="hide('mAdd')">Cancel</button><button class="b" onclick="addKid()">Save child</button></div></div></div>
 
 <div class="md" id="mEdit"><div class="mb"><h3 id="eT"></h3>
-<label>Grade</label><input id="eG"><label>Tracker ID (printed on the tracker)</label><input id="eT2">
+<label>Grade</label><input id="eG"><label>Tracker ID (needs the Card + tracker plan)</label><input id="eT2">
 <label>Photo (used in emergencies if you allow it)</label><input type="file" id="eP" accept="image/*">
 <div class="ck"><input type="checkbox" id="eNs"><span>Alert me when my child arrives at / leaves school</span></div>
 <div class="ck"><input type="checkbox" id="eNh"><span>Alert me when my child arrives home</span></div>
@@ -117,8 +117,12 @@ html.light .m{background:#fff;color:#111b21}html.light .m.me{background:#d9fdd3}
 <div class="g2"><button class="b g" onclick="hide('mEdit')">Close</button><button class="b" onclick="saveKid()">Save</button></div>
 <button class="b d" style="width:100%;margin-top:10px" onclick="delKid()">Remove child</button></div></div>
 
-<div class="md" id="mCard"><div class="mb"><div class="card"><img id="cI"><h3 id="cN"></h3><div id="cS" style="font-size:12px;opacity:.8"></div><div id="qr"></div></div>
-<div class="g2"><button class="b g" onclick="hide('mCard')">Close</button><button class="b" onclick="print()">Print card</button></div></div></div>
+<div class="md" id="mCard"><div class="mb"><div class="card"><img id="cI"><h3 id="cN"></h3><div id="cS" style="font-size:12px;opacity:.8"></div></div>
+<p class="mut" id="cSt" style="margin:12px 0;text-align:center"></p>
+<div class="g2"><button class="b g" onclick="hide('mCard')">Close</button><button class="b" id="cRe" style="display:none" onclick="reprint()">Request reprint</button></div></div></div>
+<div class="md" id="mPay"><div class="mb"><h3>Activate student cards</h3><p class="mut" style="margin-bottom:10px">Student card: R30 per month. Student card with tracker: R50 per month in total.</p>
+<div id="payRows"></div><div style="display:flex;justify-content:space-between;padding:12px 0"><b>Total</b><b id="payTot">R0</b></div><div id="payInfo" class="mut" style="margin:6px 0"></div>
+<div class="g2"><button class="b g" onclick="hide('mPay')">Close</button><button class="b" onclick="payNow()">Pay now</button></div></div></div>
 
 <div class="md" id="mJoin"><div class="mb"><h3 id="jT"></h3><p class="mut" id="jR" style="margin-bottom:10px;white-space:pre-line"></p>
 <div class="ck"><input type="checkbox" id="jA"><span>I agree to the group terms and will not share this group's information with criminals or outsiders.</span></div>
@@ -164,25 +168,41 @@ function theme(){const l=document.documentElement.classList.toggle('light');loca
 function logout(){sessionStorage.clear();location.replace('login.html')}
 /* ---- children ---- */
 let kids=[],cur=null,school=null;
+const PN={card:'Student card',card_tracker:'Card + tracker'},PRICE={card:30,card_tracker:50},fd=t=>new Date(t).toLocaleDateString();
+function pstat(k){return {requested:'Ready to print at a Safe Drive printing station.',printed:'Printed on '+(k.printed_at?fd(k.printed_at):'')+'. Request a reprint if it is lost.',reprint_pending:'Reprint waiting for admin approval.',rejected:'Reprint was declined. You can ask again.'}[k.print_status]||''}
 async function loadKids(){const d=await api('/api/children/list');kids=d.children||[];
  $('kl').innerHTML=kids.map(k=>`<div class="row"><b>${esc(k.name)} ${esc(k.surname)}</b><div class="mut">${esc(k.school_name)} · Grade ${esc(k.grade||'-')}</div>
- <div class="tag">${k.tracker_device_id?'Tracker linked':'No tracker yet'}</div><div class="g2"><button class="b g" onclick="card('${k.id}')">Student card</button><button class="b g" onclick="edit('${k.id}')">Settings</button></div></div>`).join('')||'<div class="row mut">No children yet. Tap "Add child".</div>'}
+ ${k.card_active?`<div class="tag">${PN[k.plan]} · active until ${fd(k.paid_until)}</div><div class="mut">${esc(pstat(k))}</div>`:'<div class="tag" style="color:#f59e0b">Card not active. Pay to activate.</div>'}
+ <div class="g2"><button class="b" onclick="openPay('${k.id}')">${k.card_active?'Renew':'Activate card'}</button><button class="b g" onclick="card('${k.id}')">Student card</button></div>
+ <button class="b g" style="width:100%;margin-top:8px" onclick="edit('${k.id}')">Settings</button></div>`).join('')||'<div class="row mut">No children yet. Tap "Add child".</div>'}
 function openAdd(){school=null;['aSch','aN','aS','aI','aG'].forEach(i=>$(i).value='');$('aRes').innerHTML='';show('mAdd')}
 let st;function schSearch(){school=null;clearTimeout(st);st=setTimeout(async()=>{const q=$('aSch').value.trim();if(q.length<2){$('aRes').innerHTML='';return}
  const d=await api('/api/schools/search',{q});$('aRes').innerHTML=(d.schools||[]).map(s=>`<div class="sr" onclick="pick('${esc(s.school_code)}','${esc(s.school_name)}')">${esc(s.school_name)} <span class="mut">(${esc(s.school_code)})</span></div>`).join('')||'<p class="mut">No school found. Ask the school to register as a station.</p>'},300)}
 function pick(c,n){school=c;$('aSch').value=n;$('aRes').innerHTML=''}
 async function addKid(){if(!school)return alert('Pick the school from the list.');
  const d=await api('/api/children/add',{school_code:school,name:$('aN').value,surname:$('aS').value,id_number:$('aI').value,grade:$('aG').value});
- if(d.status!=='success')return alert(d.message||'Could not save.');hide('mAdd');loadKids();card(d.child.id,d.child)}
-function card(id,k){k=k||kids.find(x=>x.id===id);$('cI').src=k.photo||'https://ui-avatars.com/api/?background=22c55e&color=fff&name='+encodeURIComponent(k.name);
- $('cN').textContent=k.name+' '+k.surname;$('cS').textContent=(k.school_name||'')+' · Grade '+(k.grade||'-');$('qr').innerHTML='';new QRCode($('qr'),{text:k.qr_token,width:150,height:150});show('mCard')}
+ if(d.status!=='success')return alert(d.message||'Could not save.');hide('mAdd');await loadKids();openPay(d.child.id)}
+let cardKid=null;
+function card(id){const k=kids.find(x=>x.id===id);if(!k)return;if(!k.card_active){openPay(k.id);return}cardKid=k;
+ $('cI').src=k.photo||'https://ui-avatars.com/api/?background=22c55e&color=fff&name='+encodeURIComponent(k.name);$('cN').textContent=k.name+' '+k.surname;$('cS').textContent=(k.school_name||'')+' · Grade '+(k.grade||'-');
+ $('cSt').textContent=pstat(k);$('cRe').style.display=(k.print_status==='printed'||k.print_status==='rejected')?'block':'none';show('mCard')}
+async function reprint(){const r=prompt('Why do you need a new print? (lost, damaged...)');if(!r)return;const d=await api('/api/cards/request_reprint',{child_id:cardKid.id,reason:r});alert(d.message||'Could not send.');hide('mCard');loadKids()}
+function openPay(pre){$('payInfo').textContent='';
+ $('payRows').innerHTML=kids.map(k=>{const def=k.id===pre?(k.plan||'card'):(!pre&&!k.card_active?'card':'');
+  return `<div class="pa"><span>${esc(k.name)}<br><small class="mut">${k.card_active?'Active until '+fd(k.paid_until):'Not active'}</small></span>
+  <select id="pp-${k.id}" onchange="payTot()" style="width:auto;margin:0"><option value="">Skip</option><option value="card"${def==='card'?' selected':''}>Card R30</option><option value="card_tracker"${def==='card_tracker'?' selected':''}>Card + tracker R50</option></select></div>`}).join('');payTot();show('mPay')}
+function payTot(){let t=0;kids.forEach(k=>t+=PRICE[$('pp-'+k.id).value]||0);$('payTot').textContent='R'+t}
+async function payNow(){const items=kids.map(k=>({child_id:k.id,plan:$('pp-'+k.id).value})).filter(i=>i.plan);if(!items.length)return alert('Choose a plan for at least one child.');
+ const d=await api('/api/billing/checkout',{items});if(d.status!=='success')return alert(d.message||'Could not start payment.');
+ if(d.mode==='payfast'){const f=document.createElement('form');f.method='POST';f.action=d.url;d.fields.forEach(([k,v])=>{const i=document.createElement('input');i.type='hidden';i.name=k;i.value=v;f.appendChild(i)});document.body.appendChild(f);f.submit()}
+ else $('payInfo').innerHTML=`<b>Pay R${d.amount} by EFT</b><br>${esc(d.bank_details)}<br>Reference: <b>${esc(d.reference)}</b><br>Your cards switch on once we confirm the payment.`}
 function edit(id){cur=kids.find(x=>x.id===id);$('eT').textContent=cur.name+' '+cur.surname;$('eG').value=cur.grade||'';$('eT2').value=cur.tracker_device_id||'';
  $('eNs').checked=cur.notify_school;$('eNh').checked=cur.notify_home;$('eNz').checked=cur.notify_zone;$('eCc').checked=cur.call_confirm;$('eR').value=cur.zone_radius||150;zt();show('mEdit')}
 function zt(){$('eZ').textContent=`Home: ${cur.home_lat?'set':'not set'} · School: ${cur.school_lat?'set':'not set'}`}
 function setZone(w){navigator.geolocation.getCurrentPosition(p=>{cur[w+'_lat']=p.coords.latitude;cur[w+'_lng']=p.coords.longitude;zt()},()=>alert('Allow location access, and stand at the place.'))}
 async function saveKid(){const b={id:cur.id,grade:$('eG').value,tracker_device_id:$('eT2').value,notify_school:$('eNs').checked,notify_home:$('eNh').checked,notify_zone:$('eNz').checked,
  call_confirm:$('eCc').checked,zone_radius:+$('eR').value||150,home_lat:cur.home_lat,home_lng:cur.home_lng,school_lat:cur.school_lat,school_lng:cur.school_lng};
- await api('/api/children/update',b);const f=$('eP').files[0];if(f){const fd=new FormData();fd.append('photo',f);fd.append('id',cur.id);await fetch('/api/children/photo',{method:'POST',headers:{Authorization:'Bearer '+tok},body:fd});$('eP').value=''}
+ const u=await api('/api/children/update',b);if(u.status==='error')alert(u.message||'Could not save.');const f=$('eP').files[0];if(f){const fd=new FormData();fd.append('photo',f);fd.append('id',cur.id);await fetch('/api/children/photo',{method:'POST',headers:{Authorization:'Bearer '+tok},body:fd});$('eP').value=''}
  hide('mEdit');loadKids()}
 async function delKid(){if(!confirm('Remove this child and their history?'))return;await api('/api/children/delete',{id:cur.id});hide('mEdit');loadKids()}
 /* ---- map (full screen, satellite) ---- */
