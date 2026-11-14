@@ -1,0 +1,52 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Print student card | Safe Drive</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<style>
+@page{size:85.6mm 54mm;margin:0}
+*{box-sizing:border-box;margin:0;padding:0}body{background:#0b141a;color:#e9edef;font-family:Inter,sans-serif;min-height:100vh;display:flex;justify-content:center;padding:24px 14px}
+.box{width:100%;max-width:460px}.logo{font-weight:900;font-size:22px;margin-bottom:6px}.logo b{color:#22c55e}.sub{color:#8696a0;margin-bottom:20px;font-size:14px}
+input{width:100%;background:#2a3942;border:0;color:#fff;padding:15px;border-radius:12px;font:16px Inter;margin-bottom:12px;outline:0}
+.b{width:100%;border:0;border-radius:12px;padding:16px;font:800 15px Inter;background:#22c55e;color:#02120a;cursor:pointer}.b.g{background:#2a3942;color:#fff}.b:disabled{opacity:.5}
+.c{background:#111b21;border-radius:14px;padding:16px;margin-bottom:10px}.c b{font-size:17px}.c p{color:#8696a0;font-size:13px;margin:4px 0 10px}
+#err{color:#fb7185;font-size:14px;margin-bottom:10px}
+#sheet{display:none;width:85.6mm;height:54mm;background:#fff;color:#000;position:relative;overflow:hidden;font-family:Arial,sans-serif}
+#sheet .top{background:#0f9d58;color:#fff;height:10mm;padding:2.5mm 4mm;font-weight:900;letter-spacing:1.5px;font-size:11pt}
+#sheet .ph{position:absolute;left:4mm;top:13mm;width:22mm;height:28mm;object-fit:cover;border:.3mm solid #999}
+#sheet .nm{position:absolute;left:29mm;top:13mm;right:28mm;font-weight:900;font-size:10.5pt;line-height:1.15}
+#sheet .in{position:absolute;left:29mm;top:27mm;right:28mm;font-size:7.5pt;line-height:1.3}
+#sheet #cq{position:absolute;right:4mm;top:14mm;width:22mm;height:22mm}#cq img,#cq canvas{width:22mm!important;height:22mm!important}
+#sheet .ft{position:absolute;left:4mm;right:4mm;bottom:2mm;font-size:6pt;color:#555}
+@media print{body>*:not(#sheet){display:none!important}body{background:#fff;padding:0;display:block}#sheet{display:block!important}}
+</style></head><body>
+<div class="box" id="ui">
+ <div class="logo">SAFE<b>DRIVE</b></div><div class="sub" id="sub">Log in to print your child's student card.</div>
+ <div id="lg"><input id="u" placeholder="Username" autocapitalize="none"><input id="p" type="password" placeholder="Password"><div id="err"></div><button class="b" onclick="login()">Log in</button></div>
+ <div id="mn" style="display:none"><div id="list"></div><button class="b g" onclick="logout()">Log out</button></div>
+</div>
+<div id="sheet"><div class="top">SAFE DRIVE · STUDENT CARD</div><img class="ph" id="sp"><div class="nm" id="sn"></div><div class="in" id="si"></div><div id="cq"></div><div class="ft" id="sf"></div></div>
+<script>
+const $=i=>document.getElementById(i);let TOK=null,idle;
+const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+async function api(p,b){const r=await fetch(p,{method:'POST',headers:{'Content-Type':'application/json',...(TOK?{Authorization:'Bearer '+TOK}:{})},body:JSON.stringify(b||{})});return r.json().catch(()=>({}))}
+/* the token stays in memory only, so a shared machine keeps nothing after logout or a refresh */
+function bump(){clearTimeout(idle);idle=setTimeout(logout,120000)}['click','keydown','touchstart'].forEach(e=>document.addEventListener(e,()=>TOK&&bump()));
+function logout(){TOK=null;$('mn').style.display='none';$('lg').style.display='block';$('u').value=$('p').value='';$('sub').textContent='Log in to print your child\'s student card.'}
+async function login(){$('err').textContent='';const d=await api('/api/login',{username:$('u').value.trim().toLowerCase(),password:$('p').value});
+ if(d.status!=='success'||d.role!=='general'){$('err').textContent=d.status==='success'?'Use a parent account.':(d.msg||'Wrong username or password.');return}
+ TOK=d.token;$('sub').textContent='Hello '+d.name;$('lg').style.display='none';$('mn').style.display='block';bump();refresh()}
+const fd=t=>new Date(t).toLocaleDateString();
+async function refresh(){const d=await api('/api/cards/list');$('list').innerHTML=(d.children||[]).map(k=>{let a;
+ if(!k.active)a='<p>Not paid yet. Pay from your dashboard first.</p>';
+ else if(k.print_status==='requested')a=`<p>Paid and ready to print.</p><button class="b" onclick="doPrint('${k.id}',this)">Print card</button>`;
+ else if(k.print_status==='printed')a=`<p>Already printed on ${k.printed_at?fd(k.printed_at):''}. Ask for a reprint from your dashboard if it is lost.</p>`;
+ else if(k.print_status==='reprint_pending')a='<p>Reprint is waiting for admin approval.</p>';
+ else a='<p>Nothing to print.</p>';
+ return `<div class="c"><b>${esc(k.name)} ${esc(k.surname)}</b>${a}</div>`}).join('')||'<div class="c"><p>No children on this account.</p></div>'}
+async function doPrint(id,btn){btn.disabled=true;const d=await api('/api/cards/print',{child_id:id});if(d.status!=='success'){alert(d.message||'Could not print.');refresh();return}
+ const c=d.card;$('sn').textContent=c.name+' '+c.surname;$('si').innerHTML='Grade: '+esc(c.grade||'-')+'<br>'+esc(c.school||'');$('sf').textContent='Valid while the subscription is active';
+ $('cq').innerHTML='';new QRCode($('cq'),{text:c.qr,width:200,height:200,correctLevel:QRCode.CorrectLevel.M});
+ const img=$('sp');await new Promise(r=>{img.onload=img.onerror=r;img.src=c.photo||'https://ui-avatars.com/api/?size=256&background=22c55e&color=fff&name='+encodeURIComponent(c.name)});
+ setTimeout(()=>{window.print();setTimeout(refresh,500)},400)}
+</script></body></html>
