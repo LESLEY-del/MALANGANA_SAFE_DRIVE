@@ -69,5 +69,10 @@ async function loadToday(){const d=await api('/api/station/logs');$('tl').innerH
 async function loadRoster(){const d=await api('/api/station/roster');roster=d.children||[];drawRoster()}
 function drawRoster(){const q=$('q').value.toLowerCase();$('rl').innerHTML=roster.filter(c=>(c.name+' '+c.surname+' '+(c.grade||'')).toLowerCase().includes(q)).map(c=>`<div class="row"><img src="${esc(c.photo||'https://ui-avatars.com/api/?background=22c55e&color=fff&name='+encodeURIComponent(c.name))}"><div><b>${esc(c.name)} ${esc(c.surname)}</b><small>Grade ${esc(c.grade||'-')}</small></div></div>`).join('')||'<div class="mut">No learners registered yet.</div>'}
 async function schoolOut(){if(!confirm('Tell every parent that school is out?'))return;const d=await api('/api/principal/school_out');hide('mMenu');alert(d.status==='success'?`Sent to ${d.notified} parents.`:'Could not send.')}
+/* Handheld barcode/QR scanners type the code like a keyboard and press Enter. Works while the Scan tab is open. */
+let kb='',kt=0;
+document.addEventListener('keydown',e=>{if(!$('v-scan').classList.contains('on')||['INPUT','TEXTAREA'].includes(document.activeElement.tagName))return;
+ const n=Date.now();if(n-kt>250)kb='';kt=n;
+ if(e.key==='Enter'){if(kb.length>=16)onScan(kb);kb='';e.preventDefault()}else if(e.key.length===1)kb+=e.key});
 startScan();
 </script></body></html>
